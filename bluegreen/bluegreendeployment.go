@@ -9,129 +9,64 @@ package bluegreen
  */
 
 import (
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"log"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"encoding/json"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
 	"time"
-	"github.com/coreos/go-etcd/etcd"
 	"fmt"
 	"strings"
 	"errors"
-	"com.amdatu.rti.deployment/healthcheck"
+	"com.amdatu.rti.deployment/cluster"
 )
 
-type Deployment struct {
-	NewVersion string `json:"newVersion,omitempty"`
-	AppName string `json:"appName,omitempty"`
-	Replicas int `json:"replicas,omitempty"`
-	VulcanFrontend string `json:"vulcanFrontend,omitempty"`
-	EtcdUrl string `json:"etcdurl,omitempty"`
-	PodSpec api.PodSpec
-	UseHealthCheck bool `json:"useHealthCheck,omitempty"`
+type bluegreen struct {
+	deployer *cluster.Deployer
 }
 
-func (deployment *Deployment) String() string {
-	b, err := json.MarshalIndent(deployment,"", "    ")
-
-	if err != nil {
-		return "Error writing deployment to JSON"
-	}
-
-	return string(b)
+func NewBlueGreen(deployer *cluster.Deployer) *bluegreen{
+	return &bluegreen{deployer}
 }
 
-type deployer struct {
-	KubernetesUrl string
-	Deployment Deployment
-	k8client *client.Client
-	etcdClient *etcd.Client
-}
+func (bluegreen *bluegreen) Deploy() error {
 
-func NewDeployer(kubernetesUrl string, deployment Deployment) *deployer{
+	bluegreen.deployer.Logger.Println("Starting blue-green deployment")
 
-	config := client.Config{Host: kubernetesUrl}
-	c, err := client.New(&config)
+	bluegreen.deployer.Logger.Println("Prepare vulcan backend....")
 
-	if err != nil {
-		log.Panic("Error creating Kuberentes client", err)
-	}
-
-	machines := []string{deployment.EtcdUrl}
-	etcdClient := etcd.NewClient(machines)
-
-	return &deployer{kubernetesUrl, deployment, c, etcdClient}
-
-}
-
-func (deployer *deployer) Deploy() error {
-	if err := deployer.createReplicationController(); err != nil {
+	if err := bluegreen.prepareNewVulcanBackend(); err != nil {
 		return err
 	}
 
-	if err := deployer.switchVulcanBackend(); err != nil {
+	if err := bluegreen.createReplicationController(); err != nil {
+		bluegreen.deployer.Logger.Printf("%", err)
 		return err
 	}
 
-	if err := deployer.prepareNewVulcanBackend(); err != nil {
+	bluegreen.deployer.Logger.Println("Switch vulcan backends....")
+	if err := bluegreen.switchVulcanBackend(); err != nil {
 		return err
 	}
 
-	deployer.cleaupOldDeployments()
+	bluegreen.deployer.Logger.Println("Cleaning up old deployments....")
+	bluegreen.deployer.CleaupOldDeployments()
 
 	return nil
 }
 
-func (deployer *deployer) createRcName() string {
-	return deployer.Deployment.AppName + "-" + deployer.Deployment.NewVersion
-}
-
-func (deployer *deployer) createReplicationController() error {
-
-	ctrl := new(api.ReplicationController)
-	rcName := deployer.createRcName()
-	ctrl.Name = rcName
-
-	labels := make(map[string]string)
-	labels["name"] = deployer.Deployment.AppName
-	labels["version"] = deployer.Deployment.NewVersion
-
-	ctrl.Labels = labels
-
-	ctrl.Spec = api.ReplicationControllerSpec {
-		Selector: map[string]string{
-			"name": rcName,
-			"version": deployer.Deployment.NewVersion,
-		} ,
-		Replicas: deployer.Deployment.Replicas,
-		Template: &api.PodTemplateSpec {
-			ObjectMeta: api.ObjectMeta{
-				Labels: map[string]string {
-					"name": rcName,
-					"version": deployer.Deployment.NewVersion,
-				},
-			},
-			Spec: deployer.Deployment.PodSpec,
-		},
-	}
+func (bluegreen *bluegreen) createReplicationController() error {
+	bluegreen.deployer.CreateReplicationController()
 
 	callBack := make(chan string)
 	timeout := make(chan string)
 
-	go deployer.watchPods(rcName, deployer.Deployment.NewVersion, callBack)
+	go bluegreen.watchPods(bluegreen.deployer.CreateRcName(), bluegreen.deployer.Deployment.NewVersion, callBack)
 	go func() {
-		time.Sleep(30 * time.Second)
+		time.Sleep(10 * time.Minute)
 		timeout <- "TIMEOUT"
 	}()
 
-	log.Println("Creating Replication Controller")
-	_, error := deployer.k8client.ReplicationControllers(api.NamespaceDefault).Create(ctrl)
-	if error != nil {
-		return error
-	}
-
+	//Wait for either the pods to report healthy, or the timeout to happen
 	select {
 	case <- callBack:
 	case <- timeout:
@@ -142,9 +77,9 @@ func (deployer *deployer) createReplicationController() error {
 }
 
 
-func (deployer *deployer) watchPods(name, version string, callback chan string) error {
-	podSelector := labels.Set{"name": name, "version": deployer.Deployment.NewVersion}.AsSelector()
-	watchNew, err := deployer.k8client.Pods(api.NamespaceDefault).Watch(podSelector, fields.Everything(), "0")
+func (bluegreen *bluegreen) watchPods(name, version string, callback chan string) error {
+	podSelector := labels.Set{"name": name, "version": bluegreen.deployer.Deployment.NewVersion}.AsSelector()
+	watchNew, err := bluegreen.deployer.K8client.Pods(api.NamespaceDefault).Watch(podSelector, fields.Everything(), "0")
 
 	if err != nil {
 		return err
@@ -157,49 +92,28 @@ func (deployer *deployer) watchPods(name, version string, callback chan string) 
 
 		if podObj.Status.Phase == "Running" {
 
-			port := podObj.Spec.Containers[0].Ports[0].ContainerPort
-			host := podObj.Status.PodIP
+			bluegreen.deployer.CheckPodHealth(podObj)
 
-			if deployer.Deployment.UseHealthCheck {
-				healthy := healthcheck.WaitForPodStarted(host, port, time.Second * 20)
-				if !healthy {
-					return errors.New("Pod didn't get healthy")
-				}
-			}
-
-			pods, listErr := deployer.k8client.Pods(api.NamespaceDefault).List(podSelector, fields.Everything())
+			pods, listErr := bluegreen.deployer.K8client.Pods(api.NamespaceDefault).List(podSelector, fields.Everything())
 			if listErr != nil {
 				return err
 			}
 
-			nrOfPods := deployer.countRunning(pods.Items)
-			if nrOfPods == deployer.Deployment.Replicas {
-				log.Printf("Found enough running pods (%v), continue to switch versions...\n", nrOfPods)
+			nrOfPods := bluegreen.deployer.CountRunningPods(pods.Items)
+			if nrOfPods == bluegreen.deployer.Deployment.Replicas {
+				bluegreen.deployer.Logger.Printf("Found enough running pods (%v), continue to switch versions...\n", nrOfPods)
 				watchNew.Stop()
 				callback <- "FINISHED"
-				break
+				return nil
 			} else {
-				log.Printf("Waiting for %v more pods...\n", deployer.Deployment.Replicas - nrOfPods)
+				bluegreen.deployer.Logger.Printf("Waiting for %v more pods...\n", bluegreen.deployer.Deployment.Replicas - nrOfPods)
 			}
 		}
 	}
 
 	return nil
-
 }
 
-
-func (deployer *deployer) countRunning(pods []api.Pod) int {
-	nrOfRunning := 0
-
-	for _,pod := range pods {
-		if pod.Status.Phase == "Running" {
-			nrOfRunning++
-		}
-	}
-
-	return nrOfRunning
-}
 
 type Backend struct {
 	Type string
@@ -216,8 +130,8 @@ type BackendConfig struct {
 	Settings BackendSettings
 }
 
-func (deployer *deployer) prepareNewVulcanBackend() error {
-	keyName := fmt.Sprintf("/vulcan/backends/%v/backend", deployer.createRcName())
+func (bluegreen *bluegreen) prepareNewVulcanBackend() error {
+	keyName := fmt.Sprintf("/vulcan/backends/%v/backend", bluegreen.deployer.CreateRcName())
 
 	backend := BackendConfig {
 		Type: "http",
@@ -231,16 +145,18 @@ func (deployer *deployer) prepareNewVulcanBackend() error {
 		return err
 	}
 
-	deployer.etcdClient.Set(keyName, string(strValue), 0)
+	bluegreen.deployer.EtcdClient.Set(keyName, string(strValue), 0)
 
 	return nil
 }
 
-func (deployer *deployer) switchVulcanBackend() error {
+func (bluegreen *bluegreen) switchVulcanBackend() error {
 
-	keyName := fmt.Sprintf("/vulcan/frontends/%v/frontend", deployer.Deployment.VulcanFrontend)
+	keyName := fmt.Sprintf("/vulcan/frontends/%v/frontend", bluegreen.deployer.Deployment.VulcanFrontend)
 
-	frontend, err := deployer.etcdClient.Get(keyName, false, false)
+	bluegreen.deployer.Logger.Printf("Switching backend for frontend config %v, using etcd at %v", keyName, bluegreen.deployer.EtcdUrl)
+
+	frontend, err := bluegreen.deployer.EtcdClient.Get(keyName, false, false)
 	if err != nil {
 		return err
 	}
@@ -249,67 +165,17 @@ func (deployer *deployer) switchVulcanBackend() error {
 	var backend Backend
 	dec.Decode(&backend)
 
-	backend.BackendId = deployer.createRcName()
+	backend.BackendId = bluegreen.deployer.CreateRcName()
 
 	strValue, err := json.Marshal(backend)
 	if err != nil {
 		return err
 	}
 
-	deployer.etcdClient.Set(keyName, string(strValue), 0)
+	bluegreen.deployer.EtcdClient.Set(keyName, string(strValue), 0)
 
 	return nil
 }
 
 
-func (deployer *deployer) cleaupOldDeployments() {
-	controllers, err := deployer.findCurrentRc()
 
-	if err != nil {
-		log.Println("Did not find a old Replication Controller to remove")
-		return
-	}
-
-	for _,rc := range controllers {
-		deployer.deleteRc(rc)
-		deployer.deleteVulcanBackend(rc)
-	}
-
-}
-
-func (deployer *deployer) deleteRc(rc api.ReplicationController) {
-	log.Printf("Deleting RC %v", rc.Name)
-
-	rc.Spec.Replicas = 0
-	deployer.k8client.ReplicationControllers(api.NamespaceDefault).Update(&rc)
-	deployer.k8client.ReplicationControllers(api.NamespaceDefault).Delete(rc.Name)
-}
-
-func (deployer *deployer) deleteVulcanBackend(rc api.ReplicationController) {
-	backendName := fmt.Sprintf("%v-%v", rc.Labels["name"], rc.Labels["version"])
-	keyName := fmt.Sprintf("/vulcan/backends/%v", backendName)
-
-	deployer.etcdClient.Delete(keyName, true)
-}
-
-func (deployer *deployer)findCurrentRc() ([]api.ReplicationController, error) {
-	result := make([]api.ReplicationController, 1, 10)
-
-	rcLabelSelector := labels.Set{"name": deployer.Deployment.AppName}.AsSelector()
-	replicationControllers,_ := deployer.k8client.ReplicationControllers(api.NamespaceDefault).List(rcLabelSelector)
-
-	for _,rc := range replicationControllers.Items {
-		if(rc.Labels["version"] != deployer.Deployment.NewVersion) {
-
-			result = append(result, rc)
-		}
-	}
-
-	if len(result) == 0 {
-		return result, errors.New("No active Replica Controller found")
-	} else {
-		return result, nil
-	}
-
-
-}

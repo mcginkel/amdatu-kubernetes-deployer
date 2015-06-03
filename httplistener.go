@@ -7,37 +7,84 @@ import (
 	"encoding/json"
 	"fmt"
 	"com.amdatu.rti.deployment/bluegreen"
+	"flag"
+	"com.amdatu.rti.deployment/cluster"
+	"errors"
+	"com.amdatu.rti.deployment/rolling"
 )
+
+var kubernetesurl, etcdUrl, port string
+
+func init() {
+	flag.StringVar(&kubernetesurl, "kubernetes", "", "URL to the Kubernetes API server")
+	flag.StringVar(&etcdUrl, "etcd", "", "Url to etcd")
+	flag.StringVar(&port, "deployport", "8000", "Port to listen for deployments")
+
+	exampleUsage := "Missing required argument %v. Example usage: httplistener -kubernetes http://[kubernetes-api-url]:8080 -etcd http://[etcd-url]:2379 -deployport 8000"
+
+	flag.Parse()
+
+	if kubernetesurl == "" {
+		log.Fatalf(exampleUsage, "kubernetes")
+	}
+
+	if etcdUrl == "" {
+		log.Fatalf(exampleUsage, "etcd")
+	}
+}
 
 func main() {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
 
-	if  err := http.ListenAndServe(":8000", r); err != nil {
+
+	log.Printf("Listining for deployments on port %v\n", port)
+
+	if  err := http.ListenAndServe(":" + port, r); err != nil {
 		log.Fatal(err)
 	}
 }
 
+
+
 func DeploymentHandler(respWriter http.ResponseWriter, req *http.Request) {
+	logger := cluster.Logger{respWriter}
+
 	defer req.Body.Close()
 	body, err := ioutil.ReadAll(req.Body)
 
 	if err != nil {
-		log.Printf("Error reading body: %v", err)
+		logger.Printf("Error reading body: %v", err)
 	}
 
-	deployment := bluegreen.Deployment{}
+	deployment := cluster.Deployment{}
 	if err := json.Unmarshal(body, &deployment); err != nil {
-		log.Printf("Error parsing body: %v", err)
+		logger.Printf("Error parsing body: %v", err)
 	}
 
-	fmt.Printf("%v\n", deployment.String())
+	logger.Printf("%v\n", deployment.String())
 
-	if err := bluegreen.NewDeployer("http://10.100.103.7:8080", deployment).Deploy(); err != nil {
-		log.Printf("Error during deployment: %v\n", err)
+	deployer := cluster.NewDeployer(kubernetesurl, etcdUrl, deployment, &logger)
+	var deploymentError error
+
+	switch deployment.DeploymentType {
+		case "blue-green":
+			deploymentError = bluegreen.NewBlueGreen(deployer).Deploy();
+		case "rolling":
+			deploymentError = rolling.NewRollingDeployer(deployer).Deploy();
+		default:
+			deploymentError = errors.New(fmt.Sprintf("Unknown type of deployment: %v", deployment.DeploymentType))
+	}
+
+	if  deploymentError != nil {
+		logger.Printf("Error during deployment: %v\n", deploymentError)
+		logger.Println("============================ Deployment Failed =======================")
 	} else {
-		log.Println("============================ Completed deployment =======================")
+		logger.Println("============================ Completed deployment =======================")
 	}
+
+
 
 }
+

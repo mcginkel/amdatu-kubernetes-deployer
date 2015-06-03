@@ -1,7 +1,6 @@
 package healthcheck
 import (
 	"log"
-	"fmt"
 	"net/http"
 	"io/ioutil"
 	"encoding/json"
@@ -9,21 +8,22 @@ import (
 )
 
 
-func WaitForPodStarted(host string, port int, timeoutDuration time.Duration) bool {
-
+func WaitForPodStarted(url string, timeoutDuration time.Duration) bool {
 	timeout := make(chan string)
 	callBack := make(chan bool)
 
 	go func() {
 		time.Sleep(timeoutDuration)
 		timeout <- "TIMEOUT"
+		close(timeout)
 	}()
 
 
-	go watchPod(host,port, callBack)
+	go watchPod(url, callBack)
 
 	select {
 	case <- callBack:
+		log.Println("Pod turned healthy")
 		return true
 	case <- timeout:
 		callBack <- false
@@ -32,16 +32,18 @@ func WaitForPodStarted(host string, port int, timeoutDuration time.Duration) boo
 	}
 }
 
-func watchPod(host string, port int, callback chan bool) {
+func watchPod(url string, callback chan bool) {
 	var resp *http.Response
 	var err error
+
+	log.Printf("Health checking on %v\n", url)
 
 	for {
 		select {
 		case <-callback:
 			return
 		default:
-			resp, err = http.Post(fmt.Sprintf("http://%v:%v/health", host, port), "application/json", nil)
+			resp, err = http.Post(url, "application/json", nil)
 			if err != nil {
 				log.Println("Error connecting, retrying...")
 				time.Sleep(time.Second * 2)
@@ -62,10 +64,11 @@ func watchPod(host string, port int, callback chan bool) {
 				time.Sleep(time.Second * 2)
 				continue
 			}
-			fmt.Println(dat.Healthy)
 
 			if dat.Healthy {
 				callback <- true
+				close(callback)
+				return
 			}
 
 			log.Println("Not yet healthy, retrying...")
