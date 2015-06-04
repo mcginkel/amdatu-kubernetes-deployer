@@ -163,8 +163,7 @@ func (deployer *Deployer) deleteRc(rc api.ReplicationController) {
 }
 
 func (deployer *Deployer) deleteVulcanBackend(rc api.ReplicationController) {
-	backendName := fmt.Sprintf("%v-%v", rc.Labels["name"], rc.Labels["version"])
-	keyName := fmt.Sprintf("/vulcan/backends/%v", backendName)
+	keyName := fmt.Sprintf("/vulcan/backends/%v", rc.Name)
 
 	deployer.Logger.Printf("Deleting Vulcan backend %v", keyName)
 	deployer.EtcdClient.Delete(keyName, true)
