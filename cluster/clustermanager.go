@@ -156,6 +156,9 @@ func (deployer *Deployer) deleteRc(rc api.ReplicationController) {
 	deployer.Logger.Printf("Deleting RC %v", rc.Name)
 
 	rc.Spec.Replicas = 0
+	deployer.K8client.ReplicationControllers(api.NamespaceDefault).Update(rc)
+	time.Sleep(20 * time.Second)
+
 	deployer.K8client.ReplicationControllers(api.NamespaceDefault).Delete(rc.Name)
 }
 
@@ -163,6 +166,7 @@ func (deployer *Deployer) deleteVulcanBackend(rc api.ReplicationController) {
 	backendName := fmt.Sprintf("%v-%v", rc.Labels["name"], rc.Labels["version"])
 	keyName := fmt.Sprintf("/vulcan/backends/%v", backendName)
 
+	deployer.Logger.Printf("Deleting Vulcan backend %v", keyName)
 	deployer.EtcdClient.Delete(keyName, true)
 }
 
