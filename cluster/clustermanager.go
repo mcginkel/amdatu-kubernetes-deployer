@@ -156,7 +156,7 @@ func (deployer *Deployer) deleteRc(rc api.ReplicationController) {
 	deployer.Logger.Printf("Deleting RC %v", rc.Name)
 
 	rc.Spec.Replicas = 0
-	deployer.K8client.ReplicationControllers(api.NamespaceDefault).Update(rc)
+	deployer.K8client.ReplicationControllers(api.NamespaceDefault).Update(&rc)
 	time.Sleep(20 * time.Second)
 
 	deployer.K8client.ReplicationControllers(api.NamespaceDefault).Delete(rc.Name)
