@@ -146,8 +146,10 @@ func (deployer *Deployer) CleaupOldDeployments() {
 	}
 
 	for _,rc := range controllers {
-		deployer.deleteRc(rc)
-		deployer.deleteVulcanBackend(rc)
+		if rc.Name != "" {
+			deployer.deleteVulcanBackend(rc)
+			deployer.deleteRc(rc)
+		}
 	}
 
 }

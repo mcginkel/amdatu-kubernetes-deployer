@@ -57,6 +57,10 @@ func (bluegreen *bluegreen) Deploy() error {
 func (bluegreen *bluegreen) createReplicationController() error {
 	bluegreen.deployer.CreateReplicationController()
 
+	if bluegreen.deployer.Deployment.Replicas == 0 {
+		return nil
+	}
+
 	callBack := make(chan string)
 	timeout := make(chan string)
 
