@@ -167,8 +167,10 @@ func (deployer *Deployer) deleteRc(rc api.ReplicationController) {
 func (deployer *Deployer) deleteVulcanBackend(rc api.ReplicationController) {
 	keyName := fmt.Sprintf("/vulcan/backends/%v", rc.Name)
 
-	deployer.Logger.Printf("Deleting Vulcan backend %v", keyName)
-	deployer.EtcdClient.Delete(keyName, true)
+	if len(keyName) > 0 {
+		deployer.Logger.Printf("Deleting Vulcan backend %v", keyName)
+		deployer.EtcdClient.Delete(keyName, true)
+	}
 }
 
 func (deployer *Deployer) CountRunningPods(pods []api.Pod) int {
