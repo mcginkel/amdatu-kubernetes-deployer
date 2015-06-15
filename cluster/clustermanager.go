@@ -12,6 +12,8 @@ import (
 	"time"
 	"net/http"
 	"io"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
 )
 
 type Deployment struct {
@@ -61,7 +63,7 @@ func (logger *Logger) Printf(format string, v ...interface{}) {
 
 func NewDeployer(kubernetesUrl string, etcdUrl string, deployment Deployment, logger *Logger) *Deployer{
 
-	config := client.Config{Host: kubernetesUrl}
+	config := client.Config{Host: kubernetesUrl, Version: "v1beta3"}
 	c, err := client.New(&config)
 
 	if err != nil {
@@ -99,13 +101,15 @@ func (deployer *Deployer) CreateReplicationController() (*api.ReplicationControl
 		Selector: map[string]string{
 			"name": rcName,
 			"version": deployer.Deployment.NewVersion,
-		} ,
+			"app": deployer.Deployment.AppName,
+		},
 		Replicas: deployer.Deployment.Replicas,
 		Template: &api.PodTemplateSpec {
 			ObjectMeta: api.ObjectMeta{
 				Labels: map[string]string {
 					"name": rcName,
 					"version": deployer.Deployment.NewVersion,
+					"app": deployer.Deployment.AppName,
 				},
 			},
 			Spec: deployer.Deployment.PodSpec,
@@ -115,6 +119,32 @@ func (deployer *Deployer) CreateReplicationController() (*api.ReplicationControl
 	deployer.Logger.Println("Creating Replication Controller")
 	return deployer.K8client.ReplicationControllers(api.NamespaceDefault).Create(ctrl)
 
+}
+
+func (deployer *Deployer) CreateService() (*api.Service, error) {
+	srv := new(api.Service)
+	srv.Name = deployer.CreateRcName()
+
+	selector := make(map[string]string)
+	selector["name"] = deployer.CreateRcName()
+	selector["version"] = deployer.Deployment.NewVersion
+	selector["app"] = deployer.Deployment.AppName
+
+	srv.Labels = selector
+
+	srv.Spec = api.ServiceSpec{
+		Selector: selector,
+		Ports: []api.ServicePort {
+			api.ServicePort{
+				TargetPort: util.NewIntOrStringFromString("None"),
+				Port: deployer.Deployment.PodSpec.Containers[0].Ports[0].ContainerPort,
+			},
+		},
+	}
+
+	deployer.Logger.Println("Creating Service")
+
+	return deployer.K8client.Services(api.NamespaceDefault).Create(srv)
 }
 
 func (deployer *Deployer)FindCurrentRc() ([]api.ReplicationController, error) {
@@ -137,6 +167,46 @@ func (deployer *Deployer)FindCurrentRc() ([]api.ReplicationController, error) {
 	}
 }
 
+func (deployer *Deployer)FindCurrentPods() ([]api.Pod, error) {
+	result := make([]api.Pod, 1, 10)
+
+	rcLabelSelector := labels.Set{"app": deployer.Deployment.AppName}.AsSelector()
+	pods,_ := deployer.K8client.Pods(api.NamespaceDefault).List(rcLabelSelector, fields.Everything())
+
+	for _,rc := range pods.Items {
+		if(rc.Labels["version"] != deployer.Deployment.NewVersion) {
+
+			result = append(result, rc)
+		}
+	}
+
+	if len(result) == 0 {
+		return result, errors.New("No active Pods found")
+	} else {
+		return result, nil
+	}
+}
+
+func (deployer *Deployer)FindCurrentService() ([]api.Service, error) {
+	result := make([]api.Service, 1, 10)
+
+	rcLabelSelector := labels.Set{"app": deployer.Deployment.AppName}.AsSelector()
+	services, _ := deployer.K8client.Services(api.NamespaceDefault).List(rcLabelSelector)
+
+	for _, service := range services.Items {
+		if (service.Labels["version"] != deployer.Deployment.NewVersion) {
+
+			result = append(result, service)
+		}
+	}
+
+	if len(result) == 0 {
+		return result, errors.New("No active Service found")
+	} else {
+		return result, nil
+	}
+}
+
 func (deployer *Deployer) CleaupOldDeployments() {
 	controllers, err := deployer.FindCurrentRc()
 
@@ -147,21 +217,54 @@ func (deployer *Deployer) CleaupOldDeployments() {
 
 	for _,rc := range controllers {
 		if rc.Name != "" {
-			deployer.deleteVulcanBackend(rc)
 			deployer.deleteRc(rc)
+			deployer.deleteVulcanBackend(rc)
 		}
 	}
 
+	log.Println("Looking for old pods...")
+	pods, err := deployer.FindCurrentPods()
+
+	if err != nil {
+		deployer.Logger.Println("Did not find old pods to remove")
+	}
+
+	for _, pod := range pods {
+		if pod.Name != "" {
+			deployer.deletePod(pod)
+		}
+	}
+
+	log.Println("Looking for services...")
+	services, err := deployer.FindCurrentService()
+
+	if err != nil {
+		deployer.Logger.Println("Did not find a old Replication Controller to remove")
+		return
+	}
+
+	for _, service := range services {
+		if service.Name != "" {
+			deployer.deleteService(service)
+		}
+	}
 }
 
 func (deployer *Deployer) deleteRc(rc api.ReplicationController) {
 	deployer.Logger.Printf("Deleting RC %v", rc.Name)
 
-	rc.Spec.Replicas = 0
-	deployer.K8client.ReplicationControllers(api.NamespaceDefault).Update(&rc)
-	time.Sleep(20 * time.Second)
-
 	deployer.K8client.ReplicationControllers(api.NamespaceDefault).Delete(rc.Name)
+}
+
+func (deployer *Deployer) deletePod(pod api.Pod) {
+	deployer.Logger.Printf("Deleting Pod %v", pod.Name)
+
+	deployer.K8client.Pods(api.NamespaceDefault).Delete(pod.Name, &api.DeleteOptions{})
+}
+
+func (deployer *Deployer) deleteService(service api.Service) {
+	deployer.Logger.Printf("Deleting Service %v", service.Name)
+	deployer.K8client.Services(api.NamespaceDefault).Delete(service.Name)
 }
 
 func (deployer *Deployer) deleteVulcanBackend(rc api.ReplicationController) {

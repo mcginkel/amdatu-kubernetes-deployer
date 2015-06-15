@@ -18,6 +18,7 @@ import (
 	"strings"
 	"errors"
 	"com.amdatu.rti.deployment/cluster"
+	"log"
 )
 
 type bluegreen struct {
@@ -38,6 +39,11 @@ func (bluegreen *bluegreen) Deploy() error {
 		return err
 	}
 
+	_, err := bluegreen.deployer.CreateService()
+	if err != nil {
+		log.Println(err)
+	}
+
 	if err := bluegreen.createReplicationController(); err != nil {
 		bluegreen.deployer.Logger.Printf("%", err)
 		return err
@@ -55,6 +61,8 @@ func (bluegreen *bluegreen) Deploy() error {
 }
 
 func (bluegreen *bluegreen) createReplicationController() error {
+
+
 	bluegreen.deployer.CreateReplicationController()
 
 	if bluegreen.deployer.Deployment.Replicas == 0 {
