@@ -12,7 +12,6 @@ import (
 	"time"
 	"net/http"
 	"io"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
 )
 
@@ -136,7 +135,7 @@ func (deployer *Deployer) CreateService() (*api.Service, error) {
 		Selector: selector,
 		Ports: []api.ServicePort {
 			api.ServicePort{
-				TargetPort: util.NewIntOrStringFromString("None"),
+				//TargetPort: util.NewIntOrStringFromString("None"),
 				Port: deployer.Deployment.PodSpec.Containers[0].Ports[0].ContainerPort,
 			},
 		},
@@ -268,9 +267,22 @@ func (deployer *Deployer) deleteService(service api.Service) {
 }
 
 func (deployer *Deployer) deleteVulcanBackend(rc api.ReplicationController) {
-	keyName := fmt.Sprintf("/vulcan/backends/%v", rc.Name)
 
-	if len(keyName) > 0 {
+	if len(rc.Name) > 0 {
+		keyName := fmt.Sprintf("/vulcan/backends/%v", rc.Name)
+		resp, err := deployer.EtcdClient.Get(fmt.Sprintf("%v/servers", keyName), false, false)
+		if err != nil {
+			log.Println(err)
+		} else {
+			for _,server := range resp.Node.Nodes {
+				deployer.Logger.Printf("Deleting Vulcan server %v", server.Key)
+				deployer.EtcdClient.Delete( server.Key, false)
+			}
+		}
+
+		deployer.EtcdClient.Delete(keyName + "/backend", false)
+
+
 		deployer.Logger.Printf("Deleting Vulcan backend %v", keyName)
 		deployer.EtcdClient.Delete(keyName, true)
 	}
