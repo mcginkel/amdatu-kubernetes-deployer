@@ -35,7 +35,7 @@ func (rollingdeploy *rollingdeploy) Deploy() error {
 	rollingdeploy.deployer.Logger.Printf("Active RC %v with %v replicas. Starting scale down...\n", currentRc.Name, currentRc.Status.Replicas)
 
 	newRcLabelSelector := labels.Set{"name": newRc.Labels["name"], "version": rollingdeploy.deployer.Deployment.NewVersion}.AsSelector()
-	watchNew, err := rollingdeploy.deployer.K8client.Pods(api.NamespaceDefault).Watch(newRcLabelSelector, fields.Everything(), "0")
+	watchNew, err := rollingdeploy.deployer.K8client.Pods(rollingdeploy.deployer.Deployment.Namespace).Watch(newRcLabelSelector, fields.Everything(), "0")
 	if(err != nil) {
 		return err
 	}
@@ -53,19 +53,19 @@ func (rollingdeploy *rollingdeploy) Deploy() error {
 
 			if currentRc.Spec.Replicas > 0 {
 				currentRc.Spec.Replicas -= 1
-				rc,err := rollingdeploy.deployer.K8client.ReplicationControllers(api.NamespaceDefault).Update(&currentRc)
+				rc,err := rollingdeploy.deployer.K8client.ReplicationControllers(rollingdeploy.deployer.Deployment.Namespace).Update(&currentRc)
 				if err != nil {
 					rollingdeploy.deployer.Logger.Printf("Error updating existing controller: %v", err)
 				}
 
 				currentRc = *rc
 			} else {
-				rollingdeploy.deployer.K8client.ReplicationControllers(api.NamespaceDefault).Delete(currentRc.Name)
+				rollingdeploy.deployer.K8client.ReplicationControllers(rollingdeploy.deployer.Deployment.Namespace).Delete(currentRc.Name)
 				rollingdeploy.deployer.Logger.Printf("Deleted %v", currentRc.Name)
 				break
 			}
 
-			pods, listErr := rollingdeploy.deployer.K8client.Pods(api.NamespaceDefault).List(newRcLabelSelector, fields.Everything())
+			pods, listErr := rollingdeploy.deployer.K8client.Pods(rollingdeploy.deployer.Deployment.Namespace).List(newRcLabelSelector, fields.Everything())
 			if listErr != nil {
 				watchNew.Stop()
 				return err
@@ -74,7 +74,7 @@ func (rollingdeploy *rollingdeploy) Deploy() error {
 			if rollingdeploy.deployer.CountRunningPods(pods.Items) == newRc.Spec.Replicas {
 				rollingdeploy.deployer.Logger.Println("Found enough running pods, deleting old cluster")
 				currentRc.Spec.Replicas = 0
-				rc,err := rollingdeploy.deployer.K8client.ReplicationControllers(api.NamespaceDefault).Update(&currentRc)
+				rc,err := rollingdeploy.deployer.K8client.ReplicationControllers(rollingdeploy.deployer.Deployment.Namespace).Update(&currentRc)
 				if err != nil {
 					rollingdeploy.deployer.Logger.Printf("Error updating existing controller: %v", err)
 				}
@@ -82,7 +82,7 @@ func (rollingdeploy *rollingdeploy) Deploy() error {
 				currentRc = *rc
 				time.Sleep(20 * time.Second)
 
-				rollingdeploy.deployer.K8client.ReplicationControllers(api.NamespaceDefault).Delete(currentRc.Name)
+				rollingdeploy.deployer.K8client.ReplicationControllers(rollingdeploy.deployer.Deployment.Namespace).Delete(currentRc.Name)
 				rollingdeploy.deployer.Logger.Printf("Deleted %v", currentRc.Name)
 				break;
 			}

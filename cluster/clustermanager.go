@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"io"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
+	"strings"
 )
 
 type Deployment struct {
@@ -23,6 +24,7 @@ type Deployment struct {
 	VulcanFrontend string `json:"vulcanFrontend,omitempty"`
 	PodSpec api.PodSpec
 	UseHealthCheck bool `json:"useHealthCheck,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
 }
 
 func (deployment *Deployment) String() string {
@@ -72,8 +74,8 @@ func NewDeployer(kubernetesUrl string, etcdUrl string, deployment Deployment, lo
 	logger.Printf("Connected to Kubernetes API server on %v\n", kubernetesUrl)
 	logger.Printf("Kubernetes version %v\n", c.APIVersion())
 
-	machines := []string{etcdUrl}
-	etcdClient := etcd.NewClient(machines)
+
+	etcdClient := etcd.NewClient(strings.Split(etcdUrl, ","))
 
 	return &Deployer{kubernetesUrl, deployment, etcdUrl, c, etcdClient, logger}
 
@@ -116,7 +118,7 @@ func (deployer *Deployer) CreateReplicationController() (*api.ReplicationControl
 	}
 
 	deployer.Logger.Println("Creating Replication Controller")
-	return deployer.K8client.ReplicationControllers(api.NamespaceDefault).Create(ctrl)
+	return deployer.K8client.ReplicationControllers(deployer.Deployment.Namespace).Create(ctrl)
 
 }
 
@@ -143,14 +145,14 @@ func (deployer *Deployer) CreateService() (*api.Service, error) {
 
 	deployer.Logger.Println("Creating Service")
 
-	return deployer.K8client.Services(api.NamespaceDefault).Create(srv)
+	return deployer.K8client.Services(deployer.Deployment.Namespace).Create(srv)
 }
 
 func (deployer *Deployer)FindCurrentRc() ([]api.ReplicationController, error) {
 	result := make([]api.ReplicationController, 1, 10)
 
 	rcLabelSelector := labels.Set{"app": deployer.Deployment.AppName}.AsSelector()
-	replicationControllers,_ := deployer.K8client.ReplicationControllers(api.NamespaceDefault).List(rcLabelSelector)
+	replicationControllers,_ := deployer.K8client.ReplicationControllers(deployer.Deployment.Namespace).List(rcLabelSelector)
 
 	for _,rc := range replicationControllers.Items {
 		if(rc.Labels["version"] != deployer.Deployment.NewVersion) {
@@ -170,7 +172,7 @@ func (deployer *Deployer)FindCurrentPods() ([]api.Pod, error) {
 	result := make([]api.Pod, 1, 10)
 
 	rcLabelSelector := labels.Set{"app": deployer.Deployment.AppName}.AsSelector()
-	pods,_ := deployer.K8client.Pods(api.NamespaceDefault).List(rcLabelSelector, fields.Everything())
+	pods,_ := deployer.K8client.Pods(deployer.Deployment.Namespace).List(rcLabelSelector, fields.Everything())
 
 	for _,rc := range pods.Items {
 		if(rc.Labels["version"] != deployer.Deployment.NewVersion) {
@@ -190,7 +192,7 @@ func (deployer *Deployer)FindCurrentService() ([]api.Service, error) {
 	result := make([]api.Service, 1, 10)
 
 	rcLabelSelector := labels.Set{"app": deployer.Deployment.AppName}.AsSelector()
-	services, _ := deployer.K8client.Services(api.NamespaceDefault).List(rcLabelSelector)
+	services, _ := deployer.K8client.Services(deployer.Deployment.Namespace).List(rcLabelSelector)
 
 	for _, service := range services.Items {
 		if (service.Labels["version"] != deployer.Deployment.NewVersion) {
@@ -252,24 +254,24 @@ func (deployer *Deployer) CleaupOldDeployments() {
 func (deployer *Deployer) deleteRc(rc api.ReplicationController) {
 	deployer.Logger.Printf("Deleting RC %v", rc.Name)
 
-	deployer.K8client.ReplicationControllers(api.NamespaceDefault).Delete(rc.Name)
+	deployer.K8client.ReplicationControllers(deployer.Deployment.Namespace).Delete(rc.Name)
 }
 
 func (deployer *Deployer) deletePod(pod api.Pod) {
 	deployer.Logger.Printf("Deleting Pod %v", pod.Name)
 
-	deployer.K8client.Pods(api.NamespaceDefault).Delete(pod.Name, &api.DeleteOptions{})
+	deployer.K8client.Pods(deployer.Deployment.Namespace).Delete(pod.Name, &api.DeleteOptions{})
 }
 
 func (deployer *Deployer) deleteService(service api.Service) {
 	deployer.Logger.Printf("Deleting Service %v", service.Name)
-	deployer.K8client.Services(api.NamespaceDefault).Delete(service.Name)
+	deployer.K8client.Services(deployer.Deployment.Namespace).Delete(service.Name)
 }
 
 func (deployer *Deployer) deleteVulcanBackend(rc api.ReplicationController) {
 
 	if len(rc.Name) > 0 {
-		keyName := fmt.Sprintf("/vulcan/backends/%v", rc.Name)
+		keyName := fmt.Sprintf("/vulcan/backends/%v-%v", rc.Namespace, rc.Name)
 		resp, err := deployer.EtcdClient.Get(fmt.Sprintf("%v/servers", keyName), false, false)
 		if err != nil {
 			log.Println(err)

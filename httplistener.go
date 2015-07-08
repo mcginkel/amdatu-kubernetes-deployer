@@ -11,6 +11,7 @@ import (
 	"com.amdatu.rti.deployment/cluster"
 	"errors"
 	"com.amdatu.rti.deployment/rolling"
+	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 )
 
 var kubernetesurl, etcdUrl, port string
@@ -61,6 +62,10 @@ func DeploymentHandler(respWriter http.ResponseWriter, req *http.Request) {
 	deployment := cluster.Deployment{}
 	if err := json.Unmarshal(body, &deployment); err != nil {
 		logger.Printf("Error parsing body: %v", err)
+	}
+
+	if len(deployment.Namespace) == 0 {
+		deployment.Namespace = api.NamespaceDefault
 	}
 
 	logger.Printf("%v\n", deployment.String())

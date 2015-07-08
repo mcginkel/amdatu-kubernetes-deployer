@@ -51,6 +51,7 @@ func (bluegreen *bluegreen) Deploy() error {
 
 	bluegreen.deployer.Logger.Println("Switch vulcan backends....")
 	if err := bluegreen.switchVulcanBackend(); err != nil {
+		bluegreen.deployer.Logger.Printf("%", err)
 		return err
 	}
 
@@ -91,7 +92,7 @@ func (bluegreen *bluegreen) createReplicationController() error {
 
 func (bluegreen *bluegreen) watchPods(name, version string, callback chan string) error {
 	podSelector := labels.Set{"name": name, "version": bluegreen.deployer.Deployment.NewVersion}.AsSelector()
-	watchNew, err := bluegreen.deployer.K8client.Pods(api.NamespaceDefault).Watch(podSelector, fields.Everything(), "0")
+	watchNew, err := bluegreen.deployer.K8client.Pods(bluegreen.deployer.Deployment.Namespace).Watch(podSelector, fields.Everything(), "0")
 
 	if err != nil {
 		return err
@@ -106,7 +107,7 @@ func (bluegreen *bluegreen) watchPods(name, version string, callback chan string
 
 			bluegreen.deployer.CheckPodHealth(podObj)
 
-			pods, listErr := bluegreen.deployer.K8client.Pods(api.NamespaceDefault).List(podSelector, fields.Everything())
+			pods, listErr := bluegreen.deployer.K8client.Pods(bluegreen.deployer.Deployment.Namespace).List(podSelector, fields.Everything())
 			if listErr != nil {
 				return err
 			}
@@ -143,7 +144,7 @@ type BackendConfig struct {
 }
 
 func (bluegreen *bluegreen) prepareNewVulcanBackend() error {
-	keyName := fmt.Sprintf("/vulcan/backends/%v/backend", bluegreen.deployer.CreateRcName())
+	keyName := fmt.Sprintf("/vulcan/backends/%v-%v/backend", bluegreen.deployer.Deployment.Namespace, bluegreen.deployer.CreateRcName())
 
 	backend := BackendConfig {
 		Type: "http",
@@ -177,13 +178,14 @@ func (bluegreen *bluegreen) switchVulcanBackend() error {
 	var backend Backend
 	dec.Decode(&backend)
 
-	backend.BackendId = bluegreen.deployer.CreateRcName()
+	backend.BackendId = bluegreen.deployer.Deployment.Namespace + "-" + bluegreen.deployer.CreateRcName()
 
 	strValue, err := json.Marshal(backend)
 	if err != nil {
 		return err
 	}
 
+	log.Printf("Setting etcd key %v to %v", keyName, string(strValue))
 	bluegreen.deployer.EtcdClient.Set(keyName, string(strValue), 0)
 
 	return nil
