@@ -168,14 +168,14 @@ func (deployer *Deployer)FindCurrentRc() ([]api.ReplicationController, error) {
 	}
 }
 
-func (deployer *Deployer)FindCurrentPods() ([]api.Pod, error) {
-	result := make([]api.Pod, 1, 10)
+func (deployer *Deployer)FindCurrentPods(allowSameVersion bool) ([]api.Pod, error) {
+	result := make([]api.Pod, 0, 10)
 
 	rcLabelSelector := labels.Set{"app": deployer.Deployment.AppName}.AsSelector()
 	pods,_ := deployer.K8client.Pods(deployer.Deployment.Namespace).List(rcLabelSelector, fields.Everything())
 
 	for _,rc := range pods.Items {
-		if(rc.Labels["version"] != deployer.Deployment.NewVersion) {
+		if(allowSameVersion || rc.Labels["version"] != deployer.Deployment.NewVersion) {
 
 			result = append(result, rc)
 		}
@@ -224,7 +224,7 @@ func (deployer *Deployer) CleaupOldDeployments() {
 	}
 
 	log.Println("Looking for old pods...")
-	pods, err := deployer.FindCurrentPods()
+	pods, err := deployer.FindCurrentPods(false)
 
 	if err != nil {
 		deployer.Logger.Println("Did not find old pods to remove")
@@ -232,7 +232,7 @@ func (deployer *Deployer) CleaupOldDeployments() {
 
 	for _, pod := range pods {
 		if pod.Name != "" {
-			deployer.deletePod(pod)
+			deployer.DeletePod(pod)
 		}
 	}
 
@@ -257,7 +257,7 @@ func (deployer *Deployer) deleteRc(rc api.ReplicationController) {
 	deployer.K8client.ReplicationControllers(deployer.Deployment.Namespace).Delete(rc.Name)
 }
 
-func (deployer *Deployer) deletePod(pod api.Pod) {
+func (deployer *Deployer) DeletePod(pod api.Pod) {
 	deployer.Logger.Printf("Deleting Pod %v", pod.Name)
 
 	deployer.K8client.Pods(deployer.Deployment.Namespace).Delete(pod.Name, &api.DeleteOptions{})

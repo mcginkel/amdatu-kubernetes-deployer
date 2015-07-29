@@ -12,6 +12,7 @@ import (
 	"errors"
 	"com.amdatu.rti.deployment/rolling"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+	"com.amdatu.rti.deployment/redeploy"
 )
 
 var kubernetesurl, etcdUrl, port string
@@ -73,13 +74,27 @@ func DeploymentHandler(respWriter http.ResponseWriter, req *http.Request) {
 	deployer := cluster.NewDeployer(kubernetesurl, etcdUrl, deployment, &logger)
 	var deploymentError error
 
-	switch deployment.DeploymentType {
+	/*Check if namespace has the current version deployed
+		If so, switch to redeployer
+	*/
+
+	logger.Println("Checking for existing service...")
+	_, err = deployer.K8client.Services(deployment.Namespace).Get(deployer.CreateRcName())
+
+	if err != nil {
+		logger.Println("No existing service found, starting deployment")
+
+		switch deployment.DeploymentType {
 		case "blue-green":
 			deploymentError = bluegreen.NewBlueGreen(deployer).Deploy();
 		case "rolling":
 			deploymentError = rolling.NewRollingDeployer(deployer).Deploy();
 		default:
 			deploymentError = errors.New(fmt.Sprintf("Unknown type of deployment: %v", deployment.DeploymentType))
+		}
+	} else {
+		logger.Println("Existing service found. Using redeployer")
+		deploymentError = redeploy.NewRedeployer(deployer).Deploy();
 	}
 
 	if  deploymentError != nil {
