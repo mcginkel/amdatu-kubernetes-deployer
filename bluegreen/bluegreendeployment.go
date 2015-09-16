@@ -92,13 +92,23 @@ func (bluegreen *bluegreen) createReplicationController() error {
 
 func (bluegreen *bluegreen) watchPods(name, version string, callback chan string) error {
 	podSelector := labels.Set{"name": name, "version": bluegreen.deployer.Deployment.NewVersion}.AsSelector()
-	watchNew, err := bluegreen.deployer.K8client.Pods(bluegreen.deployer.Deployment.Namespace).Watch(podSelector, fields.Everything(), "0")
+
+	podList, err := bluegreen.deployer.K8client.Pods(bluegreen.deployer.Deployment.Namespace).List(podSelector, fields.Everything())
 
 	if err != nil {
+		bluegreen.deployer.Logger.Println(err)
+		return err
+	}
+
+	watchNew, err := bluegreen.deployer.K8client.Pods(bluegreen.deployer.Deployment.Namespace).Watch(podSelector, fields.Everything(), podList.ResourceVersion)
+
+	if err != nil {
+		bluegreen.deployer.Logger.Println(err)
 		return err
 	}
 
 	watchChan := watchNew.ResultChan()
+	bluegreen.deployer.Logger.Println("Waiting for pods to spin up...")
 
 	for pod := range watchChan {
 		podObj := pod.Object.(*api.Pod)
@@ -143,7 +153,7 @@ type BackendConfig struct {
 	Settings BackendSettings
 }
 
-func (bluegreen *bluegreen) prepareNewVulcanBackend() error {
+func (bluegreen *bluegreen)       prepareNewVulcanBackend() error {
 	keyName := fmt.Sprintf("/vulcan/backends/%v-%v/backend", bluegreen.deployer.Deployment.Namespace, bluegreen.deployer.CreateRcName())
 
 	backend := BackendConfig {

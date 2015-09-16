@@ -56,7 +56,14 @@ func (redeployer *redeployer) Deploy() error {
 
 func (redeployer *redeployer) waitForNewPod(callback chan bool, existingPods map[string]*api.Pod) {
 	podSelector := labels.Set{"name": redeployer.deployer.CreateRcName(), "version": redeployer.deployer.Deployment.NewVersion}.AsSelector()
-	watchNew, err := redeployer.deployer.K8client.Pods(redeployer.deployer.Deployment.Namespace).Watch(podSelector, fields.Everything(), "0")
+	podList, err := redeployer.deployer.K8client.Pods(redeployer.deployer.Deployment.Namespace).List(podSelector, fields.Everything())
+
+	if err != nil {
+		redeployer.deployer.Logger.Println(err)
+		return err
+	}
+
+	watchNew, err := redeployer.deployer.K8client.Pods(redeployer.deployer.Deployment.Namespace).Watch(podSelector, fields.Everything(), podList.ResourceVersion)
 
 	if err != nil {
 		redeployer.deployer.Logger.Println(err)

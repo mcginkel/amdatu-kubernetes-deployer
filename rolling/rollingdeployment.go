@@ -35,7 +35,16 @@ func (rollingdeploy *rollingdeploy) Deploy() error {
 	rollingdeploy.deployer.Logger.Printf("Active RC %v with %v replicas. Starting scale down...\n", currentRc.Name, currentRc.Status.Replicas)
 
 	newRcLabelSelector := labels.Set{"name": newRc.Labels["name"], "version": rollingdeploy.deployer.Deployment.NewVersion}.AsSelector()
-	watchNew, err := rollingdeploy.deployer.K8client.Pods(rollingdeploy.deployer.Deployment.Namespace).Watch(newRcLabelSelector, fields.Everything(), "0")
+
+	podList, err := rollingdeploy.deployer.K8client.Pods(rollingdeploy.deployer.Deployment.Namespace).List(newRcLabelSelector, fields.Everything())
+
+	if err != nil {
+		rollingdeploy.deployer.Logger.Println(err)
+		return err
+	}
+
+
+	watchNew, err := rollingdeploy.deployer.K8client.Pods(rollingdeploy.deployer.Deployment.Namespace).Watch(newRcLabelSelector, fields.Everything(), podList.ResourceVersion)
 	if(err != nil) {
 		return err
 	}

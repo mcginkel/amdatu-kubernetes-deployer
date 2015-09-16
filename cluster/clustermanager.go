@@ -64,7 +64,7 @@ func (logger *Logger) Printf(format string, v ...interface{}) {
 
 func NewDeployer(kubernetesUrl string, etcdUrl string, deployment Deployment, logger *Logger) *Deployer{
 
-	config := client.Config{Host: kubernetesUrl, Version: "v1beta3"}
+	config := client.Config{Host: kubernetesUrl, Version: "v1"}
 	c, err := client.New(&config)
 
 	if err != nil {
@@ -118,7 +118,15 @@ func (deployer *Deployer) CreateReplicationController() (*api.ReplicationControl
 	}
 
 	deployer.Logger.Println("Creating Replication Controller")
-	return deployer.K8client.ReplicationControllers(deployer.Deployment.Namespace).Create(ctrl)
+	var result, err = deployer.K8client.ReplicationControllers(deployer.Deployment.Namespace).Create(ctrl)
+	if err != nil {
+		deployer.Logger.Println("Error while creating replication controller")
+		deployer.Logger.Println(err)
+	}
+
+	deployer.Logger.Printf("Replication Controller %v created\n", result.ObjectMeta.Name)
+
+	return result,err
 
 }
 
