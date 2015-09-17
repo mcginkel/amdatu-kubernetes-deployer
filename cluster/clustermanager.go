@@ -25,6 +25,8 @@ type Deployment struct {
 	PodSpec api.PodSpec
 	UseHealthCheck bool `json:"useHealthCheck,omitempty"`
 	Namespace string `json:"namespace,omitempty"`
+	Email string `json:"email,omitempty`
+	Password string `json:"password,omitempty`
 }
 
 func (deployment *Deployment) String() string {

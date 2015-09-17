@@ -13,14 +13,16 @@ import (
 	"com.amdatu.rti.deployment/rolling"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"com.amdatu.rti.deployment/redeploy"
+	"com.amdatu.rti.deployment/auth"
 )
 
-var kubernetesurl, etcdUrl, port string
+var kubernetesurl, etcdUrl, port, dashboardurl string
 
 func init() {
 	flag.StringVar(&kubernetesurl, "kubernetes", "", "URL to the Kubernetes API server")
 	flag.StringVar(&etcdUrl, "etcd", "", "Url to etcd")
 	flag.StringVar(&port, "deployport", "8000", "Port to listen for deployments")
+	flag.StringVar(&dashboardurl, "dashboardurl", "noauth", "Dashboard url to use for authentication. Skip authentication when not set.")
 
 	exampleUsage := "Missing required argument %v. Example usage: httplistener -kubernetes http://[kubernetes-api-url]:8080 -etcd http://[etcd-url]:2379 -deployport 8000"
 
@@ -70,6 +72,20 @@ func DeploymentHandler(respWriter http.ResponseWriter, req *http.Request) {
 	}
 
 	logger.Printf("%v\n", deployment.String())
+
+	if dashboardurl != "noauth" {
+		namespaces, err := auth.AuthenticateAndGetNamespaces(dashboardurl, deployment.Email, deployment.Password)
+
+		if err != nil {
+			logger.Println("Could not authenticate: ", err)
+			return
+		}
+
+		if !auth.NameSpaceInSet(deployment.Namespace, namespaces) {
+			logger.Printf("User %v not authorised to namespace %v", "admin@amdatu.org", deployment.Namespace)
+			return
+		}
+	}
 
 	deployer := cluster.NewDeployer(kubernetesurl, etcdUrl, deployment, &logger)
 	var deploymentError error

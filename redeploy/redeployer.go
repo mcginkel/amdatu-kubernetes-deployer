@@ -60,7 +60,7 @@ func (redeployer *redeployer) waitForNewPod(callback chan bool, existingPods map
 
 	if err != nil {
 		redeployer.deployer.Logger.Println(err)
-		return err
+		return
 	}
 
 	watchNew, err := redeployer.deployer.K8client.Pods(redeployer.deployer.Deployment.Namespace).Watch(podSelector, fields.Everything(), podList.ResourceVersion)
