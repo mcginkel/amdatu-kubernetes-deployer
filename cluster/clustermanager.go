@@ -64,9 +64,9 @@ func (logger *Logger) Printf(format string, v ...interface{}) {
 	io.WriteString(logger.RespWriter, msg)
 }
 
-func NewDeployer(kubernetesUrl string, etcdUrl string, deployment Deployment, logger *Logger) *Deployer{
+func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment Deployment, logger *Logger) *Deployer{
 
-	config := client.Config{Host: kubernetesUrl, Version: "v1"}
+	config := client.Config{Host: kubernetesUrl, Version: "v1", Username: kubernetesUsername, Password: kubernetesPassword, Insecure:true }
 	c, err := client.New(&config)
 
 	if err != nil {

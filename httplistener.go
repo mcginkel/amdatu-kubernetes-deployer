@@ -16,13 +16,15 @@ import (
 	"com.amdatu.rti.deployment/auth"
 )
 
-var kubernetesurl, etcdUrl, port, dashboardurl string
+var kubernetesurl, etcdUrl, port, dashboardurl, kubernetesUsername, kubernetesPassword string
 
 func init() {
 	flag.StringVar(&kubernetesurl, "kubernetes", "", "URL to the Kubernetes API server")
 	flag.StringVar(&etcdUrl, "etcd", "", "Url to etcd")
 	flag.StringVar(&port, "deployport", "8000", "Port to listen for deployments")
 	flag.StringVar(&dashboardurl, "dashboardurl", "noauth", "Dashboard url to use for authentication. Skip authentication when not set.")
+	flag.StringVar(&kubernetesUsername, "kubernetesusername", "noauth", "Username to authenticate against Kubernetes API server. Skip authentication when not set")
+	flag.StringVar(&kubernetesPassword, "kubernetespassword", "noauth", "Username to authenticate against Kubernetes API server.")
 
 	exampleUsage := "Missing required argument %v. Example usage: httplistener -kubernetes http://[kubernetes-api-url]:8080 -etcd http://[etcd-url]:2379 -deployport 8000"
 
@@ -87,7 +89,7 @@ func DeploymentHandler(respWriter http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	deployer := cluster.NewDeployer(kubernetesurl, etcdUrl, deployment, &logger)
+	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, deployment, &logger)
 	var deploymentError error
 
 	/*Check if namespace has the current version deployed
