@@ -81,7 +81,7 @@ func DeploymentHandler(respWriter http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		if !auth.NameSpaceInSet(deployment.Namespace, namespaces) {
+		if !auth.StringInSet(deployment.Namespace, namespaces) {
 			logger.Printf("User %v not authorised to namespace %v", "admin@amdatu.org", deployment.Namespace)
 			return
 		}
