@@ -3,7 +3,6 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"encoding/json"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/coreos/go-etcd/etcd"
 	"log"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
 	"errors"
@@ -13,7 +12,8 @@ import (
 	"net/http"
 	"io"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"strings"
+	"com.amdatu.rti.deployment/proxies"
+	etcdclient "github.com/coreos/etcd/client"
 )
 
 type Deployment struct {
@@ -44,8 +44,8 @@ type Deployer struct {
 	Deployment Deployment
 	EtcdUrl string
 	K8client *client.Client
-	EtcdClient *etcd.Client
 	Logger *Logger
+	ProxyConfigurator *proxies.ProxyConfigurator
 }
 
 type Logger struct {
@@ -76,10 +76,16 @@ func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPass
 	logger.Printf("Connected to Kubernetes API server on %v\n", kubernetesUrl)
 	logger.Printf("Kubernetes version %v\n", c.APIVersion())
 
+	cfg := etcdclient.Config{
+		Endpoints: []string{"http://127.0.0.1:2379"},
+	}
 
-	etcdClient := etcd.NewClient(strings.Split(etcdUrl, ","))
+	etcdClient, err := etcdclient.New(cfg)
+	if err != nil {
+		log.Fatal("Couldn't connect to etcd")
+	}
 
-	return &Deployer{kubernetesUrl, deployment, etcdUrl, c, etcdClient, logger}
+	return &Deployer{kubernetesUrl, deployment, etcdUrl, c, logger, proxies.NewProxyConfigurator(etcdClient)}
 
 }
 
@@ -229,7 +235,7 @@ func (deployer *Deployer) CleaupOldDeployments() {
 	for _,rc := range controllers {
 		if rc.Name != "" {
 			deployer.deleteRc(rc)
-			deployer.deleteVulcanBackend(rc)
+			deployer.ProxyConfigurator.DeleteDeployment(rc.Name)
 		}
 	}
 
@@ -276,28 +282,6 @@ func (deployer *Deployer) DeletePod(pod api.Pod) {
 func (deployer *Deployer) deleteService(service api.Service) {
 	deployer.Logger.Printf("Deleting Service %v", service.Name)
 	deployer.K8client.Services(deployer.Deployment.Namespace).Delete(service.Name)
-}
-
-func (deployer *Deployer) deleteVulcanBackend(rc api.ReplicationController) {
-
-	if len(rc.Name) > 0 {
-		keyName := fmt.Sprintf("/vulcan/backends/%v-%v", rc.Namespace, rc.Name)
-		resp, err := deployer.EtcdClient.Get(fmt.Sprintf("%v/servers", keyName), false, false)
-		if err != nil {
-			log.Println(err)
-		} else {
-			for _,server := range resp.Node.Nodes {
-				deployer.Logger.Printf("Deleting Vulcan server %v", server.Key)
-				deployer.EtcdClient.Delete( server.Key, false)
-			}
-		}
-
-		deployer.EtcdClient.Delete(keyName + "/backend", false)
-
-
-		deployer.Logger.Printf("Deleting Vulcan backend %v", keyName)
-		deployer.EtcdClient.Delete(keyName, true)
-	}
 }
 
 func (deployer *Deployer) CountRunningPods(pods []api.Pod) int {
