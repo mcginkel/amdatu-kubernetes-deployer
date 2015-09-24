@@ -1,19 +1,19 @@
 package cluster
 import (
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api"
 	"encoding/json"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/client/unversioned"
 	"log"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/labels"
 	"errors"
 	"fmt"
 	"com.amdatu.rti.deployment/healthcheck"
 	"time"
-	"net/http"
 	"io"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/fields"
 	"com.amdatu.rti.deployment/proxies"
 	etcdclient "github.com/coreos/etcd/client"
+	"bufio"
 )
 
 type Deployment struct {
@@ -21,8 +21,8 @@ type Deployment struct {
 	NewVersion string `json:"newVersion,omitempty"`
 	AppName string `json:"appName,omitempty"`
 	Replicas int `json:"replicas,omitempty"`
-	VulcanFrontend string `json:"vulcanFrontend,omitempty"`
-	PodSpec api.PodSpec
+	Frontend string `json:"frontend,omitempty"`
+	PodSpec api.PodSpec `json:podspec`
 	UseHealthCheck bool `json:"useHealthCheck,omitempty"`
 	Namespace string `json:"namespace,omitempty"`
 	Email string `json:"email,omitempty`
@@ -43,13 +43,13 @@ type Deployer struct {
 	KubernetesUrl string
 	Deployment Deployment
 	EtcdUrl string
-	K8client *client.Client
+	K8client *unversioned.Client
 	Logger *Logger
 	ProxyConfigurator *proxies.ProxyConfigurator
 }
 
 type Logger struct {
-	RespWriter http.ResponseWriter
+	RespWriter *bufio.ReadWriter
 }
 
 func (logger *Logger) Println(v ...interface{}) {
@@ -66,8 +66,8 @@ func (logger *Logger) Printf(format string, v ...interface{}) {
 
 func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment Deployment, logger *Logger) *Deployer{
 
-	config := client.Config{Host: kubernetesUrl, Version: "v1", Username: kubernetesUsername, Password: kubernetesPassword, Insecure:true }
-	c, err := client.New(&config)
+	config := unversioned.Config{Host: kubernetesUrl, Version: "v1", Username: kubernetesUsername, Password: kubernetesPassword, Insecure:true }
+	c, err := unversioned.New(&config)
 
 	if err != nil {
 		log.Panic("Error creating Kuberentes client", err)
@@ -77,7 +77,7 @@ func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPass
 	logger.Printf("Kubernetes version %v\n", c.APIVersion())
 
 	cfg := etcdclient.Config{
-		Endpoints: []string{"http://127.0.0.1:2379"},
+		Endpoints: []string{etcdUrl},
 	}
 
 	etcdClient, err := etcdclient.New(cfg)
@@ -235,7 +235,7 @@ func (deployer *Deployer) CleaupOldDeployments() {
 	for _,rc := range controllers {
 		if rc.Name != "" {
 			deployer.deleteRc(rc)
-			deployer.ProxyConfigurator.DeleteDeployment(rc.Name)
+			deployer.ProxyConfigurator.DeleteDeployment(rc.Namespace + "-" + rc.Name)
 		}
 	}
 

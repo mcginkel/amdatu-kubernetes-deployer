@@ -1,10 +1,10 @@
 package rolling
 import (
 	"com.amdatu.rti.deployment/cluster"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/fields"
 	"errors"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/labels"
 	"time"
 )
 

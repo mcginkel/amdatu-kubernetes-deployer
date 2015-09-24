@@ -130,6 +130,39 @@ func TestCreateFrontend(t *testing.T) {
 
 }
 
+func TestCreateFrontend_ExistingShouldNotBeOverwritten(t *testing.T) {
+	pc := createProxyConfigurator()
+
+	frontend := Frontend{
+		Hostname: "myhostname.com",
+		Type: "http",
+		BackendId: "testbackend",
+	}
+
+	pc.CreateFrontEnd(&frontend)
+
+	frontend = Frontend{
+		Hostname: "myhostname.com",
+		Type: "http",
+		BackendId: "testbackend2",
+	}
+
+	key, err := pc.CreateFrontEnd(&frontend)
+	if err != nil {
+		t.Error(err)
+	}
+
+	resp, err := kAPI.Get(context.Background(), key, nil)
+	value := Frontend{}
+	if err := json.Unmarshal([]byte(resp.Node.Value), &value); err != nil {
+		t.Error(err)
+	}
+
+	if value.BackendId != "testbackend" {
+		t.Error("Creating a frontend should not affect existing confguration")
+	}
+}
+
 func TestSwitchBackend(t *testing.T) {
 	pc := createProxyConfigurator()
 

@@ -11,12 +11,18 @@ import (
 	"com.amdatu.rti.deployment/cluster"
 	"errors"
 	"com.amdatu.rti.deployment/rolling"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api"
 	"com.amdatu.rti.deployment/redeploy"
 	"com.amdatu.rti.deployment/auth"
+	"k8s.io/kubernetes/pkg/client/unversioned"
+	"github.com/coreos/etcd/client"
+	"com.amdatu.rti.deployment/proxies"
+	"bufio"
+	"net"
 )
 
 var kubernetesurl, etcdUrl, port, dashboardurl, kubernetesUsername, kubernetesPassword string
+var deploymentChannel = make(chan *DeploymentRequest)
 
 func init() {
 	flag.StringVar(&kubernetesurl, "kubernetes", "", "URL to the Kubernetes API server")
@@ -42,23 +48,78 @@ func init() {
 func main() {
 	r := mux.NewRouter()
 
-	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
+	r.HandleFunc("/deployment", QueueDeployment).Methods("POST")
+	config := unversioned.Config{Host: kubernetesurl, Version: "v1", Username: kubernetesUsername, Password: kubernetesPassword, Insecure:true }
+	c, err := unversioned.New(&config)
 
+	if err != nil {
+		log.Panic("Error creating Kuberentes client", err)
+	}
+
+	cfg := client.Config{
+		Endpoints: []string{etcdUrl},
+	}
+
+	etcdClient, err := client.New(cfg)
+	if err != nil {
+		log.Fatal("Couldn't connect to etcd", err)
+	}
+
+	cluster.StartWatching(c, proxies.NewProxyConfigurator(etcdClient))
 
 	log.Printf("Listining for deployments on port %v\n", port)
+
+	go DeployEventLoop()
 
 	if  err := http.ListenAndServe(":" + port, r); err != nil {
 		log.Fatal(err)
 	}
+
+
 }
 
+type DeploymentRequest struct {
+	Con net.Conn
+	Bufrw *bufio.ReadWriter
+	Req *http.Request
+}
 
+func QueueDeployment(respWriter http.ResponseWriter, req *http.Request) {
+	println("Adding to deploy queue")
 
-func DeploymentHandler(respWriter http.ResponseWriter, req *http.Request) {
-	logger := cluster.Logger{respWriter}
+	hj, ok := respWriter.(http.Hijacker)
+	if !ok {
+		http.Error(respWriter, "webserver doesn't support hijacking", http.StatusInternalServerError)
+		return
+	}
+	con, bufrw, err := hj.Hijack()
+	if err != nil {
+		http.Error(respWriter, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	defer req.Body.Close()
-	body, err := ioutil.ReadAll(req.Body)
+	//defer conn.Close()
+	bufrw.WriteString("Deployment queued\n")
+
+	deploymentChannel <- &DeploymentRequest{con, bufrw, req}
+}
+
+func DeployEventLoop() {
+	println("Starting deploy loop")
+
+	for request := range deploymentChannel {
+		println("Starting deploy")
+		DeploymentHandler(request)
+	}
+}
+
+func DeploymentHandler(deploymentRequest *DeploymentRequest) {
+	logger := cluster.Logger{deploymentRequest.Bufrw}
+
+	defer deploymentRequest.Con.Close()
+	defer deploymentRequest.Req.Body.Close()
+
+	body, err := ioutil.ReadAll(deploymentRequest.Req.Body)
 
 	if err != nil {
 		logger.Printf("Error reading body: %v", err)
@@ -122,7 +183,7 @@ func DeploymentHandler(respWriter http.ResponseWriter, req *http.Request) {
 		logger.Println("============================ Completed deployment =======================")
 	}
 
-
+	deploymentRequest.Bufrw.Flush()
 
 }
 

@@ -9,9 +9,9 @@ package bluegreen
  */
 
 import (
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/fields"
 	"time"
 	"errors"
 	"com.amdatu.rti.deployment/cluster"
@@ -36,7 +36,7 @@ func (bluegreen *bluegreen) Deploy() error {
 
 	frontend := proxies.Frontend{
 		Type: "http",
-		Hostname: bluegreen.deployer.Deployment.VulcanFrontend,
+		Hostname: bluegreen.deployer.Deployment.Frontend,
 		BackendId: backendId,
 	}
 
@@ -54,9 +54,13 @@ func (bluegreen *bluegreen) Deploy() error {
 		return err
 	}
 
+	bluegreen.deployer.Logger.Println("Sleeping for 20 seconds for proxy to reload...")
+	time.Sleep(time.Second * 20)
+
+
 	bluegreen.deployer.Logger.Println("Switch proxy backends....")
 
-	if err := bluegreen.deployer.ProxyConfigurator.SwitchBackend(bluegreen.deployer.Deployment.VulcanFrontend, backendId); err != nil {
+	if err := bluegreen.deployer.ProxyConfigurator.SwitchBackend(bluegreen.deployer.Deployment.Frontend, backendId); err != nil {
 		bluegreen.deployer.Logger.Printf("%", err)
 		return err
 	}

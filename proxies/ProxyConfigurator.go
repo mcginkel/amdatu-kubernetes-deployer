@@ -64,15 +64,25 @@ func (proxyConfigurator *ProxyConfigurator) CreateFrontEnd(frontend *Frontend) (
 		return "",err
 	}
 
+	key := fmt.Sprintf("/proxy/frontends/%v", frontend.Hostname)
+	resp, _ := kAPI.Get(context.Background(), key, nil)
+
+	if resp != nil {
+		log.Printf("Frontend %v already exists, skipping creation\n", key)
+		return key, nil
+	}
+
 	bytes, err := json.Marshal(frontend)
 	if err != nil {
 		return "",err
 	}
 
-	key := fmt.Sprintf("/proxy/frontends/%v", frontend.Hostname)
 	if _,err := kAPI.Set(context.Background(), key, string(bytes), nil); err != nil {
+		log.Println("Error creating proxy frontend ", err)
 		return "", err
 	}
+
+	log.Printf("Created proxy frontend %v", key)
 
 	return key, nil
 }
