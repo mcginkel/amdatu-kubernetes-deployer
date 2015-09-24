@@ -17,12 +17,11 @@ import (
 	"k8s.io/kubernetes/pkg/client/unversioned"
 	"github.com/coreos/etcd/client"
 	"com.amdatu.rti.deployment/proxies"
-	"bufio"
-	"net"
+	"sync"
 )
 
 var kubernetesurl, etcdUrl, port, dashboardurl, kubernetesUsername, kubernetesPassword string
-var deploymentChannel = make(chan *DeploymentRequest)
+var mutex = &sync.Mutex{}
 
 func init() {
 	flag.StringVar(&kubernetesurl, "kubernetes", "", "URL to the Kubernetes API server")
@@ -48,7 +47,7 @@ func init() {
 func main() {
 	r := mux.NewRouter()
 
-	r.HandleFunc("/deployment", QueueDeployment).Methods("POST")
+	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
 	config := unversioned.Config{Host: kubernetesurl, Version: "v1", Username: kubernetesUsername, Password: kubernetesPassword, Insecure:true }
 	c, err := unversioned.New(&config)
 
@@ -69,8 +68,6 @@ func main() {
 
 	log.Printf("Listining for deployments on port %v\n", port)
 
-	go DeployEventLoop()
-
 	if  err := http.ListenAndServe(":" + port, r); err != nil {
 		log.Fatal(err)
 	}
@@ -79,47 +76,17 @@ func main() {
 }
 
 type DeploymentRequest struct {
-	Con net.Conn
-	Bufrw *bufio.ReadWriter
+	ResponseWriter http.ResponseWriter
 	Req *http.Request
 }
 
-func QueueDeployment(respWriter http.ResponseWriter, req *http.Request) {
-	println("Adding to deploy queue")
+func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
+	mutex.Lock()
 
-	hj, ok := respWriter.(http.Hijacker)
-	if !ok {
-		http.Error(respWriter, "webserver doesn't support hijacking", http.StatusInternalServerError)
-		return
-	}
-	con, bufrw, err := hj.Hijack()
-	if err != nil {
-		http.Error(respWriter, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	logger := cluster.Logger{responseWriter}
 
-	//defer conn.Close()
-	bufrw.WriteString("Deployment queued\n")
-
-	deploymentChannel <- &DeploymentRequest{con, bufrw, req}
-}
-
-func DeployEventLoop() {
-	println("Starting deploy loop")
-
-	for request := range deploymentChannel {
-		println("Starting deploy")
-		DeploymentHandler(request)
-	}
-}
-
-func DeploymentHandler(deploymentRequest *DeploymentRequest) {
-	logger := cluster.Logger{deploymentRequest.Bufrw}
-
-	defer deploymentRequest.Con.Close()
-	defer deploymentRequest.Req.Body.Close()
-
-	body, err := ioutil.ReadAll(deploymentRequest.Req.Body)
+	defer req.Body.Close()
+	body, err := ioutil.ReadAll(req.Body)
 
 	if err != nil {
 		logger.Printf("Error reading body: %v", err)
@@ -183,7 +150,7 @@ func DeploymentHandler(deploymentRequest *DeploymentRequest) {
 		logger.Println("============================ Completed deployment =======================")
 	}
 
-	deploymentRequest.Bufrw.Flush()
+	mutex.Unlock()
 
 }
 

@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"com.amdatu.rti.deployment/healthcheck"
 	"time"
+	"net/http"
 	"io"
 	"k8s.io/kubernetes/pkg/fields"
 	"com.amdatu.rti.deployment/proxies"
 	etcdclient "github.com/coreos/etcd/client"
-	"bufio"
 )
 
 type Deployment struct {
@@ -49,7 +49,7 @@ type Deployer struct {
 }
 
 type Logger struct {
-	RespWriter *bufio.ReadWriter
+	RespWriter http.ResponseWriter
 }
 
 func (logger *Logger) Println(v ...interface{}) {
