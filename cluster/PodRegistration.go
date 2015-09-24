@@ -41,7 +41,9 @@ func watch(K8client *unversioned.Client, ProxyConfigurator *proxies.ProxyConfigu
 
 		if pod.Type == "MODIFIED" && podObj.Status.Phase == "Running" {
 
-			ProxyConfigurator.AddBackendServer(backendName, podObj.Status.PodIP, podObj.Spec.Containers[0].Ports[0].ContainerPort)
+			if ProxyConfigurator.FrontendExistsForDeployment(backendName) {
+				ProxyConfigurator.AddBackendServer(backendName, podObj.Status.PodIP, podObj.Spec.Containers[0].Ports[0].ContainerPort)
+			}
 
 		} else if pod.Type == "DELETED" {
 

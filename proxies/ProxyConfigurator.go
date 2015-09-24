@@ -26,6 +26,26 @@ func NewProxyConfigurator(etcdClient client.Client) *ProxyConfigurator {
 	return &ProxyConfigurator{etcdClient}
 }
 
+func (proxyConfigurator *ProxyConfigurator) FrontendExistsForDeployment(deploymentName string) bool {
+	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
+	result, err := kAPI.Get(context.Background(), "/proxy/frontends", &client.GetOptions{})
+	if err != nil {
+		fmt.Println("Error listing frontends, now assuming the frontend doesn't exist")
+		return false
+	}
+
+	for _,entry := range result.Node.Nodes {
+		value := Frontend{}
+		json.Unmarshal([]byte(entry.Value), &value)
+
+		if value.BackendId == deploymentName {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (proxyConfigurator *ProxyConfigurator) AddBackendServer(deploymentName string, ip string, port int) error {
 	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
 	if err := prepareBaseConfig(kAPI); err != nil {

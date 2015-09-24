@@ -34,14 +34,18 @@ func (bluegreen *bluegreen) Deploy() error {
 	bluegreen.deployer.Logger.Println("Prepare proxy backend....")
 	backendId := bluegreen.deployer.Deployment.Namespace + "-" + bluegreen.deployer.CreateRcName()
 
-	frontend := proxies.Frontend{
-		Type: "http",
-		Hostname: bluegreen.deployer.Deployment.Frontend,
-		BackendId: backendId,
-	}
+	if bluegreen.deployer.Deployment.Frontend != "" {
+		frontend := proxies.Frontend{
+			Type: "http",
+			Hostname: bluegreen.deployer.Deployment.Frontend,
+			BackendId: backendId,
+		}
 
-	if _,err := bluegreen.deployer.ProxyConfigurator.CreateFrontEnd(&frontend); err != nil {
-		return err
+		if _,err := bluegreen.deployer.ProxyConfigurator.CreateFrontEnd(&frontend); err != nil {
+			return err
+		}
+	} else {
+		bluegreen.deployer.Logger.Println("No frontend configured in deployment, skipping creation")
 	}
 
 	_, err := bluegreen.deployer.CreateService()

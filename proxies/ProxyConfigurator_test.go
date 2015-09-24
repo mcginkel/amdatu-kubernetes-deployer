@@ -217,6 +217,35 @@ func TestBackendServer(t *testing.T) {
 
 }
 
+func TestFrontendExistsForBackend_NotExisting(t *testing.T) {
+	pc := createProxyConfigurator()
+
+	exists := pc.FrontendExistsForDeployment("somebackend")
+
+	if exists {
+		t.Fail()
+	}
+}
+
+func TestFrontendExistsForBackend_Existing(t *testing.T) {
+	pc := createProxyConfigurator()
+
+	kAPI.Delete(context.Background(), "/proxy", &client.DeleteOptions{Recursive:true, Dir:true})
+	frontend := Frontend{
+		Hostname: "myhostname.com",
+		Type: "http",
+		BackendId: "testbackend",
+	}
+
+	pc.CreateFrontEnd(&frontend)
+
+	exists := pc.FrontendExistsForDeployment("testbackend")
+
+	if !exists {
+		t.Fail()
+	}
+}
+
 func createEtcdClient() client.Client{
 	cfg := client.Config{
 		Endpoints: []string{"http://127.0.0.1:2379"},
