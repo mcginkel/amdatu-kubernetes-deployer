@@ -50,7 +50,7 @@ func (bluegreen *bluegreen) Deploy() error {
 	}
 
 	if err := bluegreen.createReplicationController(); err != nil {
-		bluegreen.deployer.Logger.Printf("%", err)
+		bluegreen.deployer.Logger.Println(err)
 		return err
 	}
 
@@ -91,7 +91,10 @@ func (bluegreen *bluegreen) createReplicationController() error {
 
 	//Wait for either the pods to report healthy, or the timeout to happen
 	select {
-	case <- callBack:
+	case msg := <- callBack:
+		if msg == "ERROR" {
+			return errors.New("Did not find enough running pods")
+		}
 	case <- timeout:
 		return errors.New("Timeout waiting for pods")
 	}
@@ -107,6 +110,7 @@ func (bluegreen *bluegreen) watchPods(name, version string, callback chan string
 
 	if err != nil {
 		bluegreen.deployer.Logger.Println(err)
+		callback <- "ERROR"
 		return err
 	}
 
@@ -114,6 +118,7 @@ func (bluegreen *bluegreen) watchPods(name, version string, callback chan string
 
 	if err != nil {
 		bluegreen.deployer.Logger.Println(err)
+		callback <- "ERROR"
 		return err
 	}
 
@@ -125,10 +130,20 @@ func (bluegreen *bluegreen) watchPods(name, version string, callback chan string
 
 		if podObj.Status.Phase == "Running" {
 
-			bluegreen.deployer.CheckPodHealth(podObj)
+
+			if err := bluegreen.deployer.CheckPodHealth(podObj); err != nil {
+				watchNew.Stop()
+				callback <- "ERROR"
+
+				return err
+			}
 
 			pods, listErr := bluegreen.deployer.K8client.Pods(bluegreen.deployer.Deployment.Namespace).List(podSelector, fields.Everything())
 			if listErr != nil {
+				bluegreen.deployer.Logger.Println(listErr)
+				watchNew.Stop()
+				callback <- "ERROR"
+
 				return err
 			}
 
@@ -146,21 +161,3 @@ func (bluegreen *bluegreen) watchPods(name, version string, callback chan string
 
 	return nil
 }
-
-
-type Backend struct {
-	Type string
-	BackendId string
-	Route string
-}
-
-type BackendSettings struct {
-	MaxIdleConnsPerHost int
-}
-
-type BackendConfig struct {
-	Type string
-	Settings BackendSettings
-}
-
-
