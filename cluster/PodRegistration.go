@@ -9,10 +9,13 @@ import (
 )
 
 func StartWatching(k8client *unversioned.Client, proxyConfigurator *proxies.ProxyConfigurator) {
-	go watch(k8client, proxyConfigurator)
+	errorChannel := make(chan string)
+
+	go watch(k8client, proxyConfigurator, errorChannel)
+	go reconnector(k8client, proxyConfigurator, errorChannel)
 }
 
-func watch(K8client *unversioned.Client, ProxyConfigurator *proxies.ProxyConfigurator) {
+func watch(K8client *unversioned.Client, ProxyConfigurator *proxies.ProxyConfigurator, errorChannel chan string) {
 	podList, err := K8client.Pods("").List(labels.Everything(), fields.Everything())
 	resouceVersion := podList.ResourceVersion
 
@@ -28,6 +31,12 @@ func watch(K8client *unversioned.Client, ProxyConfigurator *proxies.ProxyConfigu
 	for pod := range channel {
 		podObj := pod.Object.(*api.Pod)
 
+		if pod.Type == "ERROR" {
+			errorChannel <- "Disconnect"
+
+			return
+		}
+
 		backendName := fmt.Sprintf("%v-%v", podObj.Namespace, podObj.Labels["name"])
 
 		if pod.Type == "MODIFIED" && podObj.Status.Phase == "Running" {
@@ -40,4 +49,12 @@ func watch(K8client *unversioned.Client, ProxyConfigurator *proxies.ProxyConfigu
 
 		}
 	}
+}
+
+func reconnector(k8client *unversioned.Client, proxyConfigurator *proxies.ProxyConfigurator, errorChannel chan string) {
+	for _ = range errorChannel {
+		fmt.Println("Reconnecting watch")
+		go watch(k8client, proxyConfigurator, errorChannel)
+	}
+
 }
