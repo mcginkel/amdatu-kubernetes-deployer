@@ -1,22 +1,23 @@
 package main
+
 import (
-	"github.com/gorilla/mux"
-	"net/http"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/gorilla/mux"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/api"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/client/unversioned"
+	"com.amdatu.rti.deployment/auth"
+	"com.amdatu.rti.deployment/bluegreen"
+	"com.amdatu.rti.deployment/cluster"
+	"com.amdatu.rti.deployment/proxies"
+	"com.amdatu.rti.deployment/redeploy"
+	"com.amdatu.rti.deployment/rolling"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
-	"encoding/json"
-	"fmt"
-	"com.amdatu.rti.deployment/bluegreen"
-	"flag"
-	"com.amdatu.rti.deployment/cluster"
-	"errors"
-	"com.amdatu.rti.deployment/rolling"
-	"k8s.io/kubernetes/pkg/api"
-	"com.amdatu.rti.deployment/redeploy"
-	"com.amdatu.rti.deployment/auth"
-	"k8s.io/kubernetes/pkg/client/unversioned"
-	"github.com/coreos/etcd/client"
-	"com.amdatu.rti.deployment/proxies"
+	"net/http"
 	"sync"
 )
 
@@ -48,7 +49,7 @@ func main() {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
-	config := unversioned.Config{Host: kubernetesurl, Version: "v1", Username: kubernetesUsername, Password: kubernetesPassword, Insecure:true }
+	config := unversioned.Config{Host: kubernetesurl, Version: "v1", Username: kubernetesUsername, Password: kubernetesPassword, Insecure: true}
 	c, err := unversioned.New(&config)
 
 	if err != nil {
@@ -68,16 +69,15 @@ func main() {
 
 	log.Printf("Listining for deployments on port %v\n", port)
 
-	if  err := http.ListenAndServe(":" + port, r); err != nil {
+	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
 	}
-
 
 }
 
 type DeploymentRequest struct {
 	ResponseWriter http.ResponseWriter
-	Req *http.Request
+	Req            *http.Request
 }
 
 func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
@@ -121,7 +121,7 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	var deploymentError error
 
 	/*Check if namespace has the current version deployed
-		If so, switch to redeployer
+	If so, switch to redeployer
 	*/
 
 	logger.Println("Checking for existing service...")
@@ -132,18 +132,18 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 
 		switch deployment.DeploymentType {
 		case "blue-green":
-			deploymentError = bluegreen.NewBlueGreen(deployer).Deploy();
+			deploymentError = bluegreen.NewBlueGreen(deployer).Deploy()
 		case "rolling":
-			deploymentError = rolling.NewRollingDeployer(deployer).Deploy();
+			deploymentError = rolling.NewRollingDeployer(deployer).Deploy()
 		default:
 			deploymentError = errors.New(fmt.Sprintf("Unknown type of deployment: %v", deployment.DeploymentType))
 		}
 	} else {
 		logger.Println("Existing service found. Using redeployer")
-		deploymentError = redeploy.NewRedeployer(deployer).Deploy();
+		deploymentError = redeploy.NewRedeployer(deployer).Deploy()
 	}
 
-	if  deploymentError != nil {
+	if deploymentError != nil {
 		logger.Printf("Error during deployment: %v\n", deploymentError)
 		logger.Println("============================ Deployment Failed =======================")
 	} else {
@@ -153,4 +153,3 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	mutex.Unlock()
 
 }
-

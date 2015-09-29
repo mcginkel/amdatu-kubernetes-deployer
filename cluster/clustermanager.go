@@ -1,36 +1,37 @@
 package cluster
+
 import (
-	"k8s.io/kubernetes/pkg/api"
+	etcdclient "com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/api"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/client/unversioned"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/fields"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/labels"
+	"com.amdatu.rti.deployment/healthcheck"
+	"com.amdatu.rti.deployment/proxies"
 	"encoding/json"
-	"k8s.io/kubernetes/pkg/client/unversioned"
-	"log"
-	"k8s.io/kubernetes/pkg/labels"
 	"errors"
 	"fmt"
-	"com.amdatu.rti.deployment/healthcheck"
-	"time"
-	"net/http"
 	"io"
-	"k8s.io/kubernetes/pkg/fields"
-	"com.amdatu.rti.deployment/proxies"
-	etcdclient "github.com/coreos/etcd/client"
+	"log"
+	"net/http"
+	"time"
 )
 
 type Deployment struct {
-	DeploymentType string `json:"deploymentType,omitempty"`
-	NewVersion string `json:"newVersion,omitempty"`
-	AppName string `json:"appName,omitempty"`
-	Replicas int `json:"replicas,omitempty"`
-	Frontend string `json:"frontend,omitempty"`
-	PodSpec api.PodSpec `json:podspec`
-	UseHealthCheck bool `json:"useHealthCheck,omitempty"`
-	Namespace string `json:"namespace,omitempty"`
-	Email string `json:"email,omitempty`
-	Password string `json:"password,omitempty`
+	DeploymentType string      `json:"deploymentType,omitempty"`
+	NewVersion     string      `json:"newVersion,omitempty"`
+	AppName        string      `json:"appName,omitempty"`
+	Replicas       int         `json:"replicas,omitempty"`
+	Frontend       string      `json:"frontend,omitempty"`
+	PodSpec        api.PodSpec `json:podspec`
+	UseHealthCheck bool        `json:"useHealthCheck,omitempty"`
+	Namespace      string      `json:"namespace,omitempty"`
+	Email          string      `json:"email,omitempty`
+	Password       string      `json:"password,omitempty`
 }
 
 func (deployment *Deployment) String() string {
-	b, err := json.MarshalIndent(deployment,"", "    ")
+	b, err := json.MarshalIndent(deployment, "", "    ")
 
 	if err != nil {
 		return "Error writing deployment to JSON"
@@ -40,11 +41,11 @@ func (deployment *Deployment) String() string {
 }
 
 type Deployer struct {
-	KubernetesUrl string
-	Deployment Deployment
-	EtcdUrl string
-	K8client *unversioned.Client
-	Logger *Logger
+	KubernetesUrl     string
+	Deployment        Deployment
+	EtcdUrl           string
+	K8client          *unversioned.Client
+	Logger            *Logger
 	ProxyConfigurator *proxies.ProxyConfigurator
 }
 
@@ -64,9 +65,9 @@ func (logger *Logger) Printf(format string, v ...interface{}) {
 	io.WriteString(logger.RespWriter, msg)
 }
 
-func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment Deployment, logger *Logger) *Deployer{
+func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment Deployment, logger *Logger) *Deployer {
 
-	config := unversioned.Config{Host: kubernetesUrl, Version: "v1", Username: kubernetesUsername, Password: kubernetesPassword, Insecure:true }
+	config := unversioned.Config{Host: kubernetesUrl, Version: "v1", Username: kubernetesUsername, Password: kubernetesPassword, Insecure: true}
 	c, err := unversioned.New(&config)
 
 	if err != nil {
@@ -106,19 +107,19 @@ func (deployer *Deployer) CreateReplicationController() (*api.ReplicationControl
 
 	ctrl.Labels = labels
 
-	ctrl.Spec = api.ReplicationControllerSpec {
+	ctrl.Spec = api.ReplicationControllerSpec{
 		Selector: map[string]string{
-			"name": rcName,
+			"name":    rcName,
 			"version": deployer.Deployment.NewVersion,
-			"app": deployer.Deployment.AppName,
+			"app":     deployer.Deployment.AppName,
 		},
 		Replicas: deployer.Deployment.Replicas,
-		Template: &api.PodTemplateSpec {
+		Template: &api.PodTemplateSpec{
 			ObjectMeta: api.ObjectMeta{
-				Labels: map[string]string {
-					"name": rcName,
+				Labels: map[string]string{
+					"name":    rcName,
 					"version": deployer.Deployment.NewVersion,
-					"app": deployer.Deployment.AppName,
+					"app":     deployer.Deployment.AppName,
 				},
 			},
 			Spec: deployer.Deployment.PodSpec,
@@ -134,7 +135,7 @@ func (deployer *Deployer) CreateReplicationController() (*api.ReplicationControl
 
 	deployer.Logger.Printf("Replication Controller %v created\n", result.ObjectMeta.Name)
 
-	return result,err
+	return result, err
 
 }
 
@@ -151,7 +152,7 @@ func (deployer *Deployer) CreateService() (*api.Service, error) {
 
 	srv.Spec = api.ServiceSpec{
 		Selector: selector,
-		Ports: []api.ServicePort {
+		Ports: []api.ServicePort{
 			api.ServicePort{
 				//TargetPort: util.NewIntOrStringFromString("None"),
 				Port: deployer.Deployment.PodSpec.Containers[0].Ports[0].ContainerPort,
@@ -164,14 +165,14 @@ func (deployer *Deployer) CreateService() (*api.Service, error) {
 	return deployer.K8client.Services(deployer.Deployment.Namespace).Create(srv)
 }
 
-func (deployer *Deployer)FindCurrentRc() ([]api.ReplicationController, error) {
+func (deployer *Deployer) FindCurrentRc() ([]api.ReplicationController, error) {
 	result := make([]api.ReplicationController, 1, 10)
 
 	rcLabelSelector := labels.Set{"app": deployer.Deployment.AppName}.AsSelector()
-	replicationControllers,_ := deployer.K8client.ReplicationControllers(deployer.Deployment.Namespace).List(rcLabelSelector)
+	replicationControllers, _ := deployer.K8client.ReplicationControllers(deployer.Deployment.Namespace).List(rcLabelSelector)
 
-	for _,rc := range replicationControllers.Items {
-		if(rc.Labels["version"] != deployer.Deployment.NewVersion) {
+	for _, rc := range replicationControllers.Items {
+		if rc.Labels["version"] != deployer.Deployment.NewVersion {
 
 			result = append(result, rc)
 		}
@@ -184,14 +185,14 @@ func (deployer *Deployer)FindCurrentRc() ([]api.ReplicationController, error) {
 	}
 }
 
-func (deployer *Deployer)FindCurrentPods(allowSameVersion bool) ([]api.Pod, error) {
+func (deployer *Deployer) FindCurrentPods(allowSameVersion bool) ([]api.Pod, error) {
 	result := make([]api.Pod, 0, 10)
 
 	rcLabelSelector := labels.Set{"app": deployer.Deployment.AppName}.AsSelector()
-	pods,_ := deployer.K8client.Pods(deployer.Deployment.Namespace).List(rcLabelSelector, fields.Everything())
+	pods, _ := deployer.K8client.Pods(deployer.Deployment.Namespace).List(rcLabelSelector, fields.Everything())
 
-	for _,rc := range pods.Items {
-		if(allowSameVersion || rc.Labels["version"] != deployer.Deployment.NewVersion) {
+	for _, rc := range pods.Items {
+		if allowSameVersion || rc.Labels["version"] != deployer.Deployment.NewVersion {
 
 			result = append(result, rc)
 		}
@@ -204,14 +205,14 @@ func (deployer *Deployer)FindCurrentPods(allowSameVersion bool) ([]api.Pod, erro
 	}
 }
 
-func (deployer *Deployer)FindCurrentService() ([]api.Service, error) {
+func (deployer *Deployer) FindCurrentService() ([]api.Service, error) {
 	result := make([]api.Service, 1, 10)
 
 	rcLabelSelector := labels.Set{"app": deployer.Deployment.AppName}.AsSelector()
 	services, _ := deployer.K8client.Services(deployer.Deployment.Namespace).List(rcLabelSelector)
 
 	for _, service := range services.Items {
-		if (service.Labels["version"] != deployer.Deployment.NewVersion) {
+		if service.Labels["version"] != deployer.Deployment.NewVersion {
 
 			result = append(result, service)
 		}
@@ -232,7 +233,7 @@ func (deployer *Deployer) CleaupOldDeployments() {
 		return
 	}
 
-	for _,rc := range controllers {
+	for _, rc := range controllers {
 		if rc.Name != "" {
 			deployer.deleteRc(rc)
 			deployer.ProxyConfigurator.DeleteDeployment(rc.Namespace + "-" + rc.Name)
@@ -287,7 +288,7 @@ func (deployer *Deployer) deleteService(service api.Service) {
 func (deployer *Deployer) CountRunningPods(pods []api.Pod) int {
 	nrOfRunning := 0
 
-	for _,pod := range pods {
+	for _, pod := range pods {
 		if pod.Status.Phase == "Running" {
 			nrOfRunning++
 		}
@@ -301,7 +302,7 @@ func (deployer *Deployer) CheckPodHealth(pod *api.Pod) error {
 		port := pod.Spec.Containers[0].Ports[0].ContainerPort
 		host := pod.Status.PodIP
 
-		healthy := healthcheck.WaitForPodStarted(fmt.Sprintf("http://%v:%v/health", host,port), time.Minute * 5)
+		healthy := healthcheck.WaitForPodStarted(fmt.Sprintf("http://%v:%v/health", host, port), time.Minute*5)
 		if !healthy {
 			return errors.New("Pod didn't get healthy")
 		}

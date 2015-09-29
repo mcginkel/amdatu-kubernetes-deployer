@@ -6,24 +6,24 @@ package bluegreen
 3) Switch backend in proxy
 4) Remove old backend from proxy
 5) Remove old RC from Kubernetes
- */
+*/
 
 import (
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/fields"
-	"time"
-	"errors"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/api"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/fields"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/labels"
 	"com.amdatu.rti.deployment/cluster"
-	"log"
 	"com.amdatu.rti.deployment/proxies"
+	"errors"
+	"log"
+	"time"
 )
 
 type bluegreen struct {
 	deployer *cluster.Deployer
 }
 
-func NewBlueGreen(deployer *cluster.Deployer) *bluegreen{
+func NewBlueGreen(deployer *cluster.Deployer) *bluegreen {
 	return &bluegreen{deployer}
 }
 
@@ -36,12 +36,12 @@ func (bluegreen *bluegreen) Deploy() error {
 
 	if bluegreen.deployer.Deployment.Frontend != "" {
 		frontend := proxies.Frontend{
-			Type: "http",
-			Hostname: bluegreen.deployer.Deployment.Frontend,
+			Type:      "http",
+			Hostname:  bluegreen.deployer.Deployment.Frontend,
 			BackendId: backendId,
 		}
 
-		if _,err := bluegreen.deployer.ProxyConfigurator.CreateFrontEnd(&frontend); err != nil {
+		if _, err := bluegreen.deployer.ProxyConfigurator.CreateFrontEnd(&frontend); err != nil {
 			return err
 		}
 	} else {
@@ -61,7 +61,6 @@ func (bluegreen *bluegreen) Deploy() error {
 	bluegreen.deployer.Logger.Println("Sleeping for 20 seconds for proxy to reload...")
 	time.Sleep(time.Second * 20)
 
-
 	bluegreen.deployer.Logger.Println("Switch proxy backends....")
 
 	if err := bluegreen.deployer.ProxyConfigurator.SwitchBackend(bluegreen.deployer.Deployment.Frontend, backendId); err != nil {
@@ -76,7 +75,6 @@ func (bluegreen *bluegreen) Deploy() error {
 }
 
 func (bluegreen *bluegreen) createReplicationController() error {
-
 
 	bluegreen.deployer.CreateReplicationController()
 
@@ -95,17 +93,16 @@ func (bluegreen *bluegreen) createReplicationController() error {
 
 	//Wait for either the pods to report healthy, or the timeout to happen
 	select {
-	case msg := <- callBack:
+	case msg := <-callBack:
 		if msg == "ERROR" {
 			return errors.New("Did not find enough running pods")
 		}
-	case <- timeout:
+	case <-timeout:
 		return errors.New("Timeout waiting for pods")
 	}
 
 	return nil
 }
-
 
 func (bluegreen *bluegreen) watchPods(name, version string, callback chan string) error {
 	podSelector := labels.Set{"name": name, "version": bluegreen.deployer.Deployment.NewVersion}.AsSelector()
@@ -134,7 +131,6 @@ func (bluegreen *bluegreen) watchPods(name, version string, callback chan string
 
 		if podObj.Status.Phase == "Running" {
 
-
 			if err := bluegreen.deployer.CheckPodHealth(podObj); err != nil {
 				watchNew.Stop()
 				callback <- "ERROR"
@@ -158,7 +154,7 @@ func (bluegreen *bluegreen) watchPods(name, version string, callback chan string
 				callback <- "FINISHED"
 				return nil
 			} else {
-				bluegreen.deployer.Logger.Printf("Waiting for %v more pods...\n", bluegreen.deployer.Deployment.Replicas - nrOfPods)
+				bluegreen.deployer.Logger.Printf("Waiting for %v more pods...\n", bluegreen.deployer.Deployment.Replicas-nrOfPods)
 			}
 		}
 	}

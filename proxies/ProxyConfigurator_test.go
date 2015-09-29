@@ -1,12 +1,12 @@
 package proxies
 
 import (
-	"testing"
-	"github.com/coreos/etcd/client"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/golang.org/x/net/context"
+	"encoding/json"
 	"log"
 	"os"
-	"golang.org/x/net/context"
-	"encoding/json"
+	"testing"
 )
 
 var kAPI client.KeysAPI
@@ -15,7 +15,7 @@ func TestMain(m *testing.M) {
 	c := createEtcdClient()
 	kAPI = client.NewKeysAPI(c)
 
-	_,err := kAPI.Delete(context.Background(), "/proxy", &client.DeleteOptions{Recursive:true, Dir:true})
+	_, err := kAPI.Delete(context.Background(), "/proxy", &client.DeleteOptions{Recursive: true, Dir: true})
 
 	if err != nil {
 		log.Println("Did not delete /proxy dir")
@@ -24,7 +24,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func createProxyConfigurator() *ProxyConfigurator{
+func createProxyConfigurator() *ProxyConfigurator {
 	c := createEtcdClient()
 	return NewProxyConfigurator(c)
 
@@ -47,7 +47,6 @@ func TestAddBackendServer_newBackend(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
 
 	if resp == nil {
 		t.Error("Key not found")
@@ -114,8 +113,8 @@ func TestCreateFrontend(t *testing.T) {
 	pc := createProxyConfigurator()
 
 	frontend := Frontend{
-		Hostname: "myhostname.com",
-		Type: "http",
+		Hostname:  "myhostname.com",
+		Type:      "http",
 		BackendId: "testbackend",
 	}
 
@@ -134,16 +133,16 @@ func TestCreateFrontend_ExistingShouldNotBeOverwritten(t *testing.T) {
 	pc := createProxyConfigurator()
 
 	frontend := Frontend{
-		Hostname: "myhostname.com",
-		Type: "http",
+		Hostname:  "myhostname.com",
+		Type:      "http",
 		BackendId: "testbackend",
 	}
 
 	pc.CreateFrontEnd(&frontend)
 
 	frontend = Frontend{
-		Hostname: "myhostname.com",
-		Type: "http",
+		Hostname:  "myhostname.com",
+		Type:      "http",
 		BackendId: "testbackend2",
 	}
 
@@ -167,8 +166,8 @@ func TestSwitchBackend(t *testing.T) {
 	pc := createProxyConfigurator()
 
 	frontend := Frontend{
-		Hostname: "myhostname.com",
-		Type: "http",
+		Hostname:  "myhostname.com",
+		Type:      "http",
 		BackendId: "testbackend",
 	}
 
@@ -207,9 +206,9 @@ func TestBackendServer(t *testing.T) {
 		t.Error("Incorrect number of backend servers registered")
 	}
 
-	 pc.DeleteBackendServer("testbackend", "127.0.0.1")
+	pc.DeleteBackendServer("testbackend", "127.0.0.1")
 
-	resp,_ = kAPI.Get(context.Background(), "/proxy/backends/testbackend", nil)
+	resp, _ = kAPI.Get(context.Background(), "/proxy/backends/testbackend", nil)
 
 	if resp.Node.Nodes.Len() != 1 {
 		t.Error("Backend not deleted")
@@ -230,10 +229,10 @@ func TestFrontendExistsForBackend_NotExisting(t *testing.T) {
 func TestFrontendExistsForBackend_Existing(t *testing.T) {
 	pc := createProxyConfigurator()
 
-	kAPI.Delete(context.Background(), "/proxy", &client.DeleteOptions{Recursive:true, Dir:true})
+	kAPI.Delete(context.Background(), "/proxy", &client.DeleteOptions{Recursive: true, Dir: true})
 	frontend := Frontend{
-		Hostname: "myhostname.com",
-		Type: "http",
+		Hostname:  "myhostname.com",
+		Type:      "http",
 		BackendId: "testbackend",
 	}
 
@@ -246,7 +245,7 @@ func TestFrontendExistsForBackend_Existing(t *testing.T) {
 	}
 }
 
-func createEtcdClient() client.Client{
+func createEtcdClient() client.Client {
 	cfg := client.Config{
 		Endpoints: []string{"http://127.0.0.1:2379"},
 	}
@@ -258,4 +257,3 @@ func createEtcdClient() client.Client{
 
 	return c
 }
-

@@ -1,11 +1,12 @@
 package cluster
+
 import (
-	"k8s.io/kubernetes/pkg/client/unversioned"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/api"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/client/unversioned"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/fields"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/labels"
 	"com.amdatu.rti.deployment/proxies"
-	"k8s.io/kubernetes/pkg/labels"
 	"fmt"
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/fields"
 )
 
 func StartWatching(k8client *unversioned.Client, proxyConfigurator *proxies.ProxyConfigurator) {

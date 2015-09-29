@@ -1,19 +1,19 @@
 package rolling
+
 import (
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/api"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/fields"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/labels"
 	"com.amdatu.rti.deployment/cluster"
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/fields"
 	"errors"
-	"k8s.io/kubernetes/pkg/labels"
 	"time"
 )
-
 
 type rollingdeploy struct {
 	deployer *cluster.Deployer
 }
 
-func NewRollingDeployer(deployer *cluster.Deployer) *rollingdeploy{
+func NewRollingDeployer(deployer *cluster.Deployer) *rollingdeploy {
 	return &rollingdeploy{deployer}
 }
 
@@ -22,7 +22,7 @@ func (rollingdeploy *rollingdeploy) Deploy() error {
 	rollingdeploy.deployer.Logger.Println("Starting rolling deployment")
 
 	newRc, err := rollingdeploy.deployer.CreateReplicationController()
-	if err != nil{
+	if err != nil {
 		return err
 	}
 
@@ -43,9 +43,8 @@ func (rollingdeploy *rollingdeploy) Deploy() error {
 		return err
 	}
 
-
 	watchNew, err := rollingdeploy.deployer.K8client.Pods(rollingdeploy.deployer.Deployment.Namespace).Watch(newRcLabelSelector, fields.Everything(), podList.ResourceVersion)
-	if(err != nil) {
+	if err != nil {
 		return err
 	}
 
@@ -62,7 +61,7 @@ func (rollingdeploy *rollingdeploy) Deploy() error {
 
 			if currentRc.Spec.Replicas > 0 {
 				currentRc.Spec.Replicas -= 1
-				rc,err := rollingdeploy.deployer.K8client.ReplicationControllers(rollingdeploy.deployer.Deployment.Namespace).Update(&currentRc)
+				rc, err := rollingdeploy.deployer.K8client.ReplicationControllers(rollingdeploy.deployer.Deployment.Namespace).Update(&currentRc)
 				if err != nil {
 					rollingdeploy.deployer.Logger.Printf("Error updating existing controller: %v", err)
 				}
@@ -83,7 +82,7 @@ func (rollingdeploy *rollingdeploy) Deploy() error {
 			if rollingdeploy.deployer.CountRunningPods(pods.Items) == newRc.Spec.Replicas {
 				rollingdeploy.deployer.Logger.Println("Found enough running pods, deleting old cluster")
 				currentRc.Spec.Replicas = 0
-				rc,err := rollingdeploy.deployer.K8client.ReplicationControllers(rollingdeploy.deployer.Deployment.Namespace).Update(&currentRc)
+				rc, err := rollingdeploy.deployer.K8client.ReplicationControllers(rollingdeploy.deployer.Deployment.Namespace).Update(&currentRc)
 				if err != nil {
 					rollingdeploy.deployer.Logger.Printf("Error updating existing controller: %v", err)
 				}
@@ -93,7 +92,7 @@ func (rollingdeploy *rollingdeploy) Deploy() error {
 
 				rollingdeploy.deployer.K8client.ReplicationControllers(rollingdeploy.deployer.Deployment.Namespace).Delete(currentRc.Name)
 				rollingdeploy.deployer.Logger.Printf("Deleted %v", currentRc.Name)
-				break;
+				break
 			}
 		}
 	}
@@ -102,17 +101,17 @@ func (rollingdeploy *rollingdeploy) Deploy() error {
 	return nil
 }
 
-func (rollingdeploy *rollingdeploy)findCurrentRc() (api.ReplicationController, error) {
+func (rollingdeploy *rollingdeploy) findCurrentRc() (api.ReplicationController, error) {
 
 	currentRCs, err := rollingdeploy.deployer.FindCurrentRc()
 	if err != nil {
 		return api.ReplicationController{}, err
 	}
 
-	for _,rc := range currentRCs {
+	for _, rc := range currentRCs {
 
-		if(rc.Status.Replicas > 0) {
-			return rc,nil
+		if rc.Status.Replicas > 0 {
+			return rc, nil
 		}
 
 	}

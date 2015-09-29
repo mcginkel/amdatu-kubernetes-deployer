@@ -1,24 +1,26 @@
 package redeploy
+
 import (
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/api"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/fields"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/labels"
 	"com.amdatu.rti.deployment/cluster"
-	"k8s.io/kubernetes/pkg/fields"
-	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/api"
 	"time"
 )
-/**
-	Deployer to re-deploy an existing version.
-	Essentially re-deploying only means restarting the currently running pods. All other configuration, like the load balancer and service, should already be available.
 
-	1) In a rolling fashion, kill all existing pods one at a time.
-	2) Kubernetes will take care of rescheduling the replicas
- */
+/**
+Deployer to re-deploy an existing version.
+Essentially re-deploying only means restarting the currently running pods. All other configuration, like the load balancer and service, should already be available.
+
+1) In a rolling fashion, kill all existing pods one at a time.
+2) Kubernetes will take care of rescheduling the replicas
+*/
 
 type redeployer struct {
 	deployer *cluster.Deployer
 }
 
-func NewRedeployer(deployer *cluster.Deployer) *redeployer{
+func NewRedeployer(deployer *cluster.Deployer) *redeployer {
 	return &redeployer{deployer}
 }
 
@@ -37,8 +39,7 @@ func (redeployer *redeployer) Deploy() error {
 		podNames[p.Name] = &p
 	}
 
-
-	for _,pod := range pods {
+	for _, pod := range pods {
 
 		callBack := make(chan bool)
 		go redeployer.waitForNewPod(callBack, podNames)
@@ -91,7 +92,7 @@ func (redeployer *redeployer) waitForNewPod(callback chan bool, existingPods map
 			redeployer.deployer.Logger.Println("Found new pod")
 			callback <- true
 			watchNew.Stop()
-			break;
+			break
 		}
 	}
 }
