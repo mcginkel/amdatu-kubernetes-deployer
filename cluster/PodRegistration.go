@@ -18,9 +18,11 @@ func StartWatching(k8client *unversioned.Client, proxyConfigurator *proxies.Prox
 
 func watch(K8client *unversioned.Client, ProxyConfigurator *proxies.ProxyConfigurator, errorChannel chan string) {
 	podList, err := K8client.Pods("").List(labels.Everything(), fields.Everything())
-	resouceVersion := podList.ResourceVersion
+	resourceVersion := podList.ResourceVersion
 
-	w, err := K8client.Pods("").Watch(labels.Everything(), fields.Everything(), resouceVersion)
+
+	fmt.Printf("Resource version for Pod watch: %v\n", resourceVersion)
+	w, err := K8client.Pods("").Watch(labels.Everything(), fields.Everything(), resourceVersion)
 
 	if err != nil {
 		fmt.Printf("Error creating watch on pods: %v", err)
@@ -29,12 +31,13 @@ func watch(K8client *unversioned.Client, ProxyConfigurator *proxies.ProxyConfigu
 
 	channel := w.ResultChan()
 
+	fmt.Println("Watching for pods...")
 	for pod := range channel {
 		podObj := pod.Object.(*api.Pod)
 
 		if pod.Type == "ERROR" {
 			errorChannel <- "Disconnect"
-
+			fmt.Println("Error received from Kubernetes")
 			return
 		}
 
@@ -42,14 +45,15 @@ func watch(K8client *unversioned.Client, ProxyConfigurator *proxies.ProxyConfigu
 
 		if pod.Type == "MODIFIED" && podObj.Status.Phase == "Running" {
 
-			if ProxyConfigurator.FrontendExistsForDeployment(backendName) {
-				ProxyConfigurator.AddBackendServer(backendName, podObj.Status.PodIP, podObj.Spec.Containers[0].Ports[0].ContainerPort)
-			}
+			fmt.Printf("Received MODIFIED event for running pod %v\n", podObj.Name)
+			ProxyConfigurator.AddBackendServer(backendName, podObj.Status.PodIP, podObj.Spec.Containers[0].Ports[0].ContainerPort)
 
 		} else if pod.Type == "DELETED" {
 
 			ProxyConfigurator.DeleteBackendServer(backendName, podObj.Status.PodIP)
 
+		} else {
+			fmt.Printf("Received event of type: %v\n", pod.Type)
 		}
 	}
 }
