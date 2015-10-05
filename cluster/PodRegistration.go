@@ -56,6 +56,9 @@ func watch(K8client *unversioned.Client, ProxyConfigurator *proxies.ProxyConfigu
 			fmt.Printf("Received event of type: %v\n", pod.Type)
 		}
 	}
+
+	fmt.Println("Channel shut down")
+	errorChannel <- "Disconnect"
 }
 
 func reconnector(k8client *unversioned.Client, proxyConfigurator *proxies.ProxyConfigurator, errorChannel chan string) {
