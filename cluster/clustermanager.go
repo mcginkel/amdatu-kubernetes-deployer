@@ -15,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"strings"
 )
 
 type Deployment struct {
@@ -28,6 +29,7 @@ type Deployment struct {
 	Namespace      string      `json:"namespace,omitempty"`
 	Email          string      `json:"email,omitempty`
 	Password       string      `json:"password,omitempty`
+	HealthCheckUrl string	   `json:healthcheckUrl,omitempty`
 }
 
 func (deployment *Deployment) String() string {
@@ -299,14 +301,29 @@ func (deployer *Deployer) CountRunningPods(pods []api.Pod) int {
 
 func (deployer *Deployer) CheckPodHealth(pod *api.Pod) error {
 	if deployer.Deployment.UseHealthCheck {
+
 		port := pod.Spec.Containers[0].Ports[0].ContainerPort
 		host := pod.Status.PodIP
-
-		healthy := healthcheck.WaitForPodStarted(fmt.Sprintf("http://%v:%v/health", host, port), time.Minute*5)
+		healthy := healthcheck.WaitForPodStarted(deployer.getHealthcheckUrl(host, port), time.Minute*5)
 		if !healthy {
 			return errors.New("Pod didn't get healthy")
 		}
 	}
 
 	return nil
+}
+
+func (deployer *Deployer) getHealthcheckUrl(host string, port int) string{
+	var healthUrl string
+	if deployer.Deployment.HealthCheckUrl != "" {
+		if strings.HasPrefix(deployer.Deployment.HealthCheckUrl, "/") {
+			healthUrl = strings.TrimPrefix(deployer.Deployment.HealthCheckUrl, "/")
+		} else {
+			healthUrl = deployer.Deployment.HealthCheckUrl
+		}
+	} else {
+		healthUrl = "health"
+	}
+
+	return fmt.Sprintf("http://%v:%v/%v", host, port, healthUrl)
 }
