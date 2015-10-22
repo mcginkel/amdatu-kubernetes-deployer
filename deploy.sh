@@ -2,17 +2,19 @@
 curl -XPOST http://localhost:8000/deployment -d '{
   "deploymentType": "blue-green",
   "namespace": "default",
-  "useHealthCheck": false,
-  "newVersion": "r-4",
+  "email": "admin@amdatu.org",
+  "password": "test",
+  "useHealthCheck": true,
+  "newVersion": "r3",
   "appName": "nginx",
   "replicas": 2,
-  "vulcanFrontend": "rti-todo.amdatu.com",
+  "frontend": "aws-rti-todo-development.amdatu.com",
   "podspec": {
     "containers": [{
         "image": "nginx",
         "name": "nginx",
         "ports": [{
-          "containerPort": 8080
+          "containerPort": 80
         }]
         }
     ]
