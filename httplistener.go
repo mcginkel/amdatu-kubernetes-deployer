@@ -19,6 +19,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"com.amdatu.rti.deployment/deploymentregistry"
 )
 
 var kubernetesurl, etcdUrl, port, dashboardurl, kubernetesUsername, kubernetesPassword string
@@ -118,6 +119,9 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	}
 
 	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, deployment, &logger)
+	deploymentregistry.NewDeploymentRegistry(deployer.EtcdClient)
+
+
 	var deploymentError error
 
 	/*Check if namespace has the current version deployed

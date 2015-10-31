@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"time"
 	"strings"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
 )
 
 type Deployment struct {
@@ -49,6 +50,7 @@ type Deployer struct {
 	K8client          *unversioned.Client
 	Logger            *Logger
 	ProxyConfigurator *proxies.ProxyConfigurator
+	EtcdClient *client.Client
 }
 
 type Logger struct {
@@ -88,7 +90,7 @@ func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPass
 		log.Fatal("Couldn't connect to etcd")
 	}
 
-	return &Deployer{kubernetesUrl, deployment, etcdUrl, c, logger, proxies.NewProxyConfigurator(etcdClient)}
+	return &Deployer{kubernetesUrl, deployment, etcdUrl, c, logger, proxies.NewProxyConfigurator(etcdClient), &etcdClient}
 
 }
 
@@ -327,3 +329,4 @@ func (deployer *Deployer) getHealthcheckUrl(host string, port int) string{
 
 	return fmt.Sprintf("http://%v:%v/%v", host, port, healthUrl)
 }
+
