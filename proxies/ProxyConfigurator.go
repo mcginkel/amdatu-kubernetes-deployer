@@ -63,6 +63,7 @@ func (proxyConfigurator *ProxyConfigurator) AddBackendServer(deploymentName stri
 		return err
 	}
 
+	log.Printf("Deployment name: %v", deploymentName)
 	if _, err := kAPI.Set(context.Background(), fmt.Sprintf("/proxy/backends/%v/%v", deploymentName, ip), string(bytes), nil); err != nil {
 		return err
 	}

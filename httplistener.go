@@ -1,16 +1,12 @@
 package main
 
 import (
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
 	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/gorilla/mux"
 	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/api"
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/client/unversioned"
 	"com.amdatu.rti.deployment/auth"
 	"com.amdatu.rti.deployment/bluegreen"
 	"com.amdatu.rti.deployment/cluster"
-	"com.amdatu.rti.deployment/proxies"
 	"com.amdatu.rti.deployment/redeploy"
-	"com.amdatu.rti.deployment/rolling"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -50,25 +46,6 @@ func main() {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
-	config := unversioned.Config{Host: kubernetesurl, Version: "v1", Username: kubernetesUsername, Password: kubernetesPassword, Insecure: true}
-	c, err := unversioned.New(&config)
-
-	if err != nil {
-		log.Panic("Error creating Kuberentes client", err)
-	}
-
-	cfg := client.Config{
-		Endpoints: []string{etcdUrl},
-	}
-
-	etcdClient, err := client.New(cfg)
-	if err != nil {
-		log.Fatal("Couldn't connect to etcd", err)
-	}
-
-	cluster.StartWatching(c, proxies.NewProxyConfigurator(etcdClient))
-
-	log.Printf("Listining for deployments on port %v\n", port)
 
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
@@ -137,8 +114,6 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		switch deployment.DeploymentType {
 		case "blue-green":
 			deploymentError = bluegreen.NewBlueGreen(deployer).Deploy()
-		case "rolling":
-			deploymentError = rolling.NewRollingDeployer(deployer).Deploy()
 		default:
 			deploymentError = errors.New(fmt.Sprintf("Unknown type of deployment: %v", deployment.DeploymentType))
 		}

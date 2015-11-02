@@ -25,6 +25,7 @@ type Deployment struct {
 	AppName        string      `json:"appName,omitempty"`
 	Replicas       int         `json:"replicas,omitempty"`
 	Frontend       string      `json:"frontend,omitempty"`
+	ProxyPorts	   []int	   `json:"proxyports:omitempty"`
 	PodSpec        api.PodSpec `json:podspec`
 	UseHealthCheck bool        `json:"useHealthCheck,omitempty"`
 	Namespace      string      `json:"namespace,omitempty"`
@@ -154,14 +155,19 @@ func (deployer *Deployer) CreateService() (*api.Service, error) {
 
 	srv.Labels = selector
 
+	ports := []api.ServicePort{}
+	for _,container := range deployer.Deployment.PodSpec.Containers {
+		for _,port := range container.Ports {
+
+			servicePort := api.ServicePort{Port: port.ContainerPort}
+			ports = append(ports, servicePort)
+		}
+	}
+
 	srv.Spec = api.ServiceSpec{
 		Selector: selector,
-		Ports: []api.ServicePort{
-			api.ServicePort{
-				//TargetPort: util.NewIntOrStringFromString("None"),
-				Port: deployer.Deployment.PodSpec.Containers[0].Ports[0].ContainerPort,
-			},
-		},
+		Ports: ports,
+		Type: api.ServiceTypeNodePort,
 	}
 
 	deployer.Logger.Println("Creating Service")

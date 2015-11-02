@@ -31,9 +31,8 @@ func (bluegreen *bluegreen) Deploy() error {
 
 	bluegreen.deployer.Logger.Println("Starting blue-green deployment")
 
-	bluegreen.deployer.Logger.Println("Prepare proxy backend....")
 	backendId := bluegreen.deployer.Deployment.Namespace + "-" + bluegreen.deployer.CreateRcName()
-
+	bluegreen.deployer.Logger.Printf("Prepare proxy backend %v....\n", backendId)
 	if bluegreen.deployer.Deployment.Frontend != "" {
 		frontend := proxies.Frontend{
 			Type:      "http",
@@ -48,14 +47,26 @@ func (bluegreen *bluegreen) Deploy() error {
 		bluegreen.deployer.Logger.Println("No frontend configured in deployment, skipping creation")
 	}
 
-	_, err := bluegreen.deployer.CreateService()
+	service, err := bluegreen.deployer.CreateService()
 	if err != nil {
 		log.Println(err)
 	}
 
+
 	if err := bluegreen.createReplicationController(); err != nil {
 		bluegreen.deployer.Logger.Println(err)
 		return err
+	}
+
+	nodes, err := bluegreen.deployer.K8client.Nodes().List(labels.Everything(), fields.Everything())
+	if err != nil {
+		return err
+	}
+
+	for _,port := range service.Spec.Ports {
+		for _,node := range nodes.Items {
+			bluegreen.deployer.ProxyConfigurator.AddBackendServer(backendId, node.Status.Addresses[0].Address, port.NodePort)
+		}
 	}
 
 	bluegreen.deployer.Logger.Println("Sleeping for 20 seconds for proxy to reload...")
