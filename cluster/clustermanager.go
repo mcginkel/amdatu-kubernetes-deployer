@@ -336,3 +336,43 @@ func (deployer *Deployer) getHealthcheckUrl(host string, port int) string{
 	return fmt.Sprintf("http://%v:%v/%v", host, port, healthUrl)
 }
 
+func (deployer *Deployer) findRcForDeployment() (*api.ReplicationController, error){
+	return deployer.K8client.ReplicationControllers(deployer.Deployment.Namespace).Get(deployer.CreateRcName())
+}
+
+func (deployer *Deployer) findServiceForDeployment() (*api.Service, error){
+	return deployer.K8client.Services(deployer.Deployment.Namespace).Get(deployer.CreateRcName())
+}
+
+func (deployer *Deployer) findPodsForDeployment() (*api.PodList, error){
+	rcLabelSelector := labels.Set{"app": deployer.Deployment.AppName, "version": deployer.Deployment.NewVersion}.AsSelector()
+	return deployer.K8client.Pods(deployer.Deployment.Namespace).List(rcLabelSelector, fields.Everything())
+}
+
+func (deployer *Deployer) CleanupFailedDeployment() {
+	deployer.Logger.Println("Cleaning up resources created by deployment")
+
+	rc, err := deployer.findRcForDeployment()
+
+	if err == nil {
+		deployer.Logger.Printf("Deleting ReplicationController %v\n", rc.Name)
+		deployer.deleteRc(*rc)
+	}
+
+	pods, err := deployer.findPodsForDeployment()
+	if err == nil {
+		for _,pod := range pods.Items {
+			deployer.Logger.Printf("Deleting pod %v\n", pod.Name)
+			deployer.DeletePod(pod)
+		}
+	}
+
+	deployer.Logger.Printf("Deleting proxy config %v\n", rc.Namespace + "-" + rc.Name)
+	deployer.ProxyConfigurator.DeleteDeployment(rc.Namespace + "-" + rc.Name)
+	service, err := deployer.findServiceForDeployment()
+
+	if err == nil {
+		deployer.Logger.Printf("Deleting Service %v\n", service.Name)
+		deployer.deleteService(*service)
+	}
+}

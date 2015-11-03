@@ -47,10 +47,11 @@ func main() {
 
 	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
 
+	fmt.Printf("Dployer started and listening on port %v\n", port)
+
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
 	}
-
 }
 
 type DeploymentRequest struct {
@@ -123,6 +124,9 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	}
 
 	if deploymentError != nil {
+
+		deployer.CleanupFailedDeployment()
+
 		logger.Printf("Error during deployment: %v\n", deploymentError)
 		logger.Println("============================ Deployment Failed =======================")
 	} else {
