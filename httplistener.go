@@ -62,7 +62,7 @@ type DeploymentRequest struct {
 func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	mutex.Lock()
 
-	logger := cluster.Logger{responseWriter}
+	logger := cluster.NewLogger(responseWriter)
 
 	defer req.Body.Close()
 	body, err := ioutil.ReadAll(req.Body)
@@ -124,15 +124,17 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	}
 
 	if deploymentError != nil {
-
+		responseWriter.WriteHeader(500)
 		deployer.CleanupFailedDeployment()
 
 		logger.Printf("Error during deployment: %v\n", deploymentError)
 		logger.Println("============================ Deployment Failed =======================")
+
 	} else {
 		logger.Println("============================ Completed deployment =======================")
 	}
 
+	logger.Flush()
 	mutex.Unlock()
 
 }

@@ -56,18 +56,29 @@ type Deployer struct {
 
 type Logger struct {
 	RespWriter http.ResponseWriter
+	buffer []string
+}
+
+func NewLogger(responseWriter http.ResponseWriter) Logger {
+	return Logger{responseWriter, []string {}}
 }
 
 func (logger *Logger) Println(v ...interface{}) {
 	msg := fmt.Sprintln(v...)
 	log.Println(msg)
-	io.WriteString(logger.RespWriter, msg)
+	logger.buffer = append(logger.buffer, msg)
 }
 
 func (logger *Logger) Printf(format string, v ...interface{}) {
 	msg := fmt.Sprintf(format, v...)
 	log.Printf(msg)
-	io.WriteString(logger.RespWriter, msg)
+	logger.buffer = append(logger.buffer, msg)
+}
+
+func (logger *Logger) Flush() {
+	for _,msg := range logger.buffer {
+		io.WriteString(logger.RespWriter, msg)
+	}
 }
 
 func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment Deployment, logger *Logger) *Deployer {
@@ -312,7 +323,7 @@ func (deployer *Deployer) CheckPodHealth(pod *api.Pod) error {
 
 		port := pod.Spec.Containers[0].Ports[0].ContainerPort
 		host := pod.Status.PodIP
-		healthy := healthcheck.WaitForPodStarted(deployer.getHealthcheckUrl(host, port), time.Minute*5)
+		healthy := healthcheck.WaitForPodStarted(deployer.getHealthcheckUrl(host, port), time.Minute*2)
 		if !healthy {
 			return errors.New("Pod didn't get healthy")
 		}
