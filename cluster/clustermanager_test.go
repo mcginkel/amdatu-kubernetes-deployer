@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"testing"
+	"strings"
 )
 
 func TestGetHealthUrl_WithSlash(t *testing.T) {
@@ -54,4 +55,27 @@ func TestGetHealthUrl_Default(t *testing.T) {
 		t.Errorf("Incorrect url: %v", url)
 	}
 
+}
+
+func TestSetDeploymentDefaults(t *testing.T) {
+	deployment := Deployment{}
+	deployment.SetDefaults()
+
+	if deployment.Namespace != "default" {
+		t.Error("Defaul namespace not set")
+	}
+
+}
+
+func TestValidateDeployment(t *testing.T) {
+	deployment := Deployment{}
+	err := deployment.Validate()
+
+	if err == nil {
+		t.Error("Validate should fail on an empty Deployment")
+	} else {
+		if !strings.Contains(err.Error(), "Missing required property 'appName'") {
+			t.Error("Error message not correct")
+		}
+	}
 }

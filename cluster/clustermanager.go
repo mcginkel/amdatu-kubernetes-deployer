@@ -17,6 +17,7 @@ import (
 	"time"
 	"strings"
 	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
+	"bytes"
 )
 
 type Deployment struct {
@@ -42,6 +43,64 @@ func (deployment *Deployment) String() string {
 	}
 
 	return string(b)
+}
+
+func (deployment *Deployment) SetDefaults() *Deployment{
+	if len(deployment.Namespace) == 0 {
+		deployment.Namespace = api.NamespaceDefault
+	}
+
+	if len(deployment.DeploymentType) == 0 {
+		deployment.DeploymentType = "blue-green"
+	}
+
+	for _,container := range deployment.PodSpec.Containers {
+		if container.ImagePullPolicy == "" {
+			container.ImagePullPolicy = "Always"
+		}
+	}
+
+	return deployment
+}
+
+func (deployment *Deployment) Validate() error {
+
+	var messageBuffer bytes.Buffer
+
+	//Currently only blue-green deployments are supported
+	if deployment.DeploymentType != "blue-green" {
+		messageBuffer.WriteString(fmt.Sprintf("Unsupported deploymentType '%v'\n", deployment.DeploymentType))
+	}
+
+	if deployment.AppName == "" {
+		messageBuffer.WriteString("Missing required property 'appName'\n")
+	}
+
+	if deployment.Namespace == "" {
+		messageBuffer.WriteString("Missing required property 'namespace'\n")
+	}
+
+	if deployment.NewVersion == "" {
+		messageBuffer.WriteString("Missing required property 'newVersion'\n")
+	}
+
+	if len(deployment.PodSpec.Containers) == 0 {
+		messageBuffer.WriteString("No containers specified in PodSpec\n")
+	}
+
+	for i,container := range deployment.PodSpec.Containers {
+		if container.Image == "" {
+			messageBuffer.WriteString(fmt.Sprintf("No image specified for container %v\n", i))
+		}
+	}
+
+	message := messageBuffer.String()
+
+	if len(message) > 0 {
+		return errors.New(message)
+	}
+
+	return nil
 }
 
 type Deployer struct {

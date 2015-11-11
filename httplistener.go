@@ -2,7 +2,6 @@ package main
 
 import (
 	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/gorilla/mux"
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/api"
 	"com.amdatu.rti.deployment/auth"
 	"com.amdatu.rti.deployment/bluegreen"
 	"com.amdatu.rti.deployment/cluster"
@@ -76,8 +75,9 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		logger.Printf("Error parsing body: %v", err)
 	}
 
-	if len(deployment.Namespace) == 0 {
-		deployment.Namespace = api.NamespaceDefault
+	if err = deployment.SetDefaults().Validate(); err != nil {
+		logger.Printf("Deployment descriptor incorrect: \n %v", err.Error())
+		return
 	}
 
 	logger.Printf("%v\n", deployment.String())
