@@ -58,15 +58,10 @@ func (bluegreen *bluegreen) Deploy() error {
 		return err
 	}
 
-	nodes, err := bluegreen.deployer.K8client.Nodes().List(labels.Everything(), fields.Everything())
-	if err != nil {
-		return err
-	}
 
 	for _,port := range service.Spec.Ports {
-		for _,node := range nodes.Items {
-			bluegreen.deployer.ProxyConfigurator.AddBackendServer(backendId, node.Status.Addresses[0].Address, port.NodePort)
-		}
+		bluegreen.deployer.Logger.Println("Adding backend", port)
+		bluegreen.deployer.ProxyConfigurator.AddBackendServer(backendId, service.Spec.ClusterIP, port.Port)
 	}
 
 	bluegreen.deployer.Logger.Println("Sleeping for 20 seconds for proxy to reload...")
