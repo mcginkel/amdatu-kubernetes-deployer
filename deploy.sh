@@ -2,23 +2,22 @@
 curl -o output.txt  -XPOST http://localhost:8000/deployment -d '{
   "deploymentType": "blue-green",
   "namespace": "default",
-  "useHealthCheck": true,
-  "newVersion": "release-188",
+  "useHealthCheck": false,
+  "newVersion": "release-193",
   "appName": "todo",
-  "replicas": 3,
+  "replicas": 1,
   "frontend": "aws-rti-todo-development.amdatu.com",
   "podspec": {
     "imagePullSecrets": [{
             "name": "amdatu"
         }],
     "containers": [{
-        "image": "amdatu/todo-demonstrator:leaky",
-        "resources": {
-            "limits": {
-                "memory": "1500Mi",
-                "cpu": "500m"
+        "image": "amdatu/todo-demonstrator:beta",
+        "imagePullSecrets" : [
+            {
+                "name": "amdatu"
             }
-        },
+        ],
         "imagePullPolicy": "Always",
         "name": "todo",
         "ports": [{
@@ -27,7 +26,7 @@ curl -o output.txt  -XPOST http://localhost:8000/deployment -d '{
         "env": [
           {
           "name": "version",
-          "value": "release-188"
+          "value": "release-193"
           },
           {
           "name": "mongo",
