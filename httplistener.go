@@ -77,6 +77,11 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 
 	if err = deployment.SetDefaults().Validate(); err != nil {
 		logger.Printf("Deployment descriptor incorrect: \n %v", err.Error())
+		returnError(err, responseWriter, logger)
+
+		logger.Flush()
+		mutex.Unlock()
+
 		return
 	}
 
@@ -87,11 +92,19 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 
 		if err != nil {
 			logger.Println("Could not authenticate: ", err)
+			returnError(err, responseWriter, logger)
+
+			logger.Flush()
+			mutex.Unlock()
 			return
 		}
 
 		if !auth.StringInSet(deployment.Namespace, namespaces) {
 			logger.Printf("User %v not authorised to namespace %v", "admin@amdatu.org", deployment.Namespace)
+			returnError(err, responseWriter, logger)
+
+			logger.Flush()
+			mutex.Unlock()
 			return
 		}
 	}
@@ -124,12 +137,8 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	}
 
 	if deploymentError != nil {
-		responseWriter.WriteHeader(500)
+		returnError(deploymentError, responseWriter, logger)
 		deployer.CleanupFailedDeployment()
-
-		logger.Printf("Error during deployment: %v\n", deploymentError)
-		logger.Println("============================ Deployment Failed =======================")
-
 	} else {
 		logger.Println("============================ Completed deployment =======================")
 	}
@@ -137,4 +146,10 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	logger.Flush()
 	mutex.Unlock()
 
+}
+
+func returnError(deploymentError error, responseWriter http.ResponseWriter, logger cluster.Logger) {
+	responseWriter.WriteHeader(500)
+	logger.Printf("Error during deployment: %v\n", deploymentError)
+	logger.Println("============================ Deployment Failed =======================")
 }

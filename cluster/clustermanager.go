@@ -18,6 +18,7 @@ import (
 	"strings"
 	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
 	"bytes"
+	"regexp"
 )
 
 type Deployment struct {
@@ -34,6 +35,9 @@ type Deployment struct {
 	Password       string      `json:"password,omitempty`
 	HealthCheckUrl string	   `json:healthcheckUrl,omitempty`
 }
+
+const DNS952LabelFmt string = "[a-z]([-a-z0-9]*[a-z0-9])?"
+var dns952LabelRegexp = regexp.MustCompile("^" + DNS952LabelFmt + "$")
 
 func (deployment *Deployment) String() string {
 	b, err := json.MarshalIndent(deployment, "", "    ")
@@ -59,6 +63,12 @@ func (deployment *Deployment) SetDefaults() *Deployment{
 			container.ImagePullPolicy = "Always"
 		}
 	}
+
+	deployment.AppName = strings.Replace(deployment.AppName, ".", "-", -1)
+	deployment.AppName = strings.Replace(deployment.AppName, "_", "-", -1)
+
+	deployment.NewVersion = strings.Replace(deployment.NewVersion, ".", "-", -1)
+	deployment.NewVersion = strings.Replace(deployment.NewVersion, "_", "-", -1)
 
 	return deployment
 }
@@ -92,6 +102,15 @@ func (deployment *Deployment) Validate() error {
 		if container.Image == "" {
 			messageBuffer.WriteString(fmt.Sprintf("No image specified for container %v\n", i))
 		}
+	}
+
+	appName := deployment.AppName + "-" + deployment.NewVersion
+	if len(appName) > 24 {
+		messageBuffer.WriteString(fmt.Sprintf("Application name %v is too long. A maximum of 24 characters is allowed\n", appName))
+	}
+
+	if !dns952LabelRegexp.MatchString(appName) {
+		messageBuffer.WriteString(fmt.Sprintf("Application name %v doesn't match pattern [a-z]([-a-z0-9]*[a-z0-9])?\n", appName))
 	}
 
 	message := messageBuffer.String()
