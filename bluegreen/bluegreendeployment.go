@@ -64,14 +64,18 @@ func (bluegreen *bluegreen) Deploy() error {
 		bluegreen.deployer.ProxyConfigurator.AddBackendServer(backendId, service.Spec.ClusterIP, port.Port)
 	}
 
-	bluegreen.deployer.Logger.Println("Sleeping for 20 seconds for proxy to reload...")
-	time.Sleep(time.Second * 20)
 
-	bluegreen.deployer.Logger.Println("Switch proxy backends....")
+	if bluegreen.deployer.Deployment.Frontend != "" {
+		bluegreen.deployer.Logger.Println("Sleeping for 20 seconds for proxy to reload...")
 
-	if err := bluegreen.deployer.ProxyConfigurator.SwitchBackend(bluegreen.deployer.Deployment.Frontend, backendId); err != nil {
-		bluegreen.deployer.Logger.Printf("%", err)
-		return err
+		time.Sleep(time.Second * 20)
+
+		bluegreen.deployer.Logger.Println("Switch proxy backends....")
+
+		if err := bluegreen.deployer.ProxyConfigurator.SwitchBackend(bluegreen.deployer.Deployment.Frontend, backendId); err != nil {
+			bluegreen.deployer.Logger.Printf("%", err)
+			return err
+		}
 	}
 
 	bluegreen.deployer.Logger.Println("Cleaning up old deployments....")
