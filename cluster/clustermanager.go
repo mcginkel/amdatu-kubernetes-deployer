@@ -70,6 +70,9 @@ func (deployment *Deployment) SetDefaults() *Deployment{
 	deployment.NewVersion = strings.Replace(deployment.NewVersion, ".", "-", -1)
 	deployment.NewVersion = strings.Replace(deployment.NewVersion, "_", "-", -1)
 
+	deployment.AppName = strings.ToLower(deployment.AppName)
+	deployment.NewVersion = strings.ToLower(deployment.NewVersion)
+
 	return deployment
 }
 
@@ -257,6 +260,7 @@ func (deployer *Deployer) CreateService() (*api.Service, error) {
 		Selector: selector,
 		Ports: ports,
 		Type: api.ServiceTypeNodePort,
+		SessionAffinity: "ClientIP",
 	}
 
 	deployer.Logger.Println("Creating Service")
