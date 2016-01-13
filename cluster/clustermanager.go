@@ -204,6 +204,26 @@ func (deployer *Deployer) CreateReplicationController() (*api.ReplicationControl
 
 	ctrl.Labels = labels
 
+	containers := []api.Container{}
+
+	for _, container := range deployer.Deployment.PodSpec.Containers {
+		fmt.Println("Setting env vars on container")
+		container.Env = append(container.Env,
+			api.EnvVar{Name: "APP_NAME", Value: deployer.Deployment.AppName},
+			api.EnvVar{Name: "POD_NAMESPACE", Value: deployer.Deployment.Namespace},
+			api.EnvVar{Name: "APP_VERSION", Value: deployer.Deployment.NewVersion},
+			api.EnvVar{Name: "POD_NAME", ValueFrom: &api.EnvVarSource{FieldRef: &api.ObjectFieldSelector{FieldPath: "metadata.name"}}})
+
+
+		containers = append(containers, container)
+	}
+
+	deployer.Deployment.PodSpec.Containers = containers
+
+
+	bytes,_ := json.MarshalIndent(deployer.Deployment.PodSpec, "", "  ")
+	fmt.Printf("%v", string(bytes))
+
 	ctrl.Spec = api.ReplicationControllerSpec{
 		Selector: map[string]string{
 			"name":    rcName,
