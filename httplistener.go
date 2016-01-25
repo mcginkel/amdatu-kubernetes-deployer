@@ -110,6 +110,33 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	}
 
 	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, deployment, &logger)
+	if deployment.NewVersion == "000" {
+		rc, err := deployer.FindCurrentRc()
+		if err != nil || len(rc) == 0 {
+			deployer.Deployment.NewVersion = "1"
+		} else if(len(rc) > 1) {
+			logger.Println("Could not determine next deployment version, more than a singe Replication Controller found")
+			returnError(err, responseWriter, logger)
+
+			logger.Flush()
+			mutex.Unlock()
+			return
+		} else {
+			for _, ctrl := range rc {
+				logger.Println(ctrl.Name)
+				versionString := ctrl.Labels["version"]
+				newVersion, err := cluster.DetermineNewVersion(versionString)
+				if err != nil {
+					logger.Printf("Could not determine next deployment version based on current version %v", err.Error())
+
+					return
+				} else {
+					deployer.Deployment.NewVersion = newVersion
+				}
+			}
+		}
+	}
+
 	deploymentregistry.NewDeploymentRegistry(deployer.EtcdClient)
 
 

@@ -79,3 +79,22 @@ func TestValidateDeployment(t *testing.T) {
 		}
 	}
 }
+
+func TestDetermineNextVersionIncorrect(t *testing.T) {
+	newVersion, err := DetermineNewVersion("1.1a")
+	if err == nil {
+
+		t.Error("Expected error for invalid incremental version " + newVersion)
+	}
+}
+
+func TestDetermineNextVersionCorrect(t *testing.T) {
+	newVersion, err := DetermineNewVersion("1")
+	if err != nil {
+		t.Error("Unexpected error for valid incremental version")
+	} else if newVersion != "2" {
+		t.Error("Unexpected new version " + newVersion)
+	}
+
+
+}
