@@ -86,7 +86,10 @@ func (bluegreen *bluegreen) Deploy() error {
 
 func (bluegreen *bluegreen) createReplicationController() error {
 
-	bluegreen.deployer.CreateReplicationController()
+	_,err := bluegreen.deployer.CreateReplicationController()
+	if err != nil {
+		return err
+	}
 
 	if bluegreen.deployer.Deployment.Replicas == 0 {
 		return nil

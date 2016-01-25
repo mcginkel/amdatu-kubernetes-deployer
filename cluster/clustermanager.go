@@ -247,12 +247,13 @@ func (deployer *Deployer) CreateReplicationController() (*api.ReplicationControl
 	var result, err = deployer.K8client.ReplicationControllers(deployer.Deployment.Namespace).Create(ctrl)
 	if err != nil {
 		deployer.Logger.Println("Error while creating replication controller")
-		deployer.Logger.Println(err)
+
+		return result, err
 	}
 
 	deployer.Logger.Printf("Replication Controller %v created\n", result.ObjectMeta.Name)
 
-	return result, err
+	return result, nil
 
 }
 
