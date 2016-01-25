@@ -62,6 +62,8 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	mutex.Lock()
 
 	logger := cluster.NewLogger(responseWriter)
+	defer logger.Flush()
+	defer mutex.Unlock()
 
 	defer req.Body.Close()
 	body, err := ioutil.ReadAll(req.Body)
@@ -79,9 +81,6 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		logger.Printf("Deployment descriptor incorrect: \n %v", err.Error())
 		returnError(err, responseWriter, logger)
 
-		logger.Flush()
-		mutex.Unlock()
-
 		return
 	}
 
@@ -94,8 +93,6 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 			logger.Println("Could not authenticate: ", err)
 			returnError(err, responseWriter, logger)
 
-			logger.Flush()
-			mutex.Unlock()
 			return
 		}
 
@@ -103,8 +100,6 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 			logger.Printf("User %v not authorised to namespace %v", "admin@amdatu.org", deployment.Namespace)
 			returnError(err, responseWriter, logger)
 
-			logger.Flush()
-			mutex.Unlock()
 			return
 		}
 	}
@@ -117,9 +112,6 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		} else if(len(rc) > 1) {
 			logger.Println("Could not determine next deployment version, more than a singe Replication Controller found")
 			returnError(err, responseWriter, logger)
-
-			logger.Flush()
-			mutex.Unlock()
 			return
 		} else {
 			for _, ctrl := range rc {
@@ -170,8 +162,6 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		logger.Println("============================ Completed deployment =======================")
 	}
 
-	logger.Flush()
-	mutex.Unlock()
 
 }
 
