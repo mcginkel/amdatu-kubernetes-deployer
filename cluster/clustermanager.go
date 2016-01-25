@@ -19,6 +19,7 @@ import (
 	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
 	"bytes"
 	"regexp"
+	"strconv"
 )
 
 type Deployment struct {
@@ -71,6 +72,12 @@ func (deployment *Deployment) SetDefaults() *Deployment{
 	deployment.NewVersion = strings.Replace(deployment.NewVersion, "_", "-", -1)
 
 	deployment.AppName = strings.ToLower(deployment.AppName)
+
+	if strings.ToLower(deployment.NewVersion) == "#" {
+		//Make sure to pass validation, but assume a version of 3 characters. Value will be replaced later
+		deployment.NewVersion = "000"
+	}
+
 	deployment.NewVersion = strings.ToLower(deployment.NewVersion)
 
 	return deployment
@@ -290,7 +297,7 @@ func (deployer *Deployer) CreateService() (*api.Service, error) {
 }
 
 func (deployer *Deployer) FindCurrentRc() ([]api.ReplicationController, error) {
-	result := make([]api.ReplicationController, 1, 10)
+	result := []api.ReplicationController{}
 
 	rcLabelSelector := labels.Set{"app": deployer.Deployment.AppName}.AsSelector()
 	replicationControllers, _ := deployer.K8client.ReplicationControllers(deployer.Deployment.Namespace).List(rcLabelSelector)
@@ -488,5 +495,14 @@ func (deployer *Deployer) CleanupFailedDeployment() {
 	if err == nil {
 		deployer.Logger.Printf("Deleting Service %v\n", service.Name)
 		deployer.deleteService(*service)
+	}
+}
+
+func DetermineNewVersion(oldVersion string) (string, error) {
+	version, err := strconv.Atoi(oldVersion)
+	if err != nil {
+		return "", err
+	} else {
+		return strconv.Itoa(version + 1), nil
 	}
 }

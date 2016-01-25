@@ -62,6 +62,8 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	mutex.Lock()
 
 	logger := cluster.NewLogger(responseWriter)
+	defer logger.Flush()
+	defer mutex.Unlock()
 
 	defer req.Body.Close()
 	body, err := ioutil.ReadAll(req.Body)
@@ -79,9 +81,6 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		logger.Printf("Deployment descriptor incorrect: \n %v", err.Error())
 		returnError(err, responseWriter, logger)
 
-		logger.Flush()
-		mutex.Unlock()
-
 		return
 	}
 
@@ -94,8 +93,6 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 			logger.Println("Could not authenticate: ", err)
 			returnError(err, responseWriter, logger)
 
-			logger.Flush()
-			mutex.Unlock()
 			return
 		}
 
@@ -103,13 +100,35 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 			logger.Printf("User %v not authorised to namespace %v", "admin@amdatu.org", deployment.Namespace)
 			returnError(err, responseWriter, logger)
 
-			logger.Flush()
-			mutex.Unlock()
 			return
 		}
 	}
 
 	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, deployment, &logger)
+	if deployment.NewVersion == "000" {
+		rc, err := deployer.FindCurrentRc()
+		if err != nil || len(rc) == 0 {
+			deployer.Deployment.NewVersion = "1"
+		} else if(len(rc) > 1) {
+			logger.Println("Could not determine next deployment version, more than a singe Replication Controller found")
+			returnError(err, responseWriter, logger)
+			return
+		} else {
+			for _, ctrl := range rc {
+				logger.Println(ctrl.Name)
+				versionString := ctrl.Labels["version"]
+				newVersion, err := cluster.DetermineNewVersion(versionString)
+				if err != nil {
+					logger.Printf("Could not determine next deployment version based on current version %v", err.Error())
+
+					return
+				} else {
+					deployer.Deployment.NewVersion = newVersion
+				}
+			}
+		}
+	}
+
 	deploymentregistry.NewDeploymentRegistry(deployer.EtcdClient)
 
 
@@ -143,8 +162,6 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		logger.Println("============================ Completed deployment =======================")
 	}
 
-	logger.Flush()
-	mutex.Unlock()
 
 }
 
