@@ -499,10 +499,10 @@ func (deployer *Deployer) CleanupFailedDeployment() {
 }
 
 func DetermineNewVersion(oldVersion string) (string, error) {
-	version, err := strconv.ParseInt(oldVersion, 10, 16)
+	version, err := strconv.Atoi(oldVersion)
 	if err != nil {
 		return "", err
 	} else {
-		return strconv.FormatInt(version + 1, 10), nil
+		return strconv.Itoa(version + 1), nil
 	}
 }
