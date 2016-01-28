@@ -35,6 +35,7 @@ type Deployment struct {
 	Email          string      `json:"email,omitempty`
 	Password       string      `json:"password,omitempty`
 	HealthCheckUrl string	   `json:healthcheckUrl,omitempty`
+	Kafka 		   string      `json:kafka`
 }
 
 const DNS952LabelFmt string = "[a-z]([-a-z0-9]*[a-z0-9])?"
@@ -219,6 +220,7 @@ func (deployer *Deployer) CreateReplicationController() (*api.ReplicationControl
 			api.EnvVar{Name: "APP_NAME", Value: deployer.Deployment.AppName},
 			api.EnvVar{Name: "POD_NAMESPACE", Value: deployer.Deployment.Namespace},
 			api.EnvVar{Name: "APP_VERSION", Value: deployer.Deployment.NewVersion},
+			api.EnvVar{Name: "KAFKA", Value: deployer.Deployment.Kafka},
 			api.EnvVar{Name: "POD_NAME", ValueFrom: &api.EnvVarSource{FieldRef: &api.ObjectFieldSelector{FieldPath: "metadata.name"}}})
 
 
