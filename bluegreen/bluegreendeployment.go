@@ -15,7 +15,6 @@ import (
 	"com.amdatu.rti.deployment/cluster"
 	"com.amdatu.rti.deployment/proxies"
 	"errors"
-	"log"
 	"time"
 )
 
@@ -49,7 +48,8 @@ func (bluegreen *bluegreen) Deploy() error {
 
 	service, err := bluegreen.deployer.CreateService()
 	if err != nil {
-		log.Println(err)
+		bluegreen.deployer.Logger.Println(err)
+		return err
 	}
 
 
