@@ -280,6 +280,9 @@ func (deployer *Deployer) CreateService() (*api.Service, error) {
 		for _,port := range container.Ports {
 
 			servicePort := api.ServicePort{Port: port.ContainerPort}
+			if port.Name != "" {
+				servicePort.Name = port.Name
+			}
 			ports = append(ports, servicePort)
 		}
 	}
