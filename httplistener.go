@@ -17,7 +17,7 @@ import (
 	"com.amdatu.rti.deployment/deploymentregistry"
 )
 
-var kubernetesurl, etcdUrl, port, dashboardurl, kubernetesUsername, kubernetesPassword string
+var kubernetesurl, etcdUrl, port, dashboardurl, kubernetesUsername, kubernetesPassword, kafkaUrl string
 var mutex = &sync.Mutex{}
 
 func init() {
@@ -27,6 +27,7 @@ func init() {
 	flag.StringVar(&dashboardurl, "dashboardurl", "noauth", "Dashboard url to use for authentication. Skip authentication when not set.")
 	flag.StringVar(&kubernetesUsername, "kubernetesusername", "noauth", "Username to authenticate against Kubernetes API server. Skip authentication when not set")
 	flag.StringVar(&kubernetesPassword, "kubernetespassword", "noauth", "Username to authenticate against Kubernetes API server.")
+	flag.StringVar(&kafkaUrl, "kafka", "", "Kafka url to pass to deployed pods")
 
 	exampleUsage := "Missing required argument %v. Example usage: httplistener -kubernetes http://[kubernetes-api-url]:8080 -etcd http://[etcd-url]:2379 -deployport 8000"
 
@@ -72,7 +73,8 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		logger.Printf("Error reading body: %v", err)
 	}
 
-	deployment := cluster.Deployment{}
+	deployment := cluster.Deployment{Kafka:kafkaUrl}
+
 	if err := json.Unmarshal(body, &deployment); err != nil {
 		logger.Printf("Error parsing body: %v", err)
 	}
