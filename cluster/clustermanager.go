@@ -36,6 +36,9 @@ type Deployment struct {
 	Password       string      `json:"password,omitempty`
 	HealthCheckUrl string	   `json:healthcheckUrl,omitempty`
 	Kafka 		   string      `json:kafka`
+	InfluxDbUrl    string      `json:influxdbUrl`
+	InfluxDbUser   string      `json:influxdbUser`
+	InfluxDbUPassword string   `json:influxdbPassword`
 }
 
 const DNS952LabelFmt string = "[a-z]([-a-z0-9]*[a-z0-9])?"
@@ -221,6 +224,9 @@ func (deployer *Deployer) CreateReplicationController() (*api.ReplicationControl
 			api.EnvVar{Name: "POD_NAMESPACE", Value: deployer.Deployment.Namespace},
 			api.EnvVar{Name: "APP_VERSION", Value: deployer.Deployment.NewVersion},
 			api.EnvVar{Name: "KAFKA", Value: deployer.Deployment.Kafka},
+			api.EnvVar{Name: "INFLUX_URL", Value: deployer.Deployment.InfluxDbUrl},
+			api.EnvVar{Name: "INFLUX_USERNAME", Value: deployer.Deployment.InfluxDbUser},
+			api.EnvVar{Name: "INFLUX_PASSWORD", Value: deployer.Deployment.InfluxDbUPassword},
 			api.EnvVar{Name: "POD_NAME", ValueFrom: &api.EnvVarSource{FieldRef: &api.ObjectFieldSelector{FieldPath: "metadata.name"}}})
 
 
