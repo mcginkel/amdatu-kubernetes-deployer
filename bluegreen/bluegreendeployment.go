@@ -59,11 +59,11 @@ func (bluegreen *bluegreen) Deploy() error {
 	}
 
 
-	for _,port := range service.Spec.Ports {
-		bluegreen.deployer.Logger.Println("Adding backend", port)
+	if(len(service.Spec.Ports) > 0) {
+		port := service.Spec.Ports[0]
+		bluegreen.deployer.Logger.Printf("Adding backend for port %v\n", port)
 		bluegreen.deployer.ProxyConfigurator.AddBackendServer(backendId, service.Spec.ClusterIP, port.Port)
 	}
-
 
 	if bluegreen.deployer.Deployment.Frontend != "" {
 		bluegreen.deployer.Logger.Println("Sleeping for 20 seconds for proxy to reload...")
