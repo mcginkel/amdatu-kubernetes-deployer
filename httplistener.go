@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"sync"
 	"com.amdatu.rti.deployment/deploymentregistry"
+	"github.com/gorilla/websocket"
 )
 
 var kubernetesurl, etcdUrl, port, dashboardurl, kubernetesUsername, kubernetesPassword, kafkaUrl, influxUrl, influxUser, influxPassword string
@@ -46,28 +47,63 @@ func init() {
 }
 
 func main() {
-	r := mux.NewRouter()
 
+	r := mux.NewRouter()
 	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
 
 	fmt.Printf("Dployer started and listening on port %v\n", port)
+
+	r.HandleFunc("/deployment/stream", websocketHandler)
 
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
 	}
 }
 
-type DeploymentRequest struct {
-	ResponseWriter http.ResponseWriter
-	Req            *http.Request
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
+
+func websocketHandler(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	defer conn.Close()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	logger := cluster.NewWebsocketLogger(conn)
+
+	_, body, err := conn.ReadMessage()
+	if err != nil {
+		return
+	}
+
+	if err != nil {
+		logger.Printf("Error reading body: %v", err)
+	}
+
+	deployment, err := createDeployment(body)
+	if err != nil {
+		logger.Printf("Error parsing body: %v", err)
+	}
+
+	err = deploy(deployment, &logger)
+	if err != nil {
+		logger.Printf("Error during deployment: %v\n", err)
+		logger.Println("============================ Deployment Failed =======================")
+	} else {
+		logger.Println("============================ Completed deployment =======================")
+	}
+
 }
 
 func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
-	mutex.Lock()
 
-	logger := cluster.NewLogger(responseWriter)
+	logger := cluster.NewHttpLogger(responseWriter)
 	defer logger.Flush()
-	defer mutex.Unlock()
+
 
 	defer req.Body.Close()
 	body, err := ioutil.ReadAll(req.Body)
@@ -76,17 +112,34 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		logger.Printf("Error reading body: %v", err)
 	}
 
-	deployment := cluster.Deployment{Kafka:kafkaUrl, InfluxDbUrl:influxUrl, InfluxDbUser:influxUser, InfluxDbUPassword:influxPassword}
-
-	if err := json.Unmarshal(body, &deployment); err != nil {
+	deployment, err := createDeployment(body)
+	if err != nil {
 		logger.Printf("Error parsing body: %v", err)
 	}
 
-	if err = deployment.SetDefaults().Validate(); err != nil {
-		logger.Printf("Deployment descriptor incorrect: \n %v", err.Error())
-		returnError(err, responseWriter, logger)
+	err = deploy(deployment, &logger)
+	if err != nil {
+		responseWriter.WriteHeader(500)
+		logger.Printf("Error during deployment: %v\n", err)
+		logger.Println("============================ Deployment Failed =======================")
+	} else {
+		logger.Println("============================ Completed deployment =======================")
+	}
+}
 
-		return
+
+type DeploymentRequest struct {
+	ResponseWriter http.ResponseWriter
+	Req            *http.Request
+}
+
+func deploy(deployment cluster.Deployment, logger cluster.Logger) error {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	if err := deployment.SetDefaults().Validate(); err != nil {
+		logger.Printf("Deployment descriptor incorrect: \n %v", err.Error())
+		return err
 	}
 
 	logger.Printf("%v\n", deployment.String())
@@ -96,28 +149,23 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 
 		if err != nil {
 			logger.Println("Could not authenticate: ", err)
-			returnError(err, responseWriter, logger)
-
-			return
+			return err
 		}
 
 		if !auth.StringInSet(deployment.Namespace, namespaces) {
 			logger.Printf("User %v not authorised to namespace %v", "admin@amdatu.org", deployment.Namespace)
-			returnError(err, responseWriter, logger)
-
-			return
+			return err
 		}
 	}
 
-	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, deployment, &logger)
+	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, deployment, logger)
 	if deployment.NewVersion == "000" {
 		rc, err := deployer.FindCurrentRc()
 		if err != nil || len(rc) == 0 {
 			deployer.Deployment.NewVersion = "1"
 		} else if(len(rc) > 1) {
 			logger.Println("Could not determine next deployment version, more than a singe Replication Controller found")
-			returnError(err, responseWriter, logger)
-			return
+			return err
 		} else {
 			for _, ctrl := range rc {
 				logger.Println(ctrl.Name)
@@ -126,7 +174,7 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 				if err != nil {
 					logger.Printf("Could not determine next deployment version based on current version %v", err.Error())
 
-					return
+					return err
 				} else {
 					deployer.Deployment.NewVersion = newVersion
 				}
@@ -136,7 +184,6 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 
 	deploymentregistry.NewDeploymentRegistry(deployer.EtcdClient)
 
-
 	var deploymentError error
 
 	/*Check if namespace has the current version deployed
@@ -144,7 +191,7 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	*/
 
 	logger.Println("Checking for existing service...")
-	_, err = deployer.K8client.Services(deployment.Namespace).Get(deployer.CreateRcName())
+	_, err := deployer.K8client.Services(deployment.Namespace).Get(deployer.CreateRcName())
 
 	if err != nil {
 		logger.Println("No existing service found, starting deployment")
@@ -161,17 +208,21 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	}
 
 	if deploymentError != nil {
-		returnError(deploymentError, responseWriter, logger)
+
 		deployer.CleanupFailedDeployment()
-	} else {
-		logger.Println("============================ Completed deployment =======================")
+		return err
 	}
 
-
+	return nil
 }
 
-func returnError(deploymentError error, responseWriter http.ResponseWriter, logger cluster.Logger) {
-	responseWriter.WriteHeader(500)
-	logger.Printf("Error during deployment: %v\n", deploymentError)
-	logger.Println("============================ Deployment Failed =======================")
+
+func createDeployment(jsonString []byte) (cluster.Deployment, error) {
+	deployment := cluster.Deployment{Kafka:kafkaUrl, InfluxDbUrl:influxUrl, InfluxDbUser:influxUser, InfluxDbUPassword:influxPassword}
+
+	if err := json.Unmarshal(jsonString, &deployment); err != nil {
+		return cluster.Deployment{},err
+	}
+
+	return deployment, nil
 }
