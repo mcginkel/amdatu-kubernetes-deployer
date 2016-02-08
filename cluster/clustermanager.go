@@ -11,9 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"time"
 	"strings"
 	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
@@ -141,39 +139,19 @@ type Deployer struct {
 	Deployment        Deployment
 	EtcdUrl           string
 	K8client          *unversioned.Client
-	Logger            *Logger
+	Logger            Logger
 	ProxyConfigurator *proxies.ProxyConfigurator
 	EtcdClient *client.Client
 }
 
-type Logger struct {
-	RespWriter http.ResponseWriter
-	buffer []string
+type Logger interface {
+	Println(v ...interface{})
+	Printf(format string, v ...interface{})
+	Flush()
 }
 
-func NewLogger(responseWriter http.ResponseWriter) Logger {
-	return Logger{responseWriter, []string {}}
-}
 
-func (logger *Logger) Println(v ...interface{}) {
-	msg := fmt.Sprintln(v...)
-	log.Println(msg)
-	logger.buffer = append(logger.buffer, msg)
-}
-
-func (logger *Logger) Printf(format string, v ...interface{}) {
-	msg := fmt.Sprintf(format, v...)
-	log.Printf(msg)
-	logger.buffer = append(logger.buffer, msg)
-}
-
-func (logger *Logger) Flush() {
-	for _,msg := range logger.buffer {
-		io.WriteString(logger.RespWriter, msg)
-	}
-}
-
-func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment Deployment, logger *Logger) *Deployer {
+func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment Deployment, logger Logger) *Deployer {
 
 	config := unversioned.Config{Host: kubernetesUrl, Version: "v1", Username: kubernetesUsername, Password: kubernetesPassword, Insecure: true}
 	c, err := unversioned.New(&config)
