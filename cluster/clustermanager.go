@@ -420,7 +420,7 @@ func (deployer *Deployer) CountRunningPods(pods []api.Pod) int {
 func (deployer *Deployer) CheckPodHealth(pod *api.Pod) error {
 	if deployer.Deployment.UseHealthCheck {
 
-		port := pod.Spec.Containers[0].Ports[0].ContainerPort
+		port := FindHealthcheckPort(pod)
 		host := pod.Status.PodIP
 		healthy := healthcheck.WaitForPodStarted(deployer.getHealthcheckUrl(host, port), time.Minute*2)
 		if !healthy {
@@ -429,6 +429,32 @@ func (deployer *Deployer) CheckPodHealth(pod *api.Pod) error {
 	}
 
 	return nil
+}
+
+func FindHealthcheckPort(pod *api.Pod) int {
+
+	ports := pod.Spec.Containers[0].Ports
+
+
+	if(ports == nil || len(ports) == 0) {
+		//If no ports are defined, 9999 is the default
+		return 9999
+	} else if(len(ports) == 1) {
+		//If one port is defined, it must be the health check port
+		return ports[0].ContainerPort
+	} else {
+		//If multiple ports are defined, check for a named port "healthcheck"
+		for _, port :=range ports {
+			if port.Name == "healthcheck" {
+				return port.ContainerPort
+			}
+		}
+
+		//If no named healthcheck port if found, assume the first port
+		return ports[0].ContainerPort
+	}
+
+	return 0
 }
 
 func (deployer *Deployer) getHealthcheckUrl(host string, port int) string{
