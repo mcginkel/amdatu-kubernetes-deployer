@@ -9,9 +9,6 @@ package bluegreen
 */
 
 import (
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/api"
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/fields"
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/labels"
 	"com.amdatu.rti.deployment/cluster"
 	"com.amdatu.rti.deployment/proxies"
 	"errors"
@@ -60,7 +57,7 @@ func (bluegreen *bluegreen) Deploy() error {
 	if len(service.Spec.Ports) > 0 {
 		port := service.Spec.Ports[0]
 		bluegreen.deployer.Logger.Printf("Adding backend for port %v\n", port)
-		bluegreen.deployer.ProxyConfigurator.AddBackendServer(backendId, service.Spec.ClusterIP, port.Port)
+		bluegreen.deployer.ProxyConfigurator.AddBackendServer(backendId, service.Spec.ClusterIP, int32(port.Port))
 	}
 
 	if bluegreen.deployer.Deployment.Frontend != "" {
@@ -116,17 +113,9 @@ func (bluegreen *bluegreen) createReplicationController() error {
 }
 
 func (bluegreen *bluegreen) watchPods(name, version string, callback chan string) error {
-	podSelector := labels.Set{"name": name, "version": bluegreen.deployer.Deployment.NewVersion}.AsSelector()
+	podSelector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.NewVersion}
 
-	podList, err := bluegreen.deployer.K8client.Pods(bluegreen.deployer.Deployment.Namespace).List(podSelector, fields.Everything())
-
-	if err != nil {
-		bluegreen.deployer.Logger.Println(err)
-		callback <- "ERROR"
-		return err
-	}
-
-	watchNew, err := bluegreen.deployer.K8client.Pods(bluegreen.deployer.Deployment.Namespace).Watch(podSelector, fields.Everything(), podList.ResourceVersion)
+	watchNew, signals, err := bluegreen.deployer.K8client.WatchPodsWithLabel(bluegreen.deployer.Deployment.Namespace, podSelector)
 
 	if err != nil {
 		bluegreen.deployer.Logger.Println(err)
@@ -134,25 +123,24 @@ func (bluegreen *bluegreen) watchPods(name, version string, callback chan string
 		return err
 	}
 
-	watchChan := watchNew.ResultChan()
 	bluegreen.deployer.Logger.Println("Waiting for pods to spin up...")
 
-	for pod := range watchChan {
-		podObj := pod.Object.(*api.Pod)
+	for pod := range watchNew {
+		podObj := pod.Object
 
 		if podObj.Status.Phase == "Running" {
 
-			if err := bluegreen.deployer.CheckPodHealth(podObj); err != nil {
-				watchNew.Stop()
+			if err := bluegreen.deployer.CheckPodHealth(&podObj); err != nil {
+				signals <- "cancel"
 				callback <- "ERROR"
 
 				return err
 			}
 
-			pods, listErr := bluegreen.deployer.K8client.Pods(bluegreen.deployer.Deployment.Namespace).List(podSelector, fields.Everything())
+			pods, listErr := bluegreen.deployer.K8client.ListPodsWithLabel(bluegreen.deployer.Deployment.Namespace, podSelector)
 			if listErr != nil {
 				bluegreen.deployer.Logger.Println(listErr)
-				watchNew.Stop()
+				signals <- "cancel"
 				callback <- "ERROR"
 
 				return err
@@ -161,8 +149,8 @@ func (bluegreen *bluegreen) watchPods(name, version string, callback chan string
 			nrOfPods := bluegreen.deployer.CountRunningPods(pods.Items)
 			if nrOfPods == bluegreen.deployer.Deployment.Replicas {
 				bluegreen.deployer.Logger.Printf("Found enough running pods (%v), continue to switch versions...\n", nrOfPods)
-				watchNew.Stop()
 				callback <- "FINISHED"
+				signals <- "cancel"
 				return nil
 			} else {
 				bluegreen.deployer.Logger.Printf("Waiting for %v more pods...\n", bluegreen.deployer.Deployment.Replicas-nrOfPods)

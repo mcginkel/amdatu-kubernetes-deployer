@@ -1,9 +1,7 @@
 package redeploy
 
 import (
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/api"
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/fields"
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/labels"
+	"com.cloudrti/kubernetesclient/api/v1"
 	"com.amdatu.rti.deployment/cluster"
 	"time"
 )
@@ -34,7 +32,7 @@ func (redeployer *redeployer) Deploy() error {
 		return error
 	}
 
-	podNames := make(map[string]*api.Pod, len(pods))
+	podNames := make(map[string]*v1.Pod, len(pods))
 	for _, p := range pods {
 		podNames[p.Name] = &p
 	}
@@ -55,43 +53,35 @@ func (redeployer *redeployer) Deploy() error {
 	return nil
 }
 
-func (redeployer *redeployer) waitForNewPod(callback chan bool, existingPods map[string]*api.Pod) {
-	podSelector := labels.Set{"name": redeployer.deployer.CreateRcName(), "version": redeployer.deployer.Deployment.NewVersion}.AsSelector()
-	podList, err := redeployer.deployer.K8client.Pods(redeployer.deployer.Deployment.Namespace).List(podSelector, fields.Everything())
+func (redeployer *redeployer) waitForNewPod(callback chan bool, existingPods map[string]*v1.Pod) {
+	podSelector := map[string]string{"name": redeployer.deployer.CreateRcName(), "version": redeployer.deployer.Deployment.NewVersion}
+
+	watchNew, signals, err := redeployer.deployer.K8client.WatchPodsWithLabel(redeployer.deployer.Deployment.Namespace, podSelector)
 
 	if err != nil {
 		redeployer.deployer.Logger.Println(err)
-		return
-	}
-
-	watchNew, err := redeployer.deployer.K8client.Pods(redeployer.deployer.Deployment.Namespace).Watch(podSelector, fields.Everything(), podList.ResourceVersion)
-
-	if err != nil {
-		redeployer.deployer.Logger.Println(err)
+		signals <- "cancel"
 		callback <- false
 		return
 	}
-
-	watchChan := watchNew.ResultChan()
 
 	timeout := make(chan string)
 	go func() {
 		time.Sleep(time.Minute * 5)
 		timeout <- "TIMEOUT"
 		close(timeout)
-		watchNew.Stop()
-
+		signals <- "cancel"
 		callback <- false
 	}()
 
-	for evnt := range watchChan {
-		podObj := evnt.Object.(*api.Pod)
+	for evnt := range watchNew {
+		podObj := evnt.Object
 
 		if evnt.Type == "MODIFIED" && existingPods[podObj.Name] == nil && podObj.Status.PodIP != "" {
-			redeployer.deployer.CheckPodHealth(podObj)
+			redeployer.deployer.CheckPodHealth(&podObj)
 			redeployer.deployer.Logger.Println("Found new pod")
 			callback <- true
-			watchNew.Stop()
+			signals <- "cancel"
 			break
 		}
 	}

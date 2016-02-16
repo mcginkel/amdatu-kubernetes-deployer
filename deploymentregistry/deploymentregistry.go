@@ -1,7 +1,7 @@
 package deploymentregistry
 
 import (
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
+	"github.com/coreos/etcd/client"
 	"com.amdatu.rti.deployment/cluster"
 	"encoding/json"
 	"fmt"

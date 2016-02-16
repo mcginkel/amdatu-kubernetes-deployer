@@ -1,7 +1,7 @@
 package main
 
 import (
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/gorilla/mux"
+	"github.com/gorilla/mux"
 	"com.amdatu.rti.deployment/auth"
 	"com.amdatu.rti.deployment/bluegreen"
 	"com.amdatu.rti.deployment/cluster"
@@ -189,7 +189,7 @@ func deploy(deployment cluster.Deployment, logger cluster.Logger) error {
 	*/
 
 	logger.Println("Checking for existing service...")
-	_, err := deployer.K8client.Services(deployment.Namespace).Get(deployer.CreateRcName())
+	_, err := deployer.K8client.GetService(deployment.Namespace, deployer.CreateRcName())
 
 	if err != nil {
 		logger.Println("No existing service found, starting deployment")
