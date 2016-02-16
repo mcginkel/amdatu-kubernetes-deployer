@@ -1,19 +1,20 @@
 package cluster
+
 import (
-	"net/http"
 	"fmt"
-"log"
-"io"
-"github.com/gorilla/websocket"
+	"github.com/gorilla/websocket"
+	"io"
+	"log"
+	"net/http"
 )
 
 type HttpLogger struct {
 	RespWriter http.ResponseWriter
-	buffer []string
+	buffer     []string
 }
 
 func NewHttpLogger(responseWriter http.ResponseWriter) HttpLogger {
-	return HttpLogger{responseWriter, []string {}}
+	return HttpLogger{responseWriter, []string{}}
 }
 
 func (logger *HttpLogger) Println(v ...interface{}) {
@@ -29,11 +30,10 @@ func (logger *HttpLogger) Printf(format string, v ...interface{}) {
 }
 
 func (logger *HttpLogger) Flush() {
-	for _,msg := range logger.buffer {
+	for _, msg := range logger.buffer {
 		io.WriteString(logger.RespWriter, msg)
 	}
 }
-
 
 type WebsocketLogger struct {
 	Conn *websocket.Conn

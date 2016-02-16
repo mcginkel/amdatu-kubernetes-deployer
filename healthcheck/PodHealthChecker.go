@@ -1,12 +1,12 @@
 package healthcheck
+
 import (
+	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"io/ioutil"
-	"encoding/json"
 	"time"
 )
-
 
 func WaitForPodStarted(url string, timeoutDuration time.Duration) bool {
 	timeout := make(chan string)
@@ -18,14 +18,13 @@ func WaitForPodStarted(url string, timeoutDuration time.Duration) bool {
 		close(timeout)
 	}()
 
-
 	go watchPod(url, callBack)
 
 	select {
-	case <- callBack:
+	case <-callBack:
 		log.Println("Pod turned healthy")
 		return true
-	case <- timeout:
+	case <-timeout:
 		callBack <- false
 		log.Println("Timeout waiting for Pod to become healthy")
 		return false
