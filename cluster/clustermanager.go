@@ -27,16 +27,16 @@ type Deployment struct {
 	Replicas       int         `json:"replicas,omitempty"`
 	Frontend       string      `json:"frontend,omitempty"`
 	ProxyPorts	   []int	   `json:"proxyports:omitempty"`
-	PodSpec        api.PodSpec `json:podspec`
+	PodSpec        api.PodSpec `json:"podspec,omitempty"`
 	UseHealthCheck bool        `json:"useHealthCheck,omitempty"`
 	Namespace      string      `json:"namespace,omitempty"`
-	Email          string      `json:"email,omitempty`
-	Password       string      `json:"password,omitempty`
-	HealthCheckUrl string	   `json:healthcheckUrl,omitempty`
-	Kafka 		   string      `json:kafka`
-	InfluxDbUrl    string      `json:influxdbUrl`
-	InfluxDbUser   string      `json:influxdbUser`
-	InfluxDbUPassword string   `json:influxdbPassword`
+	Email          string      `json:"email,omitempty"`
+	Password       string      `json:"password,omitempty"`
+	HealthCheckUrl string	   `json:"healthcheckUrl,omitempty"`
+	Kafka 		   string      `json:"kafka,omitempty"`
+	InfluxDbUrl    string      `json:"influxdbUrl,omitempty"`
+	InfluxDbUser   string      `json:"influxdbUser,omitempty"`
+	InfluxDbUPassword string   `json:"influxdbPassword,omitempty"`
 }
 
 const DNS952LabelFmt string = "[a-z]([-a-z0-9]*[a-z0-9])?"
@@ -453,8 +453,6 @@ func FindHealthcheckPort(pod *api.Pod) int {
 		//If no named healthcheck port if found, assume the first port
 		return ports[0].ContainerPort
 	}
-
-	return 0
 }
 
 func (deployer *Deployer) getHealthcheckUrl(host string, port int) string{
