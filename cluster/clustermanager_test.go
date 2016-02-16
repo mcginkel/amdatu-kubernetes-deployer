@@ -1,9 +1,9 @@
 package cluster
 
 import (
-	"testing"
-	"strings"
 	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/api"
+	"strings"
+	"testing"
 )
 
 func TestGetHealthUrl_WithSlash(t *testing.T) {
@@ -13,7 +13,7 @@ func TestGetHealthUrl_WithSlash(t *testing.T) {
 	}
 
 	deployer := Deployer{
-		Deployment:depl,
+		Deployment: depl,
 	}
 	url := deployer.getHealthcheckUrl("127.0.0.1", 8080)
 
@@ -23,7 +23,6 @@ func TestGetHealthUrl_WithSlash(t *testing.T) {
 
 }
 
-
 func TestGetHealthUrl_WithoutSlash(t *testing.T) {
 
 	depl := Deployment{
@@ -31,7 +30,7 @@ func TestGetHealthUrl_WithoutSlash(t *testing.T) {
 	}
 
 	deployer := Deployer{
-		Deployment:depl,
+		Deployment: depl,
 	}
 	url := deployer.getHealthcheckUrl("127.0.0.1", 8080)
 
@@ -48,7 +47,7 @@ func TestGetHealthUrl_Default(t *testing.T) {
 	}
 
 	deployer := Deployer{
-		Deployment:depl,
+		Deployment: depl,
 	}
 	url := deployer.getHealthcheckUrl("127.0.0.1", 8080)
 
@@ -101,10 +100,10 @@ func TestDetermineNextVersionCorrect(t *testing.T) {
 
 /**
 Default to only exposed port
- */
+*/
 func TestFindHealthcheckPort_SinglePort(t *testing.T) {
 	pod := api.Pod{
-		Spec:api.PodSpec{
+		Spec: api.PodSpec{
 			Containers: []api.Container{
 				{Ports: []api.ContainerPort{
 					{ContainerPort: 8080},
@@ -121,10 +120,10 @@ func TestFindHealthcheckPort_SinglePort(t *testing.T) {
 
 /**
 Named port when multiple ports defined
- */
+*/
 func TestFindHealthcheckPort_MultiplePort(t *testing.T) {
 	pod := api.Pod{
-		Spec:api.PodSpec{
+		Spec: api.PodSpec{
 			Containers: []api.Container{
 				{Ports: []api.ContainerPort{
 					{ContainerPort: 8080, Name: "web"},
@@ -142,10 +141,10 @@ func TestFindHealthcheckPort_MultiplePort(t *testing.T) {
 
 /**
 Default port when no ports are defined
- */
+*/
 func TestFindHealthcheckPort_NoPort(t *testing.T) {
 	pod := api.Pod{
-		Spec:api.PodSpec{
+		Spec: api.PodSpec{
 			Containers: []api.Container{{}},
 		},
 	}
@@ -158,10 +157,10 @@ func TestFindHealthcheckPort_NoPort(t *testing.T) {
 
 /**
 Default port when no health check port found
- */
+*/
 func TestFindHealthcheckPort_NoHealthPort(t *testing.T) {
 	pod := api.Pod{
-		Spec:api.PodSpec{
+		Spec: api.PodSpec{
 			Containers: []api.Container{
 				{Ports: []api.ContainerPort{
 					{ContainerPort: 8080, Name: "web"},

@@ -1,17 +1,18 @@
 package deploymentregistry
+
 import (
-	"com.amdatu.rti.deployment/cluster"
 	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
-	"golang.org/x/net/context"
-	"fmt"
+	"com.amdatu.rti.deployment/cluster"
 	"encoding/json"
+	"fmt"
+	"golang.org/x/net/context"
 )
 
 type DeploymentRegistry struct {
 	etcdApi client.KeysAPI
 }
 
-func NewDeploymentRegistry(etcdClient *client.Client) DeploymentRegistry{
+func NewDeploymentRegistry(etcdClient *client.Client) DeploymentRegistry {
 	etcdApi := client.NewKeysAPI(*etcdClient)
 
 	return DeploymentRegistry{etcdApi}
@@ -25,8 +26,7 @@ func (registry *DeploymentRegistry) StoreDeployment(deployment *cluster.Deployme
 		return err
 	}
 
-
-	if _,err := registry.etcdApi.Set(context.Background(), keyName, string(bytes), nil); err != nil {
+	if _, err := registry.etcdApi.Set(context.Background(), keyName, string(bytes), nil); err != nil {
 		return err
 	}
 

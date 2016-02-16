@@ -52,14 +52,12 @@ func (bluegreen *bluegreen) Deploy() error {
 		return err
 	}
 
-
 	if err := bluegreen.createReplicationController(); err != nil {
 		bluegreen.deployer.Logger.Println(err)
 		return err
 	}
 
-
-	if(len(service.Spec.Ports) > 0) {
+	if len(service.Spec.Ports) > 0 {
 		port := service.Spec.Ports[0]
 		bluegreen.deployer.Logger.Printf("Adding backend for port %v\n", port)
 		bluegreen.deployer.ProxyConfigurator.AddBackendServer(backendId, service.Spec.ClusterIP, port.Port)
@@ -86,7 +84,7 @@ func (bluegreen *bluegreen) Deploy() error {
 
 func (bluegreen *bluegreen) createReplicationController() error {
 
-	_,err := bluegreen.deployer.CreateReplicationController()
+	_, err := bluegreen.deployer.CreateReplicationController()
 	if err != nil {
 		return err
 	}
