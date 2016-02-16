@@ -1,11 +1,11 @@
 package healthcheck
 
 import (
-	"testing"
-	"time"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"fmt"
+	"testing"
+	"time"
 )
 
 func TestWaitForPod(t *testing.T) {
@@ -14,7 +14,7 @@ func TestWaitForPod(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	result := WaitForPodStarted(ts.URL, 100 * time.Millisecond);
+	result := WaitForPodStarted(ts.URL, 100*time.Millisecond)
 	if !result {
 		t.Error("Pod didn't get healthy")
 	}
@@ -26,7 +26,7 @@ func TestTimeout(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	result := WaitForPodStarted(ts.URL, 100 * time.Millisecond);
+	result := WaitForPodStarted(ts.URL, 100*time.Millisecond)
 	if result {
 		t.Error("Pod reported healthy but shouldn't")
 	}

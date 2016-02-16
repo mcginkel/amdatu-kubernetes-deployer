@@ -5,17 +5,17 @@ import (
 	"com.amdatu.rti.deployment/auth"
 	"com.amdatu.rti.deployment/bluegreen"
 	"com.amdatu.rti.deployment/cluster"
+	"com.amdatu.rti.deployment/deploymentregistry"
 	"com.amdatu.rti.deployment/redeploy"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/gorilla/websocket"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"sync"
-	"com.amdatu.rti.deployment/deploymentregistry"
-	"github.com/gorilla/websocket"
 )
 
 var kubernetesurl, etcdUrl, port, dashboardurl, kubernetesUsername, kubernetesPassword, kafkaUrl, influxUrl, influxUser, influxPassword string
@@ -104,7 +104,6 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	logger := cluster.NewHttpLogger(responseWriter)
 	defer logger.Flush()
 
-
 	defer req.Body.Close()
 	body, err := ioutil.ReadAll(req.Body)
 
@@ -126,7 +125,6 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		logger.Println("============================ Completed deployment =======================")
 	}
 }
-
 
 type DeploymentRequest struct {
 	ResponseWriter http.ResponseWriter
@@ -163,7 +161,7 @@ func deploy(deployment cluster.Deployment, logger cluster.Logger) error {
 		rc, err := deployer.FindCurrentRc()
 		if err != nil || len(rc) == 0 {
 			deployer.Deployment.NewVersion = "1"
-		} else if(len(rc) > 1) {
+		} else if len(rc) > 1 {
 			logger.Println("Could not determine next deployment version, more than a singe Replication Controller found")
 			return err
 		} else {
@@ -216,12 +214,11 @@ func deploy(deployment cluster.Deployment, logger cluster.Logger) error {
 	return nil
 }
 
-
 func createDeployment(jsonString []byte) (cluster.Deployment, error) {
-	deployment := cluster.Deployment{Kafka:kafkaUrl, InfluxDbUrl:influxUrl, InfluxDbUser:influxUser, InfluxDbUPassword:influxPassword}
+	deployment := cluster.Deployment{Kafka: kafkaUrl, InfluxDbUrl: influxUrl, InfluxDbUser: influxUser, InfluxDbUPassword: influxPassword}
 
 	if err := json.Unmarshal(jsonString, &deployment); err != nil {
-		return cluster.Deployment{},err
+		return cluster.Deployment{}, err
 	}
 
 	return deployment, nil

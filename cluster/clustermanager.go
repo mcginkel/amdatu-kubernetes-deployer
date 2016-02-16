@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"bytes"
+	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
 	etcdclient "com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
 	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/api"
 	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/client/unversioned"
@@ -12,34 +14,33 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
-	"strings"
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
-	"bytes"
 	"regexp"
 	"strconv"
+	"strings"
+	"time"
 )
 
 type Deployment struct {
-	DeploymentType string      `json:"deploymentType,omitempty"`
-	NewVersion     string      `json:"newVersion,omitempty"`
-	AppName        string      `json:"appName,omitempty"`
-	Replicas       int         `json:"replicas,omitempty"`
-	Frontend       string      `json:"frontend,omitempty"`
-	ProxyPorts	   []int	   `json:"proxyports:omitempty"`
-	PodSpec        api.PodSpec `json:podspec`
-	UseHealthCheck bool        `json:"useHealthCheck,omitempty"`
-	Namespace      string      `json:"namespace,omitempty"`
-	Email          string      `json:"email,omitempty`
-	Password       string      `json:"password,omitempty`
-	HealthCheckUrl string	   `json:healthcheckUrl,omitempty`
-	Kafka 		   string      `json:kafka`
-	InfluxDbUrl    string      `json:influxdbUrl`
-	InfluxDbUser   string      `json:influxdbUser`
-	InfluxDbUPassword string   `json:influxdbPassword`
+	DeploymentType    string      `json:"deploymentType,omitempty"`
+	NewVersion        string      `json:"newVersion,omitempty"`
+	AppName           string      `json:"appName,omitempty"`
+	Replicas          int         `json:"replicas,omitempty"`
+	Frontend          string      `json:"frontend,omitempty"`
+	ProxyPorts        []int       `json:"proxyports:omitempty"`
+	PodSpec           api.PodSpec `json:"podspec,omitempty"`
+	UseHealthCheck    bool        `json:"useHealthCheck,omitempty"`
+	Namespace         string      `json:"namespace,omitempty"`
+	Email             string      `json:"email,omitempty"`
+	Password          string      `json:"password,omitempty"`
+	HealthCheckUrl    string      `json:"healthcheckUrl,omitempty"`
+	Kafka             string      `json:"kafka,omitempty"`
+	InfluxDbUrl       string      `json:"influxdbUrl,omitempty"`
+	InfluxDbUser      string      `json:"influxdbUser,omitempty"`
+	InfluxDbUPassword string      `json:"influxdbPassword,omitempty"`
 }
 
 const DNS952LabelFmt string = "[a-z]([-a-z0-9]*[a-z0-9])?"
+
 var dns952LabelRegexp = regexp.MustCompile("^" + DNS952LabelFmt + "$")
 
 func (deployment *Deployment) String() string {
@@ -52,7 +53,7 @@ func (deployment *Deployment) String() string {
 	return string(b)
 }
 
-func (deployment *Deployment) SetDefaults() *Deployment{
+func (deployment *Deployment) SetDefaults() *Deployment {
 	if len(deployment.Namespace) == 0 {
 		deployment.Namespace = api.NamespaceDefault
 	}
@@ -61,7 +62,7 @@ func (deployment *Deployment) SetDefaults() *Deployment{
 		deployment.DeploymentType = "blue-green"
 	}
 
-	for _,container := range deployment.PodSpec.Containers {
+	for _, container := range deployment.PodSpec.Containers {
 		if container.ImagePullPolicy == "" {
 			container.ImagePullPolicy = "Always"
 		}
@@ -110,7 +111,7 @@ func (deployment *Deployment) Validate() error {
 		messageBuffer.WriteString("No containers specified in PodSpec\n")
 	}
 
-	for i,container := range deployment.PodSpec.Containers {
+	for i, container := range deployment.PodSpec.Containers {
 		if container.Image == "" {
 			messageBuffer.WriteString(fmt.Sprintf("No image specified for container %v\n", i))
 		}
@@ -141,7 +142,7 @@ type Deployer struct {
 	K8client          *unversioned.Client
 	Logger            Logger
 	ProxyConfigurator *proxies.ProxyConfigurator
-	EtcdClient *client.Client
+	EtcdClient        *client.Client
 }
 
 type Logger interface {
@@ -149,7 +150,6 @@ type Logger interface {
 	Printf(format string, v ...interface{})
 	Flush()
 }
-
 
 func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment Deployment, logger Logger) *Deployer {
 
@@ -207,14 +207,12 @@ func (deployer *Deployer) CreateReplicationController() (*api.ReplicationControl
 			api.EnvVar{Name: "INFLUX_PASSWORD", Value: deployer.Deployment.InfluxDbUPassword},
 			api.EnvVar{Name: "POD_NAME", ValueFrom: &api.EnvVarSource{FieldRef: &api.ObjectFieldSelector{FieldPath: "metadata.name"}}})
 
-
 		containers = append(containers, container)
 	}
 
 	deployer.Deployment.PodSpec.Containers = containers
 
-
-	bytes,_ := json.MarshalIndent(deployer.Deployment.PodSpec, "", "  ")
+	bytes, _ := json.MarshalIndent(deployer.Deployment.PodSpec, "", "  ")
 	fmt.Printf("%v", string(bytes))
 
 	ctrl.Spec = api.ReplicationControllerSpec{
@@ -262,8 +260,8 @@ func (deployer *Deployer) CreateService() (*api.Service, error) {
 	srv.Labels = selector
 
 	ports := []api.ServicePort{}
-	for _,container := range deployer.Deployment.PodSpec.Containers {
-		for _,port := range container.Ports {
+	for _, container := range deployer.Deployment.PodSpec.Containers {
+		for _, port := range container.Ports {
 
 			servicePort := api.ServicePort{Port: port.ContainerPort}
 			if port.Name != "" {
@@ -274,9 +272,9 @@ func (deployer *Deployer) CreateService() (*api.Service, error) {
 	}
 
 	srv.Spec = api.ServiceSpec{
-		Selector: selector,
-		Ports: ports,
-		Type: api.ServiceTypeNodePort,
+		Selector:        selector,
+		Ports:           ports,
+		Type:            api.ServiceTypeNodePort,
 		SessionAffinity: "ClientIP",
 	}
 
@@ -420,7 +418,7 @@ func (deployer *Deployer) CountRunningPods(pods []api.Pod) int {
 func (deployer *Deployer) CheckPodHealth(pod *api.Pod) error {
 	if deployer.Deployment.UseHealthCheck {
 
-		port := pod.Spec.Containers[0].Ports[0].ContainerPort
+		port := FindHealthcheckPort(pod)
 		host := pod.Status.PodIP
 		healthy := healthcheck.WaitForPodStarted(deployer.getHealthcheckUrl(host, port), time.Minute*2)
 		if !healthy {
@@ -431,7 +429,30 @@ func (deployer *Deployer) CheckPodHealth(pod *api.Pod) error {
 	return nil
 }
 
-func (deployer *Deployer) getHealthcheckUrl(host string, port int) string{
+func FindHealthcheckPort(pod *api.Pod) int {
+
+	ports := pod.Spec.Containers[0].Ports
+
+	if ports == nil || len(ports) == 0 {
+		//If no ports are defined, 9999 is the default
+		return 9999
+	} else if len(ports) == 1 {
+		//If one port is defined, it must be the health check port
+		return ports[0].ContainerPort
+	} else {
+		//If multiple ports are defined, check for a named port "healthcheck"
+		for _, port := range ports {
+			if port.Name == "healthcheck" {
+				return port.ContainerPort
+			}
+		}
+
+		//If no named healthcheck port if found, assume the first port
+		return ports[0].ContainerPort
+	}
+}
+
+func (deployer *Deployer) getHealthcheckUrl(host string, port int) string {
 	var healthUrl string
 	if deployer.Deployment.HealthCheckUrl != "" {
 		if strings.HasPrefix(deployer.Deployment.HealthCheckUrl, "/") {
@@ -446,15 +467,15 @@ func (deployer *Deployer) getHealthcheckUrl(host string, port int) string{
 	return fmt.Sprintf("http://%v:%v/%v", host, port, healthUrl)
 }
 
-func (deployer *Deployer) findRcForDeployment() (*api.ReplicationController, error){
+func (deployer *Deployer) findRcForDeployment() (*api.ReplicationController, error) {
 	return deployer.K8client.ReplicationControllers(deployer.Deployment.Namespace).Get(deployer.CreateRcName())
 }
 
-func (deployer *Deployer) findServiceForDeployment() (*api.Service, error){
+func (deployer *Deployer) findServiceForDeployment() (*api.Service, error) {
 	return deployer.K8client.Services(deployer.Deployment.Namespace).Get(deployer.CreateRcName())
 }
 
-func (deployer *Deployer) findPodsForDeployment() (*api.PodList, error){
+func (deployer *Deployer) findPodsForDeployment() (*api.PodList, error) {
 	rcLabelSelector := labels.Set{"app": deployer.Deployment.AppName, "version": deployer.Deployment.NewVersion}.AsSelector()
 	return deployer.K8client.Pods(deployer.Deployment.Namespace).List(rcLabelSelector, fields.Everything())
 }
@@ -471,13 +492,13 @@ func (deployer *Deployer) CleanupFailedDeployment() {
 
 	pods, err := deployer.findPodsForDeployment()
 	if err == nil {
-		for _,pod := range pods.Items {
+		for _, pod := range pods.Items {
 			deployer.Logger.Printf("Deleting pod %v\n", pod.Name)
 			deployer.DeletePod(pod)
 		}
 	}
 
-	deployer.Logger.Printf("Deleting proxy config %v\n", rc.Namespace + "-" + rc.Name)
+	deployer.Logger.Printf("Deleting proxy config %v\n", rc.Namespace+"-"+rc.Name)
 	deployer.ProxyConfigurator.DeleteDeployment(rc.Namespace + "-" + rc.Name)
 	service, err := deployer.findServiceForDeployment()
 

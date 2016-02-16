@@ -1,14 +1,15 @@
 package auth
+
 import (
-	"net/http"
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 )
 
 type LoginRequest struct {
-	Email string `json:"email"`
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
@@ -27,7 +28,7 @@ func AuthenticateAndGetNamespaces(authServerBaseUrl string, email string, passwo
 		return nil, err
 	}
 
-	loginResponse, err := http.Post(authServerBaseUrl + "/auth/login", "application/json", bytes.NewBuffer(loginRequestBody))
+	loginResponse, err := http.Post(authServerBaseUrl+"/auth/login", "application/json", bytes.NewBuffer(loginRequestBody))
 
 	if err != nil {
 		return nil, err
@@ -39,13 +40,13 @@ func AuthenticateAndGetNamespaces(authServerBaseUrl string, email string, passwo
 		return nil, err
 	}
 
-	if !StringInSet("DEPLOYER", member.Roles)  {
+	if !StringInSet("DEPLOYER", member.Roles) {
 		fmt.Printf("Roles: %v", member)
 		return nil, errors.New("Member doesn't have role 'DEPLOYER'")
 	}
 
 	cookies := loginResponse.Cookies()
-	req, err := http.NewRequest("GET", authServerBaseUrl + "/rtiauth/namespaces", nil)
+	req, err := http.NewRequest("GET", authServerBaseUrl+"/rtiauth/namespaces", nil)
 
 	if err != nil {
 		return nil, err

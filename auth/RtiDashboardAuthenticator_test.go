@@ -19,4 +19,3 @@ func TestAuthenticate(t *testing.T) {
 		t.Fatal("Default namespace expected but not returned")
 	}
 }
-
