@@ -64,6 +64,10 @@
 			"Rev": "ecff5aabe41f13b4cdf897e3c0c9bbccbe552a29"
 		},
 		{
+			"ImportPath": "github.com/satori/go.uuid",
+			"Rev": "e673fdd4dea8a7334adbbe7f57b7e4b00bdc5502"
+		},
+		{
 			"ImportPath": "github.com/spf13/pflag",
 			"Rev": "7f60f83a2c81bc3c3c0d5297f61ddfa68da9d3b7"
 		},
