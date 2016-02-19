@@ -1,10 +1,10 @@
 package proxies
 
 import (
-	"github.com/coreos/etcd/client"
-	"golang.org/x/net/context"
 	"encoding/json"
 	"fmt"
+	"github.com/coreos/etcd/client"
+	"golang.org/x/net/context"
 	"log"
 )
 

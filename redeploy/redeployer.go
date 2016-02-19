@@ -1,8 +1,8 @@
 package redeploy
 
 import (
-	"com.cloudrti/kubernetesclient/api/v1"
 	"com.amdatu.rti.deployment/cluster"
+	"com.cloudrti/kubernetesclient/api/v1"
 	"time"
 )
 

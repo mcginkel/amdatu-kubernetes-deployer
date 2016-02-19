@@ -1,10 +1,10 @@
 package deploymentregistry
 
 import (
-	"github.com/coreos/etcd/client"
 	"com.amdatu.rti.deployment/cluster"
 	"encoding/json"
 	"fmt"
+	"github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
 )
 

@@ -1,15 +1,15 @@
 package cluster
 
 import (
-	"com.cloudrti/kubernetesclient/api/v1"
-	k8sClient "com.cloudrti/kubernetesclient/client"
 	"bytes"
-	etcdclient "github.com/coreos/etcd/client"
 	"com.amdatu.rti.deployment/healthcheck"
 	"com.amdatu.rti.deployment/proxies"
+	"com.cloudrti/kubernetesclient/api/v1"
+	k8sClient "com.cloudrti/kubernetesclient/client"
 	"encoding/json"
 	"errors"
 	"fmt"
+	etcdclient "github.com/coreos/etcd/client"
 	"log"
 	"regexp"
 	"strconv"
@@ -18,22 +18,22 @@ import (
 )
 
 type Deployment struct {
-	DeploymentType    string      `json:"deploymentType,omitempty"`
-	NewVersion        string      `json:"newVersion,omitempty"`
-	AppName           string      `json:"appName,omitempty"`
-	Replicas          int         `json:"replicas,omitempty"`
-	Frontend          string      `json:"frontend,omitempty"`
-	ProxyPorts        []int       `json:"proxyports:omitempty"`
+	DeploymentType    string     `json:"deploymentType,omitempty"`
+	NewVersion        string     `json:"newVersion,omitempty"`
+	AppName           string     `json:"appName,omitempty"`
+	Replicas          int        `json:"replicas,omitempty"`
+	Frontend          string     `json:"frontend,omitempty"`
+	ProxyPorts        []int      `json:"proxyports:omitempty"`
 	PodSpec           v1.PodSpec `json:"podspec,omitempty"`
-	UseHealthCheck    bool        `json:"useHealthCheck,omitempty"`
-	Namespace         string      `json:"namespace,omitempty"`
-	Email             string      `json:"email,omitempty"`
-	Password          string      `json:"password,omitempty"`
-	HealthCheckUrl    string      `json:"healthcheckUrl,omitempty"`
-	Kafka             string      `json:"kafka,omitempty"`
-	InfluxDbUrl       string      `json:"influxdbUrl,omitempty"`
-	InfluxDbUser      string      `json:"influxdbUser,omitempty"`
-	InfluxDbUPassword string      `json:"influxdbPassword,omitempty"`
+	UseHealthCheck    bool       `json:"useHealthCheck,omitempty"`
+	Namespace         string     `json:"namespace,omitempty"`
+	Email             string     `json:"email,omitempty"`
+	Password          string     `json:"password,omitempty"`
+	HealthCheckUrl    string     `json:"healthcheckUrl,omitempty"`
+	Kafka             string     `json:"kafka,omitempty"`
+	InfluxDbUrl       string     `json:"influxdbUrl,omitempty"`
+	InfluxDbUser      string     `json:"influxdbUser,omitempty"`
+	InfluxDbUPassword string     `json:"influxdbPassword,omitempty"`
 }
 
 const DNS952LabelFmt string = "[a-z]([-a-z0-9]*[a-z0-9])?"
@@ -278,7 +278,7 @@ func (deployer *Deployer) CreateService() (*v1.Service, error) {
 func (deployer *Deployer) FindCurrentRc() ([]v1.ReplicationController, error) {
 	result := []v1.ReplicationController{}
 
-	labels := map[string]string {"app": deployer.Deployment.AppName}
+	labels := map[string]string{"app": deployer.Deployment.AppName}
 	replicationControllers, _ := deployer.K8client.ListReplicationControllersWithLabel(deployer.Deployment.Namespace, labels)
 
 	for _, rc := range replicationControllers.Items {
@@ -298,7 +298,7 @@ func (deployer *Deployer) FindCurrentRc() ([]v1.ReplicationController, error) {
 func (deployer *Deployer) FindCurrentPods(allowSameVersion bool) ([]v1.Pod, error) {
 	result := make([]v1.Pod, 0, 10)
 
-	labels := map[string]string {"app": deployer.Deployment.AppName}
+	labels := map[string]string{"app": deployer.Deployment.AppName}
 	pods, _ := deployer.K8client.ListPodsWithLabel(deployer.Deployment.Namespace, labels)
 
 	for _, rc := range pods.Items {

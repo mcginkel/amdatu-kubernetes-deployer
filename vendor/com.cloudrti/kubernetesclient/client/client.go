@@ -1,19 +1,18 @@
 package client
 
 import (
-
+	"bytes"
+	"com.cloudrti/kubernetesclient/api/v1"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"golang.org/x/net/websocket"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"bytes"
-"com.cloudrti/kubernetesclient/api/v1"
-	"fmt"
 	"os"
-"io/ioutil"
-	"errors"
-	"golang.org/x/net/websocket"
 	"strings"
 )
 
@@ -24,7 +23,7 @@ type Client struct {
 	Password   string
 }
 
-type Labels map[string] string
+type Labels map[string]string
 
 func NewClient(url, username, password string) Client {
 	httpClient := &http.Client{}
@@ -66,12 +65,11 @@ func (c *Client) ListPodsWithLabel(namespace string, labels Labels) (*v1.PodList
 	return &result, nil
 }
 
-func (c *Client) WatchPodsWithLabel(namespace string, labels Labels) (chan PodEvent, chan string, error){
+func (c *Client) WatchPodsWithLabel(namespace string, labels Labels) (chan PodEvent, chan string, error) {
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/pods"
 
 	podList := v1.PodList{}
 	c.get(url, &podList)
-
 
 	url = getUrlWithLabelQueryParam(url, labels)
 	url = url + "&watch=true&resourceVersion=" + podList.ResourceVersion
@@ -193,7 +191,6 @@ func (c *Client) CreateReplicationController(namespace string, rc *v1.Replicatio
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/replicationcontrollers"
 	err := c.post(url, &rc, &result)
 
-
 	if err != nil {
 		return &v1.ReplicationController{}, err
 	}
@@ -278,7 +275,7 @@ func getUrlWithLabelQueryParam(url string, labels Labels) string {
 
 		first := true
 
-		for k,v := range labels {
+		for k, v := range labels {
 			if !first {
 				buffer.WriteString(",")
 			}
@@ -311,8 +308,6 @@ func (c *Client) DeleteService(namespace, service string) error {
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/services/" + service
 	return c.delete(url)
 }
-
-
 
 func (c *Client) createRequest(method, url string, body io.Reader) (*http.Request, error) {
 	request, err := http.NewRequest(method, url, body)

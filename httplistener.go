@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/gorilla/mux"
 	"com.amdatu.rti.deployment/auth"
 	"com.amdatu.rti.deployment/bluegreen"
 	"com.amdatu.rti.deployment/cluster"
@@ -11,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"io/ioutil"
 	"log"
