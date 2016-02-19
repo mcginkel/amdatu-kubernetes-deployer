@@ -18,22 +18,24 @@ import (
 )
 
 type Deployment struct {
-	DeploymentType    string     `json:"deploymentType,omitempty"`
-	NewVersion        string     `json:"newVersion,omitempty"`
-	AppName           string     `json:"appName,omitempty"`
-	Replicas          int        `json:"replicas,omitempty"`
-	Frontend          string     `json:"frontend,omitempty"`
-	ProxyPorts        []int      `json:"proxyports:omitempty"`
-	PodSpec           v1.PodSpec `json:"podspec,omitempty"`
-	UseHealthCheck    bool       `json:"useHealthCheck,omitempty"`
-	Namespace         string     `json:"namespace,omitempty"`
-	Email             string     `json:"email,omitempty"`
-	Password          string     `json:"password,omitempty"`
-	HealthCheckUrl    string     `json:"healthcheckUrl,omitempty"`
-	Kafka             string     `json:"kafka,omitempty"`
-	InfluxDbUrl       string     `json:"influxdbUrl,omitempty"`
-	InfluxDbUser      string     `json:"influxdbUser,omitempty"`
-	InfluxDbUPassword string     `json:"influxdbPassword,omitempty"`
+	Id                string            `json:"id,omitempty"`
+	History           map[string]string `json:"history,omitempty"`
+	DeploymentType    string            `json:"deploymentType,omitempty"`
+	NewVersion        string            `json:"newVersion,omitempty"`
+	AppName           string            `json:"appName,omitempty"`
+	Replicas          int               `json:"replicas,omitempty"`
+	Frontend          string            `json:"frontend,omitempty"`
+	ProxyPorts        []int             `json:"proxyports:omitempty"`
+	PodSpec           v1.PodSpec        `json:"podspec,omitempty"`
+	UseHealthCheck    bool              `json:"useHealthCheck,omitempty"`
+	Namespace         string            `json:"namespace,omitempty"`
+	Email             string            `json:"email,omitempty"`
+	Password          string            `json:"password,omitempty"`
+	HealthCheckUrl    string            `json:"healthcheckUrl,omitempty"`
+	Kafka             string            `json:"kafka,omitempty"`
+	InfluxDbUrl       string            `json:"influxdbUrl,omitempty"`
+	InfluxDbUser      string            `json:"influxdbUser,omitempty"`
+	InfluxDbUPassword string            `json:"influxdbPassword,omitempty"`
 }
 
 const DNS952LabelFmt string = "[a-z]([-a-z0-9]*[a-z0-9])?"
