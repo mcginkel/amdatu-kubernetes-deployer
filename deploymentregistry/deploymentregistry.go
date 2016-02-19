@@ -42,11 +42,11 @@ func (registry *DeploymentRegistry) GetDeployment(namespace string, id string) (
 		return &cluster.Deployment{}, err
 	}
 
-	return parseDeployment(resp.Node.Value)
+	return ParseDeployment(resp.Node.Value)
 
 }
 
-func parseDeployment(value string) (*cluster.Deployment, error) {
+func ParseDeployment(value string) (*cluster.Deployment, error) {
 	deployment := cluster.Deployment{}
 	bytes := []byte(value)
 	if err := json.Unmarshal(bytes, &deployment); err != nil {
@@ -66,7 +66,7 @@ func (registry *DeploymentRegistry) ListDeployments(namespace string) ([]cluster
 
 	result := []cluster.Deployment{}
 	for _, node := range resp.Node.Nodes {
-		deployment, err := parseDeployment(node.Value)
+		deployment, err := ParseDeployment(node.Value)
 
 		if err != nil {
 			log.Println("Can't parse deployment descriptor: "+err.Error(), node.Value)
@@ -76,4 +76,11 @@ func (registry *DeploymentRegistry) ListDeployments(namespace string) ([]cluster
 	}
 
 	return result, nil
+}
+
+func (registry *DeploymentRegistry) DeleteDeployment(namespace, id string) error {
+	keyName := fmt.Sprintf("/deployment/%v/%v", namespace, id)
+
+	_, err := registry.etcdApi.Delete(context.Background(), keyName, &client.DeleteOptions{Dir: false})
+	return err
 }

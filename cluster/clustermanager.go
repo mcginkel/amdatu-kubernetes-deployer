@@ -19,6 +19,7 @@ import (
 
 type Deployment struct {
 	Id                string            `json:"id,omitempty"`
+	WebHooks	  []WebHook         `json:"webhooks,omitempty"`
 	History           map[string]string `json:"history,omitempty"`
 	DeploymentType    string            `json:"deploymentType,omitempty"`
 	NewVersion        string            `json:"newVersion,omitempty"`
@@ -36,6 +37,11 @@ type Deployment struct {
 	InfluxDbUrl       string            `json:"influxdbUrl,omitempty"`
 	InfluxDbUser      string            `json:"influxdbUser,omitempty"`
 	InfluxDbUPassword string            `json:"influxdbPassword,omitempty"`
+}
+
+type WebHook struct {
+	description string `json:"name,omitempty"`
+	key string `json:"url,omitempty"`
 }
 
 const DNS952LabelFmt string = "[a-z]([-a-z0-9]*[a-z0-9])?"

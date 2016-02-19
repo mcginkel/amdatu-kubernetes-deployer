@@ -54,6 +54,8 @@ func main() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/deployments/{namespace}", listDeployments).Methods("GET")
+	r.HandleFunc("/deployments/{namespace}/{id}", updateDeployment).Methods("PUT")
+	r.HandleFunc("/deployments/{namespace}/{id}", deleteDeployment).Methods("DELETE")
 	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
 
 	fmt.Printf("Dployer started and listening on port %v\n", port)
@@ -67,18 +69,10 @@ func main() {
 
 func listDeployments(w http.ResponseWriter, r *http.Request) {
 
-	cfg := etcdclient.Config{
-		Endpoints: []string{etcdUrl},
-	}
-
-	etcdClient, err := etcdclient.New(cfg)
+	registry, err :=createDeploymentRegistry(w, r)
 	if err != nil {
-		w.WriteHeader(500)
-		io.WriteString(w, "Error connecting to etcd: "+err.Error())
 		return
 	}
-
-	registry := deploymentregistry.NewDeploymentRegistry(&etcdClient)
 
 	vars := mux.Vars(r)
 	deployments, err := registry.ListDeployments(vars["namespace"])
@@ -97,6 +91,70 @@ func listDeployments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write(jsonStr)
+}
+
+func updateDeployment(w http.ResponseWriter, r *http.Request) {
+	registry, err := createDeploymentRegistry(w, r)
+	if err != nil {
+		return
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, "Error parsing deployment: " +err.Error())
+		return
+	}
+
+	deployment, err := deploymentregistry.ParseDeployment(string(body))
+
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, "Error parsing deployment: " +err.Error())
+		return
+	}
+
+	err = registry.StoreDeployment(deployment)
+
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, "Error storing deployment: "+err.Error())
+		return
+	}
+}
+
+func deleteDeployment(w http.ResponseWriter, r *http.Request) {
+	registry, err := createDeploymentRegistry(w, r)
+	if err != nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+
+	err = registry.DeleteDeployment(vars["namespace"], vars["id"])
+
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, "Error storing deployment: "+err.Error())
+		return
+	}
+}
+
+func createDeploymentRegistry(w http.ResponseWriter, r *http.Request) (*deploymentregistry.DeploymentRegistry, error) {
+	cfg := etcdclient.Config{
+		Endpoints: []string{etcdUrl},
+	}
+
+	etcdClient, err := etcdclient.New(cfg)
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, "Error connecting to etcd: "+err.Error())
+		return nil, err
+	}
+
+	registry := deploymentregistry.NewDeploymentRegistry(&etcdClient)
+	return &registry, nil
 }
 
 var upgrader = websocket.Upgrader{
