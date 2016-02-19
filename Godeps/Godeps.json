@@ -3,16 +3,24 @@
 	"GoVersion": "go1.6",
 	"Deps": [
 		{
+			"ImportPath": "com.cloudrti/kubernetesclient/api/resource",
+			"Rev": "145e8992678ee2f1beb1c3343bec49cf3b8cef30"
+		},
+		{
+			"ImportPath": "com.cloudrti/kubernetesclient/api/unversioned",
+			"Rev": "145e8992678ee2f1beb1c3343bec49cf3b8cef30"
+		},
+		{
 			"ImportPath": "com.cloudrti/kubernetesclient/api/util",
-			"Rev": "e9fc1e24cb7da0700f1440e2a25234ae3cdce563"
+			"Rev": "145e8992678ee2f1beb1c3343bec49cf3b8cef30"
 		},
 		{
 			"ImportPath": "com.cloudrti/kubernetesclient/api/v1",
-			"Rev": "e9fc1e24cb7da0700f1440e2a25234ae3cdce563"
+			"Rev": "145e8992678ee2f1beb1c3343bec49cf3b8cef30"
 		},
 		{
 			"ImportPath": "com.cloudrti/kubernetesclient/client",
-			"Rev": "e9fc1e24cb7da0700f1440e2a25234ae3cdce563"
+			"Rev": "145e8992678ee2f1beb1c3343bec49cf3b8cef30"
 		},
 		{
 			"ImportPath": "github.com/coreos/etcd/Godeps/_workspace/src/github.com/ugorji/go/codec",
