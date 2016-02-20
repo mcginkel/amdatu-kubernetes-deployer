@@ -1,7 +1,6 @@
 package main
 
 import (
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/gorilla/mux"
 	"com.amdatu.rti.deployment/auth"
 	"com.amdatu.rti.deployment/bluegreen"
 	"com.amdatu.rti.deployment/cluster"
@@ -11,11 +10,16 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	etcdclient "github.com/coreos/etcd/client"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/satori/go.uuid"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"sync"
+	"time"
 )
 
 var kubernetesurl, etcdUrl, port, dashboardurl, kubernetesUsername, kubernetesPassword, kafkaUrl, influxUrl, influxUser, influxPassword string
@@ -49,6 +53,9 @@ func init() {
 func main() {
 
 	r := mux.NewRouter()
+	r.HandleFunc("/deployments/{namespace}", listDeployments).Methods("GET")
+	r.HandleFunc("/deployments/{namespace}/{id}", updateDeployment).Methods("PUT")
+	r.HandleFunc("/deployments/{namespace}/{id}", deleteDeployment).Methods("DELETE")
 	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
 
 	fmt.Printf("Dployer started and listening on port %v\n", port)
@@ -58,6 +65,96 @@ func main() {
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func listDeployments(w http.ResponseWriter, r *http.Request) {
+
+	registry, err :=createDeploymentRegistry(w, r)
+	if err != nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	deployments, err := registry.ListDeployments(vars["namespace"])
+
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, "Error listing deployments: "+err.Error())
+		return
+	}
+
+	jsonStr, err := json.MarshalIndent(deployments, "", "   ")
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, "Error listing deployments: "+err.Error())
+		return
+	}
+
+	w.Write(jsonStr)
+}
+
+func updateDeployment(w http.ResponseWriter, r *http.Request) {
+	registry, err := createDeploymentRegistry(w, r)
+	if err != nil {
+		return
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, "Error parsing deployment: " +err.Error())
+		return
+	}
+
+	deployment, err := deploymentregistry.ParseDeployment(string(body))
+
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, "Error parsing deployment: " +err.Error())
+		return
+	}
+
+	err = registry.StoreDeployment(deployment)
+
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, "Error storing deployment: "+err.Error())
+		return
+	}
+}
+
+func deleteDeployment(w http.ResponseWriter, r *http.Request) {
+	registry, err := createDeploymentRegistry(w, r)
+	if err != nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+
+	err = registry.DeleteDeployment(vars["namespace"], vars["id"])
+
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, "Error storing deployment: "+err.Error())
+		return
+	}
+}
+
+func createDeploymentRegistry(w http.ResponseWriter, r *http.Request) (*deploymentregistry.DeploymentRegistry, error) {
+	cfg := etcdclient.Config{
+		Endpoints: []string{etcdUrl},
+	}
+
+	etcdClient, err := etcdclient.New(cfg)
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, "Error connecting to etcd: "+err.Error())
+		return nil, err
+	}
+
+	registry := deploymentregistry.NewDeploymentRegistry(&etcdClient)
+	return &registry, nil
 }
 
 var upgrader = websocket.Upgrader{
@@ -180,8 +277,6 @@ func deploy(deployment cluster.Deployment, logger cluster.Logger) error {
 		}
 	}
 
-	deploymentregistry.NewDeploymentRegistry(deployer.EtcdClient)
-
 	var deploymentError error
 
 	/*Check if namespace has the current version deployed
@@ -189,7 +284,7 @@ func deploy(deployment cluster.Deployment, logger cluster.Logger) error {
 	*/
 
 	logger.Println("Checking for existing service...")
-	_, err := deployer.K8client.Services(deployment.Namespace).Get(deployer.CreateRcName())
+	_, err := deployer.K8client.GetService(deployment.Namespace, deployer.CreateRcName())
 
 	if err != nil {
 		logger.Println("No existing service found, starting deployment")
@@ -204,6 +299,28 @@ func deploy(deployment cluster.Deployment, logger cluster.Logger) error {
 		logger.Println("Existing service found. Using redeployer")
 		deploymentError = redeploy.NewRedeployer(deployer).Deploy()
 	}
+
+	if deployment.Id == "" {
+		id := uuid.NewV1().String()
+		deployment.Id = deployment.AppName + "-" + string(id)
+	}
+
+	var deploymentLog string
+	if deploymentError == nil {
+		deploymentLog = "success"
+	} else {
+		deploymentLog = deploymentError.Error()
+	}
+
+	timeFormat := time.Now().Format(time.RFC3339)
+	if deployment.History == nil {
+		deployment.History = map[string]string{}
+	}
+
+	deployment.History[timeFormat] = deploymentLog
+
+	registry := deploymentregistry.NewDeploymentRegistry(deployer.EtcdClient)
+	registry.StoreDeployment(&deployment)
 
 	if deploymentError != nil {
 

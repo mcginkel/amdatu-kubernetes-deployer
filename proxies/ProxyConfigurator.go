@@ -1,10 +1,10 @@
 package proxies
 
 import (
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/golang.org/x/net/context"
 	"encoding/json"
 	"fmt"
+	"github.com/coreos/etcd/client"
+	"golang.org/x/net/context"
 	"log"
 )
 
@@ -14,7 +14,7 @@ type ProxyConfigurator struct {
 
 type BackendServer struct {
 	IPAddress string
-	Port      int
+	Port      int32
 }
 
 type Frontend struct {
@@ -47,7 +47,7 @@ func (proxyConfigurator *ProxyConfigurator) FrontendExistsForDeployment(deployme
 	return false
 }
 
-func (proxyConfigurator *ProxyConfigurator) AddBackendServer(deploymentName string, ip string, port int) error {
+func (proxyConfigurator *ProxyConfigurator) AddBackendServer(deploymentName string, ip string, port int32) error {
 	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
 	if err := prepareBaseConfig(kAPI); err != nil {
 		return err
