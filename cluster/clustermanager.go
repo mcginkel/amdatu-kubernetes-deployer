@@ -26,7 +26,7 @@ type Deployment struct {
 	AppName           string            `json:"appName,omitempty"`
 	Replicas          int               `json:"replicas,omitempty"`
 	Frontend          string            `json:"frontend,omitempty"`
-	ProxyPorts        []int             `json:"proxyports:omitempty"`
+	ProxyPorts        []int             `json:"proxyports,omitempty"`
 	PodSpec           v1.PodSpec        `json:"podspec,omitempty"`
 	UseHealthCheck    bool              `json:"useHealthCheck,omitempty"`
 	Namespace         string            `json:"namespace,omitempty"`
@@ -40,8 +40,8 @@ type Deployment struct {
 }
 
 type WebHook struct {
-	description string `json:"name,omitempty"`
-	key string `json:"url,omitempty"`
+	Description string `json:"description,omitempty"`
+	Key string `json:"key,omitempty"`
 }
 
 const DNS952LabelFmt string = "[a-z]([-a-z0-9]*[a-z0-9])?"
