@@ -186,12 +186,14 @@ func websocketHandler(w http.ResponseWriter, r *http.Request) {
 		logger.Printf("Error parsing body: %v", err)
 	}
 
-	err = deploy(deployment, &logger)
+	err = deploy(&deployment, &logger)
 	if err != nil {
 		logger.Printf("Error during deployment: %v\n", err)
 		logger.Println("============================ Deployment Failed =======================")
+		logger.Println("!!{\"success\": \"false\"}") // this is parsed by the frontend!
 	} else {
 		logger.Println("============================ Completed deployment =======================")
+		logger.Println("!!{\"success\": \"true\", \"id\": \"" + deployment.Id + "\"}") // this is parsed by the frontend!
 	}
 
 }
@@ -213,7 +215,7 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		logger.Printf("Error parsing body: %v", err)
 	}
 
-	err = deploy(deployment, &logger)
+	err = deploy(&deployment, &logger)
 	if err != nil {
 		responseWriter.WriteHeader(500)
 		logger.Printf("Error during deployment: %v\n", err)
@@ -221,6 +223,7 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 	} else {
 		logger.Println("============================ Completed deployment =======================")
 	}
+
 }
 
 type DeploymentRequest struct {
@@ -228,7 +231,7 @@ type DeploymentRequest struct {
 	Req            *http.Request
 }
 
-func deploy(deployment cluster.Deployment, logger cluster.Logger) error {
+func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -253,7 +256,7 @@ func deploy(deployment cluster.Deployment, logger cluster.Logger) error {
 		}
 	}
 
-	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, deployment, logger)
+	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, *deployment, logger)
 	if deployment.NewVersion == "000" {
 		rc, err := deployer.FindCurrentRc()
 		if err != nil || len(rc) == 0 {
@@ -320,7 +323,7 @@ func deploy(deployment cluster.Deployment, logger cluster.Logger) error {
 	deployment.History[timeFormat] = deploymentLog
 
 	registry := deploymentregistry.NewDeploymentRegistry(deployer.EtcdClient)
-	registry.StoreDeployment(&deployment)
+	registry.StoreDeployment(deployment)
 
 	if deploymentError != nil {
 
