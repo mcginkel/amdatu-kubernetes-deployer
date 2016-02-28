@@ -203,7 +203,11 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 			v1.EnvVar{Name: "INFLUX_URL", Value: deployer.Deployment.InfluxDbUrl},
 			v1.EnvVar{Name: "INFLUX_USERNAME", Value: deployer.Deployment.InfluxDbUser},
 			v1.EnvVar{Name: "INFLUX_PASSWORD", Value: deployer.Deployment.InfluxDbUPassword},
-			v1.EnvVar{Name: "POD_NAME", ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{FieldPath: "metadata.name"}}})
+			v1.EnvVar{Name: "POD_NAME", ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}}})
+
+		for i := range container.Ports {
+			container.Ports[i].Protocol = v1.ProtocolTCP
+		}
 
 		containers = append(containers, container)
 	}
@@ -212,6 +216,9 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 
 	bytes, _ := json.MarshalIndent(deployer.Deployment.PodSpec, "", "  ")
 	fmt.Printf("%v", string(bytes))
+	deployer.Deployment.PodSpec.RestartPolicy = v1.RestartPolicyAlways
+	deployer.Deployment.PodSpec.DNSPolicy = v1.DNSClusterFirst
+
 
 	replicas := int32(deployer.Deployment.Replicas)
 
@@ -266,7 +273,11 @@ func (deployer *Deployer) CreateService() (*v1.Service, error) {
 			servicePort := v1.ServicePort{Port: port.ContainerPort}
 			if port.Name != "" {
 				servicePort.Name = port.Name
+				servicePort.TargetPort = intstr.IntOrString{Type: intstr.String, StrVal: port.Name}
+			} else {
+				servicePort.TargetPort = intstr.IntOrString{Type: intstr.Int, IntVal: port.ContainerPort}
 			}
+			servicePort.Protocol = v1.ProtocolTCP
 			ports = append(ports, servicePort)
 		}
 	}
