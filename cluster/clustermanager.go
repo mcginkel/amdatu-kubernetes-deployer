@@ -2,24 +2,26 @@ package cluster
 
 import (
 	"bytes"
-	"com.amdatu.rti.deployment/healthcheck"
-	"com.amdatu.rti.deployment/proxies"
-	"com.cloudrti/kubernetesclient/api/v1"
-	k8sClient "com.cloudrti/kubernetesclient/client"
 	"encoding/json"
 	"errors"
 	"fmt"
-	etcdclient "github.com/coreos/etcd/client"
 	"log"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"com.amdatu.rti.deployment/healthcheck"
+	"com.amdatu.rti.deployment/proxies"
+	"com.cloudrti/kubernetesclient/api/util"
+	"com.cloudrti/kubernetesclient/api/v1"
+	k8sClient "com.cloudrti/kubernetesclient/client"
+	etcdclient "github.com/coreos/etcd/client"
 )
 
 type Deployment struct {
 	Id                string            `json:"id,omitempty"`
-	WebHooks	  []WebHook         `json:"webhooks,omitempty"`
+	WebHooks          []WebHook         `json:"webhooks,omitempty"`
 	History           map[string]string `json:"history,omitempty"`
 	DeploymentType    string            `json:"deploymentType,omitempty"`
 	NewVersion        string            `json:"newVersion,omitempty"`
@@ -41,7 +43,7 @@ type Deployment struct {
 
 type WebHook struct {
 	Description string `json:"description,omitempty"`
-	Key string `json:"key,omitempty"`
+	Key         string `json:"key,omitempty"`
 }
 
 const DNS952LabelFmt string = "[a-z]([-a-z0-9]*[a-z0-9])?"

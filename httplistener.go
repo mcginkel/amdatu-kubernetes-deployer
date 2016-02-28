@@ -1,25 +1,26 @@
 package main
 
 import (
-	"com.amdatu.rti.deployment/auth"
-	"com.amdatu.rti.deployment/bluegreen"
-	"com.amdatu.rti.deployment/cluster"
-	"com.amdatu.rti.deployment/deploymentregistry"
-	"com.amdatu.rti.deployment/redeploy"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	etcdclient "github.com/coreos/etcd/client"
-	"github.com/gorilla/mux"
-	"github.com/gorilla/websocket"
-	"github.com/satori/go.uuid"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"sync"
 	"time"
+
+	"com.amdatu.rti.deployment/auth"
+	"com.amdatu.rti.deployment/bluegreen"
+	"com.amdatu.rti.deployment/cluster"
+	"com.amdatu.rti.deployment/deploymentregistry"
+	"com.amdatu.rti.deployment/redeploy"
+	etcdclient "github.com/coreos/etcd/client"
+	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
+	"github.com/satori/go.uuid"
 )
 
 var kubernetesurl, etcdUrl, port, dashboardurl, kubernetesUsername, kubernetesPassword, kafkaUrl, influxUrl, influxUser, influxPassword string
@@ -69,7 +70,7 @@ func main() {
 
 func listDeployments(w http.ResponseWriter, r *http.Request) {
 
-	registry, err :=createDeploymentRegistry(w, r)
+	registry, err := createDeploymentRegistry(w, r)
 	if err != nil {
 		return
 	}
@@ -103,7 +104,7 @@ func updateDeployment(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		w.WriteHeader(500)
-		io.WriteString(w, "Error parsing deployment: " +err.Error())
+		io.WriteString(w, "Error parsing deployment: "+err.Error())
 		return
 	}
 
@@ -111,7 +112,7 @@ func updateDeployment(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		w.WriteHeader(500)
-		io.WriteString(w, "Error parsing deployment: " +err.Error())
+		io.WriteString(w, "Error parsing deployment: "+err.Error())
 		return
 	}
 
