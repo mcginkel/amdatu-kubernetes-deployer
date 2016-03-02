@@ -61,6 +61,7 @@ func (deployment *Deployment) String() string {
 }
 
 func (deployment *Deployment) SetDefaults() *Deployment {
+	
 	if len(deployment.Namespace) == 0 {
 		deployment.Namespace = v1.NamespaceDefault
 	}
@@ -69,10 +70,25 @@ func (deployment *Deployment) SetDefaults() *Deployment {
 		deployment.DeploymentType = "blue-green"
 	}
 
-	for _, container := range deployment.PodSpec.Containers {
-		if container.ImagePullPolicy == "" {
-			container.ImagePullPolicy = "Always"
+	if len(deployment.PodSpec.RestartPolicy) == 0 {
+		deployment.PodSpec.RestartPolicy = v1.RestartPolicyAlways	
+	}
+	if len(deployment.PodSpec.DNSPolicy) == 0 {
+		deployment.PodSpec.DNSPolicy = v1.DNSClusterFirst
+	}
+
+	for i := range deployment.PodSpec.Containers {
+		container := deployment.PodSpec.Containers[i]
+		if len(container.ImagePullPolicy) == 0 {
+			container.ImagePullPolicy = v1.PullAlways
 		}
+
+		for j := range container.Ports {
+			if len(container.Ports[j].Protocol) == 0 {
+				container.Ports[j].Protocol = v1.ProtocolTCP
+			}
+		}
+		deployment.PodSpec.Containers[i] = container
 	}
 
 	deployment.AppName = strings.Replace(deployment.AppName, ".", "-", -1)
@@ -207,10 +223,6 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 			v1.EnvVar{Name: "INFLUX_PASSWORD", Value: deployer.Deployment.InfluxDbUPassword},
 			v1.EnvVar{Name: "POD_NAME", ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}}})
 
-		for i := range container.Ports {
-			container.Ports[i].Protocol = v1.ProtocolTCP
-		}
-
 		containers = append(containers, container)
 	}
 
@@ -218,9 +230,6 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 
 	bytes, _ := json.MarshalIndent(deployer.Deployment.PodSpec, "", "  ")
 	fmt.Printf("%v", string(bytes))
-	deployer.Deployment.PodSpec.RestartPolicy = v1.RestartPolicyAlways
-	deployer.Deployment.PodSpec.DNSPolicy = v1.DNSClusterFirst
-
 
 	replicas := int32(deployer.Deployment.Replicas)
 
