@@ -1,20 +1,21 @@
 package client
 
 import (
-
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"bytes"
-"com.cloudrti/kubernetesclient/api/v1"
-	"fmt"
 	"os"
-"io/ioutil"
-	"errors"
-	"golang.org/x/net/websocket"
 	"strings"
+
+	"com.cloudrti/kubernetesclient/api/v1"
+	"golang.org/x/net/websocket"
+	"com.cloudrti/kubernetesclient/api/unversioned"
 )
 
 type Client struct {
@@ -24,7 +25,7 @@ type Client struct {
 	Password   string
 }
 
-type Labels map[string] string
+type Labels map[string]string
 
 func NewClient(url, username, password string) Client {
 	httpClient := &http.Client{}
@@ -40,7 +41,14 @@ func (c *Client) ListPods(namespace string) (*v1.PodList, error) {
 
 	result := v1.PodList{}
 
-	url := c.Url + "/api/v1/namespaces/" + namespace + "/pods"
+	var url string
+
+	if namespace == "" {
+		url = c.Url + "/api/v1/pods"
+	} else {
+		url = c.Url + "/api/v1/namespaces/" + namespace + "/pods"
+	}
+
 	err := c.get(url, &result)
 
 	if err != nil {
@@ -66,12 +74,11 @@ func (c *Client) ListPodsWithLabel(namespace string, labels Labels) (*v1.PodList
 	return &result, nil
 }
 
-func (c *Client) WatchPodsWithLabel(namespace string, labels Labels) (chan PodEvent, chan string, error){
+func (c *Client) WatchPodsWithLabel(namespace string, labels Labels) (chan PodEvent, chan string, error) {
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/pods"
 
 	podList := v1.PodList{}
 	c.get(url, &podList)
-
 
 	url = getUrlWithLabelQueryParam(url, labels)
 	url = url + "&watch=true&resourceVersion=" + podList.ResourceVersion
@@ -138,6 +145,31 @@ type PodEvent struct {
 	Object v1.Pod
 }
 
+func (c *Client) UpdatePod(namespace string, pod *v1.Pod) (*v1.Pod, error) {
+	result := v1.Pod{}
+	url := c.Url + "/api/v1/namespaces/" + namespace + "/pods/" + pod.Name
+	err := c.put(url, &pod, &result)
+
+	if err != nil {
+		return &v1.Pod{}, err
+	}
+
+	return &result, nil
+}
+
+func (c *Client) GetPod(namespace, podName string) (*v1.Pod, error) {
+	result := v1.Pod{}
+	url := c.Url + "/api/v1/namespaces/" + namespace + "/pods/" + podName
+
+	err := c.get(url, &result)
+
+	if err != nil {
+		return &v1.Pod{}, err
+	}
+
+	return &result, nil
+}
+
 func (c *Client) DeletePod(namespace, pod string) error {
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/pods/" + pod
 
@@ -193,6 +225,17 @@ func (c *Client) CreateReplicationController(namespace string, rc *v1.Replicatio
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/replicationcontrollers"
 	err := c.post(url, &rc, &result)
 
+	if err != nil {
+		return &v1.ReplicationController{}, err
+	}
+
+	return &result, nil
+}
+
+func (c *Client) UpdateReplicationController(namespace string, rc *v1.ReplicationController) (*v1.ReplicationController, error) {
+	result := v1.ReplicationController{}
+	url := c.Url + "/api/v1/namespaces/" + namespace + "/replicationcontrollers/" + rc.Name
+	err := c.put(url, &rc, &result)
 
 	if err != nil {
 		return &v1.ReplicationController{}, err
@@ -272,13 +315,56 @@ func (c *Client) GetService(namespace, service string) (*v1.Service, error) {
 	return &result, nil
 }
 
+func (c *Client) ListNodes() (*v1.NodeList, error) {
+	result := v1.NodeList{}
+	url := c.Url + "/api/v1/nodes"
+	err := c.get(url, &result)
+
+	if err != nil {
+		return &v1.NodeList{}, err
+	}
+
+	return &result, nil
+}
+
+func (c *Client) GetNode(node string) (*v1.Node, error) {
+	result := v1.Node{}
+	url := c.Url + "/api/v1/nodes/" + node
+
+	err := c.get(url, &result)
+
+	if err != nil {
+		return &v1.Node{}, err
+	}
+
+	return &result, nil
+}
+
+func (c *Client) UpdateNode(node *v1.Node) (*v1.Node, error) {
+
+	result := v1.Node{}
+	url := c.Url + "/api/v1/nodes/" + node.Name
+	err := c.put(url, &node, &result)
+
+	if err != nil {
+		return &v1.Node{}, err
+	}
+
+	return &result, nil
+}
+
+func (c *Client) DeleteNode(node string) error {
+	url := c.Url + "/api/v1/nodes/" + node
+	return c.delete(url)
+}
+
 func getUrlWithLabelQueryParam(url string, labels Labels) string {
 	if len(labels) > 0 {
 		buffer := bytes.Buffer{}
 
 		first := true
 
-		for k,v := range labels {
+		for k, v := range labels {
 			if !first {
 				buffer.WriteString(",")
 			}
@@ -311,8 +397,6 @@ func (c *Client) DeleteService(namespace, service string) error {
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/services/" + service
 	return c.delete(url)
 }
-
-
 
 func (c *Client) createRequest(method, url string, body io.Reader) (*http.Request, error) {
 	request, err := http.NewRequest(method, url, body)
@@ -387,6 +471,51 @@ func (c *Client) post(url string, body interface{}, result interface{}) error {
 	}
 
 	req, err := c.createRequest("POST", url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+	decoder := json.NewDecoder(resp.Body)
+
+	if resp.StatusCode >= 300 {
+		
+		status := new(unversioned.Status)
+		err = decoder.Decode(&status)
+		if err != nil {
+			return errors.New("Http request error: " + resp.Status)
+		} else {
+			return errors.New("Http request error, code: " + resp.Status + ", message: " + status.Message)
+		}
+	}
+
+	err = decoder.Decode(&result)
+
+	if err != nil {
+		printResponse(resp)
+
+		return err
+	}
+	return nil
+}
+
+func (c *Client) put(url string, body interface{}, result interface{}) error {
+
+	log.Printf("Requesting PUT %v\n", url)
+
+	b, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+
+	req, err := c.createRequest("PUT", url, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
