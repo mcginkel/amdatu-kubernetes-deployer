@@ -349,7 +349,11 @@ func (deployer *Deployer) FindCurrentService() ([]v1.Service, error) {
 	result := make([]v1.Service, 1, 10)
 
 	labels := map[string]string{"app": deployer.Deployment.AppName}
-	services, _ := deployer.K8client.ListServicesWithLabel(deployer.Deployment.Namespace, labels)
+	services, err := deployer.K8client.ListServicesWithLabel(deployer.Deployment.Namespace, labels)
+
+	if err != nil {
+		return result, errors.New("No active Service found")
+	}
 
 	for _, service := range services.Items {
 		if service.Labels["version"] != deployer.Deployment.NewVersion {
