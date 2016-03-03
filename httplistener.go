@@ -284,18 +284,15 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 		deploymentLog = deploymentError.Error()
 	}
 
-	timeFormat := time.Now().Format(time.RFC3339)
-	if deployment.History == nil {
-		deployment.History = map[string]string{}
-	}
-
-	deployment.History[timeFormat] = deploymentLog
+	result := cluster.DeploymentResult{}
+	result.Date = time.Now().Format(time.RFC3339)
+	result.Status = deploymentLog
+	result.Deployment = *deployment
 
 	registry := deploymentregistry.NewDeploymentRegistry(deployer.EtcdClient)
-	registry.StoreDeployment(deployment)
+	registry.StoreDeployment(result)
 
 	if deploymentError != nil {
-
 		deployer.CleanupFailedDeployment()
 		return err
 	}
