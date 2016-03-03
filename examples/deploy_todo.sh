@@ -3,7 +3,7 @@ curl -o output.txt  -XPOST http://localhost:8000/deployment -d '{
   "deploymentType": "blue-green",
   "namespace": "default",
   "useHealthCheck": false,
-  "newVersion": "release-193",
+  "newVersion": "#",
   "appName": "todo",
   "replicas": 1,
   "frontend": "aws-rti-todo-development.amdatu.com",
@@ -12,7 +12,7 @@ curl -o output.txt  -XPOST http://localhost:8000/deployment -d '{
             "name": "amdatu"
         }],
     "containers": [{
-        "image": "amdatu/todo-demonstrator:beta",
+        "image": "amdatu/todo-demonstrator:alpha",
         "imagePullSecrets" : [
             {
                 "name": "amdatu"
@@ -26,19 +26,15 @@ curl -o output.txt  -XPOST http://localhost:8000/deployment -d '{
         "env": [
           {
           "name": "version",
-          "value": "release-193"
+          "value": "Alpha"
           },
           {
           "name": "mongo",
-          "value": "10.150.16.64"
+          "value": "10.150.16.90"
           },
           {
           "name": "dbname",
           "value": "todo-app"
-          },
-          {
-          "name": "kafka",
-          "value": "10.151.16.64:9092"
           },
           {
           "name": "hostname",
