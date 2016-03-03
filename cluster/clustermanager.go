@@ -20,25 +20,37 @@ import (
 )
 
 type Deployment struct {
-	Id                string            `json:"id,omitempty"`
-	WebHooks          []WebHook         `json:"webhooks,omitempty"`
-	History           map[string]string `json:"history,omitempty"`
-	DeploymentType    string            `json:"deploymentType,omitempty"`
-	NewVersion        string            `json:"newVersion,omitempty"`
-	AppName           string            `json:"appName,omitempty"`
-	Replicas          int               `json:"replicas,omitempty"`
-	Frontend          string            `json:"frontend,omitempty"`
-	ProxyPorts        []int             `json:"proxyports,omitempty"`
-	PodSpec           v1.PodSpec        `json:"podspec,omitempty"`
-	UseHealthCheck    bool              `json:"useHealthCheck,omitempty"`
-	Namespace         string            `json:"namespace,omitempty"`
-	Email             string            `json:"email,omitempty"`
-	Password          string            `json:"password,omitempty"`
-	HealthCheckUrl    string            `json:"healthcheckUrl,omitempty"`
-	Kafka             string            `json:"kafka,omitempty"`
-	InfluxDbUrl       string            `json:"influxdbUrl,omitempty"`
-	InfluxDbUser      string            `json:"influxdbUser,omitempty"`
-	InfluxDbUPassword string            `json:"influxdbPassword,omitempty"`
+	Id                string     `json:"id,omitempty"`
+	WebHooks          []WebHook  `json:"webhooks,omitempty"`
+	DeploymentType    string     `json:"deploymentType,omitempty"`
+	NewVersion        string     `json:"newVersion,omitempty"`
+	AppName           string     `json:"appName,omitempty"`
+	Replicas          int        `json:"replicas,omitempty"`
+	Frontend          string     `json:"frontend,omitempty"`
+	ProxyPorts        []int      `json:"proxyports,omitempty"`
+	PodSpec           v1.PodSpec `json:"podspec,omitempty"`
+	UseHealthCheck    bool       `json:"useHealthCheck,omitempty"`
+	Namespace         string     `json:"namespace,omitempty"`
+	Email             string     `json:"email,omitempty"`
+	Password          string     `json:"password,omitempty"`
+	HealthCheckUrl    string     `json:"healthcheckUrl,omitempty"`
+	Kafka             string     `json:"kafka,omitempty"`
+	InfluxDbUrl       string     `json:"influxdbUrl,omitempty"`
+	InfluxDbUser      string     `json:"influxdbUser,omitempty"`
+	InfluxDbUPassword string     `json:"influxdbPassword,omitempty"`
+}
+
+type DeploymentResult struct {
+	Date       string     `json:"date,omitempty"`
+	Status     string     `json:"status,omitempty"`
+	Deployment Deployment `json:"deployment,omitempty"`
+}
+
+type DeploymentHistory struct {
+	Id                string             `json:"id,omitempty"`
+	Namespace         string             `json:"namespace,omitempty"`
+	AppName           string             `json:"appName,omitempty"`
+	DeploymentResults []DeploymentResult `json:"deploymentResults,omitempty"`
 }
 
 type WebHook struct {
@@ -61,7 +73,7 @@ func (deployment *Deployment) String() string {
 }
 
 func (deployment *Deployment) SetDefaults() *Deployment {
-	
+
 	if len(deployment.Namespace) == 0 {
 		deployment.Namespace = v1.NamespaceDefault
 	}
@@ -71,7 +83,7 @@ func (deployment *Deployment) SetDefaults() *Deployment {
 	}
 
 	if len(deployment.PodSpec.RestartPolicy) == 0 {
-		deployment.PodSpec.RestartPolicy = v1.RestartPolicyAlways	
+		deployment.PodSpec.RestartPolicy = v1.RestartPolicyAlways
 	}
 	if len(deployment.PodSpec.DNSPolicy) == 0 {
 		deployment.PodSpec.DNSPolicy = v1.DNSClusterFirst

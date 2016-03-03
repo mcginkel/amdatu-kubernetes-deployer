@@ -1,12 +1,13 @@
 package deploymentregistry
 
 import (
-	"com.amdatu.rti.deployment/cluster"
 	"encoding/json"
 	"fmt"
+	"log"
+
+	"com.amdatu.rti.deployment/cluster"
 	"github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
-	"log"
 )
 
 type DeploymentRegistry struct {
@@ -19,10 +20,10 @@ func NewDeploymentRegistry(etcdClient *client.Client) DeploymentRegistry {
 	return DeploymentRegistry{etcdApi}
 }
 
-func (registry *DeploymentRegistry) StoreDeployment(deployment *cluster.Deployment) error {
-	keyName := fmt.Sprintf("/deployment/%v/%v", deployment.Namespace, deployment.Id)
+func (registry *DeploymentRegistry) StoreDeployment(deploymentResult cluster.DeploymentResult) error {
+	keyName := fmt.Sprintf("/deployment/%v/%v/%v", deploymentResult.Deployment.Namespace, deploymentResult.Deployment.Id, deploymentResult.Date)
 
-	bytes, err := json.MarshalIndent(deployment, "", "  ")
+	bytes, err := json.MarshalIndent(deploymentResult, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -34,44 +35,57 @@ func (registry *DeploymentRegistry) StoreDeployment(deployment *cluster.Deployme
 	return nil
 }
 
-func (registry *DeploymentRegistry) GetDeployment(namespace string, id string) (*cluster.Deployment, error) {
+func (registry *DeploymentRegistry) GetDeployment(namespace string, id string) (cluster.DeploymentHistory, error) {
 	keyName := fmt.Sprintf("/deployment/%v/%v", namespace, id)
 
-	resp, err := registry.etcdApi.Get(context.Background(), keyName, nil)
+	resp, err := registry.etcdApi.Get(context.Background(), keyName, &client.GetOptions{Recursive: true})
 	if err != nil {
-		return &cluster.Deployment{}, err
+		return cluster.DeploymentHistory{}, err
 	}
 
-	return ParseDeployment(resp.Node.Value)
+	return ParseDeploymentHistory(resp.Node.Nodes)
 
 }
 
-func ParseDeployment(value string) (*cluster.Deployment, error) {
-	deployment := cluster.Deployment{}
-	bytes := []byte(value)
-	if err := json.Unmarshal(bytes, &deployment); err != nil {
-		return &cluster.Deployment{}, err
+func ParseDeploymentHistory(nodes client.Nodes) (cluster.DeploymentHistory, error) {
+	deploymentHistory := cluster.DeploymentHistory{}
+
+	for i, node := range nodes {
+		deploymentResult := cluster.DeploymentResult{}
+
+		bytes := []byte(node.Value)
+		if err := json.Unmarshal(bytes, &deploymentResult); err != nil {
+			return cluster.DeploymentHistory{}, err
+		}
+
+		if i == 0 {
+			deploymentHistory.Id = deploymentResult.Deployment.Id
+			deploymentHistory.Namespace = deploymentResult.Deployment.Namespace
+			deploymentHistory.AppName = deploymentResult.Deployment.AppName
+		}
+
+		deploymentHistory.DeploymentResults = append(deploymentHistory.DeploymentResults, deploymentResult)
 	}
 
-	return &deployment, nil
+	return deploymentHistory, nil
 }
 
-func (registry *DeploymentRegistry) ListDeployments(namespace string) ([]cluster.Deployment, error) {
+func (registry *DeploymentRegistry) ListDeployments(namespace string) ([]cluster.DeploymentHistory, error) {
 	keyName := fmt.Sprintf("/deployment/%v", namespace)
 
 	resp, err := registry.etcdApi.Get(context.Background(), keyName, &client.GetOptions{Recursive: true})
 	if err != nil {
-		return []cluster.Deployment{}, err
+		return []cluster.DeploymentHistory{}, err
 	}
 
-	result := []cluster.Deployment{}
+	result := []cluster.DeploymentHistory{}
 	for _, node := range resp.Node.Nodes {
-		deployment, err := ParseDeployment(node.Value)
+		deploymentHistory, err := ParseDeploymentHistory(node.Nodes)
 
 		if err != nil {
 			log.Println("Can't parse deployment descriptor: "+err.Error(), node.Value)
 		} else {
-			result = append(result, *deployment)
+			result = append(result, deploymentHistory)
 		}
 	}
 
