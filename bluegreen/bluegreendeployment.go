@@ -108,7 +108,7 @@ func (bluegreen *bluegreen) createReplicationController() error {
 
 	go bluegreen.watchPods(bluegreen.deployer.CreateRcName(), bluegreen.deployer.Deployment.NewVersion, callBack)
 	go func() {
-		time.Sleep(10 * time.Minute)
+		time.Sleep(1 * time.Minute)
 		timeout <- "TIMEOUT"
 	}()
 
