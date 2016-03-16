@@ -317,6 +317,54 @@ func (deployer *Deployer) CreateService() (*v1.Service, error) {
 	return deployer.K8client.CreateService(deployer.Deployment.Namespace, srv)
 }
 
+func (deployer *Deployer) CreatePersistentService() (*v1.Service, error) {
+	existing,_ := deployer.K8client.GetService(deployer.Deployment.Namespace, deployer.Deployment.AppName)
+	if existing.Name == "" {
+		srv := new(v1.Service)
+		srv.Name = deployer.Deployment.AppName
+
+		labels := make(map[string]string)
+		labels["app"] = deployer.Deployment.AppName
+		labels["name"] = deployer.Deployment.AppName
+		labels["persistent"] = "true"
+
+		srv.Labels = labels
+
+		ports := []v1.ServicePort{}
+		for _, container := range deployer.Deployment.PodSpec.Containers {
+			for _, port := range container.Ports {
+
+				servicePort := v1.ServicePort{Port: port.ContainerPort}
+				if port.Name != "" {
+					servicePort.Name = port.Name
+					servicePort.TargetPort = intstr.IntOrString{Type: intstr.String, StrVal: port.Name}
+				} else {
+					servicePort.TargetPort = intstr.IntOrString{Type: intstr.Int, IntVal: port.ContainerPort}
+				}
+				servicePort.Protocol = v1.ProtocolTCP
+				ports = append(ports, servicePort)
+			}
+		}
+
+		selector := make(map[string]string)
+		selector["app"] = deployer.Deployment.AppName
+
+		srv.Spec = v1.ServiceSpec{
+			Selector:        selector,
+			Ports:           ports,
+			Type:            v1.ServiceTypeNodePort,
+			SessionAffinity: "ClientIP",
+		}
+
+		deployer.Logger.Printf("Creating persistent service %v\n", srv.Name)
+
+		return deployer.K8client.CreateService(deployer.Deployment.Namespace, srv)
+	} else {
+		deployer.Logger.Printf("Persistent service %v already exists\n", existing.Name)
+		return existing, nil
+	}
+}
+
 func (deployer *Deployer) FindCurrentRc() ([]v1.ReplicationController, error) {
 	result := []v1.ReplicationController{}
 
@@ -368,7 +416,7 @@ func (deployer *Deployer) FindCurrentService() ([]v1.Service, error) {
 	}
 
 	for _, service := range services.Items {
-		if service.Labels["version"] != deployer.Deployment.NewVersion {
+		if service.Labels["version"] != deployer.Deployment.NewVersion && service.Labels["persistent"] != "true" {
 
 			result = append(result, service)
 		}
