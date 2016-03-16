@@ -13,6 +13,7 @@ import (
 	"com.amdatu.rti.deployment/proxies"
 	"errors"
 	"time"
+"com.cloudrti/kubernetesclient/api/v1"
 )
 
 type bluegreen struct {
@@ -55,7 +56,7 @@ func (bluegreen *bluegreen) Deploy() error {
 	}
 
 	if len(service.Spec.Ports) > 0 {
-		port := service.Spec.Ports[0]
+		port := selectPort(service.Spec.Ports)
 		bluegreen.deployer.Logger.Printf("Adding backend for port %v\n", port)
 		bluegreen.deployer.ProxyConfigurator.AddBackendServer(backendId, service.Spec.ClusterIP, int32(port.Port))
 	}
@@ -79,6 +80,18 @@ func (bluegreen *bluegreen) Deploy() error {
 	return nil
 }
 
+func selectPort(ports []v1.ServicePort) v1.ServicePort{
+	if len(ports) > 1 {
+		for _,port := range ports {
+			if port.Name != "healthcheck" {
+				return port
+			}
+		}
+	}
+
+	return ports[0]
+}
+
 func (bluegreen *bluegreen) createReplicationController() error {
 
 	_, err := bluegreen.deployer.CreateReplicationController()
@@ -95,7 +108,7 @@ func (bluegreen *bluegreen) createReplicationController() error {
 
 	go bluegreen.watchPods(bluegreen.deployer.CreateRcName(), bluegreen.deployer.Deployment.NewVersion, callBack)
 	go func() {
-		time.Sleep(10 * time.Minute)
+		time.Sleep(1 * time.Minute)
 		timeout <- "TIMEOUT"
 	}()
 
