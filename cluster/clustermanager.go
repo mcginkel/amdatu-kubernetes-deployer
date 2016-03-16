@@ -356,11 +356,17 @@ func (deployer *Deployer) CreatePersistentService() (*v1.Service, error) {
 			SessionAffinity: "ClientIP",
 		}
 
-		deployer.Logger.Printf("Creating persistent service %v\n", srv.Name)
 
-		return deployer.K8client.CreateService(deployer.Deployment.Namespace, srv)
+
+		created, err := deployer.K8client.CreateService(deployer.Deployment.Namespace, srv)
+
+		if err == nil {
+			deployer.Logger.Printf("Creating persistent service %v. Listening on IP %v\n", srv.Name, created.Spec.ClusterIP)
+		}
+		return created, err
+
 	} else {
-		deployer.Logger.Printf("Persistent service %v already exists\n", existing.Name)
+		deployer.Logger.Printf("Persistent service %v already exists on IP %v\n", existing.Name, existing.Spec.ClusterIP)
 		return existing, nil
 	}
 }
