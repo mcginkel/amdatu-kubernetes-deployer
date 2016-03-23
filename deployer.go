@@ -56,7 +56,7 @@ func main() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/deployments/{namespace}", listDeployments).Methods("GET")
-	r.HandleFunc("/deployments/{namespace}/{id}", deleteDeployment).Methods("DELETE")
+	r.HandleFunc("/deployments/history/{namespace}/{id}", deleteDeploymentHistory).Methods("DELETE")
 	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
 
 	fmt.Printf("Dployer started and listening on port %v\n", port)
@@ -94,7 +94,7 @@ func listDeployments(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonStr)
 }
 
-func deleteDeployment(w http.ResponseWriter, r *http.Request) {
+func deleteDeploymentHistory(w http.ResponseWriter, r *http.Request) {
 	registry, err := createDeploymentRegistry(w, r)
 	if err != nil {
 		return
