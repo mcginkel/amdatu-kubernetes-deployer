@@ -70,8 +70,12 @@ func main() {
 
 func listDeployments(w http.ResponseWriter, r *http.Request) {
 
-	registry, err := createDeploymentRegistry(w, r)
+	logger := cluster.NewHttpLogger(w)
+	defer logger.Flush()
+
+	registry, err := createDeploymentRegistry(logger)
 	if err != nil {
+		w.WriteHeader(500)
 		return
 	}
 
@@ -95,8 +99,13 @@ func listDeployments(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteDeploymentHistory(w http.ResponseWriter, r *http.Request) {
-	registry, err := createDeploymentRegistry(w, r)
+
+	logger := cluster.NewHttpLogger(w)
+	defer logger.Flush()
+
+	registry, err := createDeploymentRegistry(logger)
 	if err != nil {
+		w.WriteHeader(500)
 		return
 	}
 
@@ -111,15 +120,14 @@ func deleteDeploymentHistory(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func createDeploymentRegistry(w http.ResponseWriter, r *http.Request) (*deploymentregistry.DeploymentRegistry, error) {
+func createDeploymentRegistry(logger cluster.Logger) (*deploymentregistry.DeploymentRegistry, error) {
 	cfg := etcdclient.Config{
 		Endpoints: []string{etcdUrl},
 	}
 
 	etcdClient, err := etcdclient.New(cfg)
 	if err != nil {
-		w.WriteHeader(500)
-		io.WriteString(w, "Error connecting to etcd: "+err.Error())
+		logger.Println("Error connecting to etcd: " + err.Error())
 		return nil, err
 	}
 
