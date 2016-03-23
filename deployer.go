@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/auth"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/bluegreen"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/deploymentregistry"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/environment"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/redeploy"
+	"com.amdatu.rti.deployment/auth"
+	"com.amdatu.rti.deployment/bluegreen"
+	"com.amdatu.rti.deployment/cluster"
+	"com.amdatu.rti.deployment/deploymentregistry"
+	"com.amdatu.rti.deployment/redeploy"
+	"com.amdatu.rti.deployment/undeploy"
 	etcdclient "github.com/coreos/etcd/client"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -57,11 +57,13 @@ func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/deployments/{namespace}", listDeployments).Methods("GET")
 	r.HandleFunc("/deployments/history/{namespace}/{id}", deleteDeploymentHistory).Methods("DELETE")
+	r.HandleFunc("/deployments/{namespace}/{appname}", UndeploymentHandler).Methods("DELETE")
 	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
 
 	fmt.Printf("Dployer started and listening on port %v\n", port)
 
-	r.HandleFunc("/deployment/stream", websocketHandler)
+	r.HandleFunc("/deployment/stream", deployWebsocketHandler)
+	r.HandleFunc("/undeployment/stream/{namespace}/{appname}", undeployWebsocketHandler)
 
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
@@ -155,7 +157,7 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func websocketHandler(w http.ResponseWriter, r *http.Request) {
+func deployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	defer conn.Close()
 	if err != nil {
@@ -166,10 +168,6 @@ func websocketHandler(w http.ResponseWriter, r *http.Request) {
 	logger := cluster.NewWebsocketLogger(conn)
 
 	_, body, err := conn.ReadMessage()
-	if err != nil {
-		return
-	}
-
 	if err != nil {
 		logger.Printf("Error reading body: %v", err)
 	}
@@ -221,6 +219,78 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 
 }
 
+func undeployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	defer conn.Close()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	logger := cluster.NewWebsocketLogger(conn)
+
+	registry, err := createDeploymentRegistry(logger)
+	if err != nil {
+		return
+	}
+
+	defer r.Body.Close()
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		logger.Printf("Error reading body: %v", err)
+	}
+
+	user, err := createUser(body)
+	if err != nil {
+		logger.Printf("Error parsing user: %v", err)
+	}
+
+	vars := mux.Vars(r)
+
+	err = unDeploy(vars["namespace"], vars["appname"], user.Email, user.Password, logger)
+	if err != nil {
+		logger.Printf("Error during undeployment: %v\n", err)
+		logger.Println("============================ Deployment Failed =======================")
+		logger.Println("!!{\"success\": \"false\"}") // this is parsed by the frontend!
+	} else {
+		err2 := registry.DeleteDeployment(vars["namespace"], vars["id"])
+		if err2 != nil {
+			logger.Printf("Error during deleting history: %v\n", err2)
+		}
+		logger.Println("============================ Completed deployment =======================")
+		logger.Println("!!{\"success\": \"true\"}") // this is parsed by the frontend!
+	}
+}
+
+func UndeploymentHandler(w http.ResponseWriter, req *http.Request) {
+
+	logger := cluster.NewHttpLogger(w)
+	defer logger.Flush()
+
+	defer req.Body.Close()
+	body, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		logger.Printf("Error reading body: %v", err)
+	}
+
+	user, err := createUser(body)
+	if err != nil {
+		logger.Printf("Error parsing user: %v", err)
+	}
+
+	vars := mux.Vars(req)
+
+	err = unDeploy(vars["namespace"], vars["appname"], user.Email, user.Password, &logger)
+	if err != nil {
+		w.WriteHeader(500)
+		logger.Printf("Error during undeployment: %v\n", err)
+		logger.Println("============================ Undeployment Failed =======================")
+	} else {
+		logger.Println("============================ Completed Undeployment =======================")
+	}
+
+}
+
 type DeploymentRequest struct {
 	ResponseWriter http.ResponseWriter
 	Req            *http.Request
@@ -237,20 +307,10 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 
 	logger.Printf("%v\n", deployment.String())
 
-	if authurl != "noauth" {
-		namespaces, err := auth.AuthenticateAndGetNamespaces(authurl, deployment.Email, deployment.Password)
-
-		if err != nil {
-			logger.Println("Could not authenticate: ", err)
-			return err
-		}
-
-		if !auth.StringInSet(deployment.Namespace, namespaces) {
-			logger.Printf("User %v not authorised to namespace %v", "admin@amdatu.org", deployment.Namespace)
-			return err
-		}
+	if err := authenticate(deployment.Namespace, deployment.Email, deployment.Password, logger); err != nil {
+		return err;
 	}
-
+	
 	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, *deployment, logger)
 	if deployment.NewVersion == "000" {
 		rc, err := deployer.FindCurrentRc()
@@ -342,3 +402,49 @@ func createDeployment(jsonString []byte) (cluster.Deployment, error) {
 
 	return deployment, nil
 }
+
+func createUser(jsonString []byte) (cluster.User, error) {
+	user := cluster.User{}
+
+	if err := json.Unmarshal(jsonString, &user); err != nil {
+		return cluster.User{}, err
+	}
+
+	return user, nil
+}
+
+func unDeploy(namespace string, appname string, email string, password string, logger cluster.Logger) error {
+
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	if err := authenticate(namespace, email, password, logger); err != nil {
+		return err;
+	}
+
+	undeployer, err := undeploy.NewUndeployer(namespace, appname, etcdUrl, kubernetesurl, kubernetesUsername, kubernetesPassword, logger)
+	
+	if err != nil {
+		return err;
+	}
+	
+	return undeployer.Undeploy()
+}
+
+func authenticate(namespace string, email string, password string, logger cluster.Logger) error {
+	if dashboardurl != "noauth" {
+		namespaces, err := auth.AuthenticateAndGetNamespaces(dashboardurl, email, password)
+
+		if err != nil {
+			logger.Println("Could not authenticate: ", err)
+			return err
+		}
+
+		if !auth.StringInSet(namespace, namespaces) {
+			logger.Printf("User %v not authorised to namespace %v", email, namespace)
+			return errors.New("Not authorized for namespace")
+		}
+	}
+	return nil;
+}
+
