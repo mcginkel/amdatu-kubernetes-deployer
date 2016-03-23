@@ -17,9 +17,9 @@ limitations under the License.
 package v1
 
 import (
-	"com.cloudrti/kubernetesclient/api/resource"
-	"com.cloudrti/kubernetesclient/api/unversioned"
-	"com.cloudrti/kubernetesclient/api/util"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/resource"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/unversioned"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/util"
 )
 
 // The comments for the structs and fields can be used from go-resful to

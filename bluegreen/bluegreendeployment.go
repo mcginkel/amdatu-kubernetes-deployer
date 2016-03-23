@@ -13,7 +13,7 @@ import (
 	"com.amdatu.rti.deployment/proxies"
 	"errors"
 	"time"
-"com.cloudrti/kubernetesclient/api/v1"
+"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 )
 
 type bluegreen struct {

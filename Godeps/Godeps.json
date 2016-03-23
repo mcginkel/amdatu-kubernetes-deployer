@@ -3,24 +3,24 @@
 	"GoVersion": "go1.6",
 	"Deps": [
 		{
-			"ImportPath": "com.cloudrti/kubernetesclient/api/resource",
-			"Rev": "145e8992678ee2f1beb1c3343bec49cf3b8cef30"
+			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/resource",
+			"Rev": "45cce2c76e78614942d97ab2ec979970a6d17d69"
 		},
 		{
-			"ImportPath": "com.cloudrti/kubernetesclient/api/unversioned",
-			"Rev": "145e8992678ee2f1beb1c3343bec49cf3b8cef30"
+			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/unversioned",
+			"Rev": "45cce2c76e78614942d97ab2ec979970a6d17d69"
 		},
 		{
-			"ImportPath": "com.cloudrti/kubernetesclient/api/util",
-			"Rev": "145e8992678ee2f1beb1c3343bec49cf3b8cef30"
+			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/util",
+			"Rev": "45cce2c76e78614942d97ab2ec979970a6d17d69"
 		},
 		{
-			"ImportPath": "com.cloudrti/kubernetesclient/api/v1",
-			"Rev": "145e8992678ee2f1beb1c3343bec49cf3b8cef30"
+			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1",
+			"Rev": "45cce2c76e78614942d97ab2ec979970a6d17d69"
 		},
 		{
-			"ImportPath": "com.cloudrti/kubernetesclient/client",
-			"Rev": "145e8992678ee2f1beb1c3343bec49cf3b8cef30"
+			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/client",
+			"Rev": "45cce2c76e78614942d97ab2ec979970a6d17d69"
 		},
 		{
 			"ImportPath": "github.com/coreos/etcd/Godeps/_workspace/src/github.com/ugorji/go/codec",

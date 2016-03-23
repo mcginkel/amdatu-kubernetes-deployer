@@ -2,7 +2,7 @@ package redeploy
 
 import (
 	"com.amdatu.rti.deployment/cluster"
-	"com.cloudrti/kubernetesclient/api/v1"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	"time"
 )
 

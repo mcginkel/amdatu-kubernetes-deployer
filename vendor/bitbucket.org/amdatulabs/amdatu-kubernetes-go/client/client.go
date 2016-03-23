@@ -1,3 +1,18 @@
+/*
+Copyright (c) 2016 The Amdatu Foundation
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package client
 
 import (
@@ -13,9 +28,9 @@ import (
 	"os"
 	"strings"
 
-	"com.cloudrti/kubernetesclient/api/v1"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/unversioned"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	"golang.org/x/net/websocket"
-	"com.cloudrti/kubernetesclient/api/unversioned"
 )
 
 type Client struct {
@@ -486,7 +501,7 @@ func (c *Client) post(url string, body interface{}, result interface{}) error {
 	decoder := json.NewDecoder(resp.Body)
 
 	if resp.StatusCode >= 300 {
-		
+
 		status := new(unversioned.Status)
 		err = decoder.Decode(&status)
 		if err != nil {

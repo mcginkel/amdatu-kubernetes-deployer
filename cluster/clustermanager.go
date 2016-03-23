@@ -13,9 +13,9 @@ import (
 
 	"com.amdatu.rti.deployment/healthcheck"
 	"com.amdatu.rti.deployment/proxies"
-	"com.cloudrti/kubernetesclient/api/util"
-	"com.cloudrti/kubernetesclient/api/v1"
-	k8sClient "com.cloudrti/kubernetesclient/client"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/util"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
+	k8sClient "bitbucket.org/amdatulabs/amdatu-kubernetes-go/client"
 	etcdclient "github.com/coreos/etcd/client"
 )
 
