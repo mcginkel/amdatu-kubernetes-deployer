@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"com.amdatu.rti.deployment/cluster"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
 )

@@ -1,9 +1,9 @@
 package proxies
 
 import (
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/github.com/coreos/etcd/client"
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/golang.org/x/net/context"
 	"encoding/json"
+	"github.com/coreos/etcd/client"
+	"golang.org/x/net/context"
 	"log"
 	"os"
 	"testing"

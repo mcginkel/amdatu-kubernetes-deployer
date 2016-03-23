@@ -1,6 +1,9 @@
 {
-	"ImportPath": "com.amdatu.rti.deployment",
+	"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-deployer",
 	"GoVersion": "go1.6",
+	"Packages": [
+		"./..."
+	],
 	"Deps": [
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/resource",

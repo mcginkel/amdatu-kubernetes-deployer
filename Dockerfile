@@ -1,4 +1,4 @@
 FROM busybox
-ADD main /main
+ADD deployer /deployer
 WORKDIR /
-ENTRYPOINT ["/main"]
+ENTRYPOINT ["/deployer"]

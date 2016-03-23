@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"com.amdatu.rti.deployment/healthcheck"
-	"com.amdatu.rti.deployment/proxies"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/healthcheck"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/util"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	k8sClient "bitbucket.org/amdatulabs/amdatu-kubernetes-go/client"
@@ -318,7 +318,7 @@ func (deployer *Deployer) CreateService() (*v1.Service, error) {
 }
 
 func (deployer *Deployer) CreatePersistentService() (*v1.Service, error) {
-	existing,_ := deployer.K8client.GetService(deployer.Deployment.Namespace, deployer.Deployment.AppName)
+	existing, _ := deployer.K8client.GetService(deployer.Deployment.Namespace, deployer.Deployment.AppName)
 	if existing.Name == "" {
 		srv := new(v1.Service)
 		srv.Name = deployer.Deployment.AppName

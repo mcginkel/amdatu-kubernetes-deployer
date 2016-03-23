@@ -9,11 +9,11 @@ package bluegreen
 */
 
 import (
-	"com.amdatu.rti.deployment/cluster"
-	"com.amdatu.rti.deployment/proxies"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	"errors"
 	"time"
-"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 )
 
 type bluegreen struct {
@@ -86,9 +86,9 @@ func (bluegreen *bluegreen) Deploy() error {
 	return nil
 }
 
-func selectPort(ports []v1.ServicePort) v1.ServicePort{
+func selectPort(ports []v1.ServicePort) v1.ServicePort {
 	if len(ports) > 1 {
-		for _,port := range ports {
+		for _, port := range ports {
 			if port.Name != "healthcheck" {
 				return port
 			}

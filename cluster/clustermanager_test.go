@@ -1,7 +1,7 @@
 package cluster
 
 import (
-	"com.amdatu.rti.deployment/Godeps/_workspace/src/k8s.io/kubernetes/pkg/api"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	"strings"
 	"testing"
 )
@@ -102,10 +102,10 @@ func TestDetermineNextVersionCorrect(t *testing.T) {
 Default to only exposed port
 */
 func TestFindHealthcheckPort_SinglePort(t *testing.T) {
-	pod := api.Pod{
-		Spec: api.PodSpec{
-			Containers: []api.Container{
-				{Ports: []api.ContainerPort{
+	pod := v1.Pod{
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{Ports: []v1.ContainerPort{
 					{ContainerPort: 8080},
 				}},
 			},
@@ -122,10 +122,10 @@ func TestFindHealthcheckPort_SinglePort(t *testing.T) {
 Named port when multiple ports defined
 */
 func TestFindHealthcheckPort_MultiplePort(t *testing.T) {
-	pod := api.Pod{
-		Spec: api.PodSpec{
-			Containers: []api.Container{
-				{Ports: []api.ContainerPort{
+	pod := v1.Pod{
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{Ports: []v1.ContainerPort{
 					{ContainerPort: 8080, Name: "web"},
 					{ContainerPort: 9999, Name: "healthcheck"},
 				}},
@@ -143,9 +143,9 @@ func TestFindHealthcheckPort_MultiplePort(t *testing.T) {
 Default port when no ports are defined
 */
 func TestFindHealthcheckPort_NoPort(t *testing.T) {
-	pod := api.Pod{
-		Spec: api.PodSpec{
-			Containers: []api.Container{{}},
+	pod := v1.Pod{
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{{}},
 		},
 	}
 
@@ -159,10 +159,10 @@ func TestFindHealthcheckPort_NoPort(t *testing.T) {
 Default port when no health check port found
 */
 func TestFindHealthcheckPort_NoHealthPort(t *testing.T) {
-	pod := api.Pod{
-		Spec: api.PodSpec{
-			Containers: []api.Container{
-				{Ports: []api.ContainerPort{
+	pod := v1.Pod{
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{Ports: []v1.ContainerPort{
 					{ContainerPort: 8080, Name: "web"},
 					{ContainerPort: 9999, Name: "db"},
 				}},
