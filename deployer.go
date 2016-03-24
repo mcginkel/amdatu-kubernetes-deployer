@@ -229,20 +229,15 @@ func undeployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 
 	logger := cluster.NewWebsocketLogger(conn)
 
-	registry, err := createDeploymentRegistry(logger)
-	if err != nil {
-		return
-	}
 
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	_, body, err := conn.ReadMessage()
 	if err != nil {
 		logger.Printf("Error reading body: %v", err)
 	}
 
 	user, err := createUser(body)
 	if err != nil {
-		logger.Printf("Error parsing user: %v", err)
+		logger.Printf("Error parsing body: %v", err)
 	}
 
 	vars := mux.Vars(r)
@@ -253,10 +248,6 @@ func undeployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 		logger.Println("============================ Deployment Failed =======================")
 		logger.Println("!!{\"success\": \"false\"}") // this is parsed by the frontend!
 	} else {
-		err2 := registry.DeleteDeployment(vars["namespace"], vars["id"])
-		if err2 != nil {
-			logger.Printf("Error during deleting history: %v\n", err2)
-		}
 		logger.Println("============================ Completed deployment =======================")
 		logger.Println("!!{\"success\": \"true\"}") // this is parsed by the frontend!
 	}
