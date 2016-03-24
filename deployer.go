@@ -16,12 +16,12 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/bluegreen"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/deploymentregistry"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/environment"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/redeploy"
 	etcdclient "github.com/coreos/etcd/client"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/satori/go.uuid"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/environment"
 )
 
 var kubernetesurl, etcdUrl, port, authurl, kubernetesUsername, kubernetesPassword, kafkaUrl, influxUrl, influxUser, influxPassword string
@@ -141,7 +141,6 @@ func createEnvironmentVarStore(logger cluster.Logger) (*environment.EnvironmentV
 	store := environment.NewEnvironmentVarStore(etcdClient, logger)
 	return store, nil
 }
-
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -267,7 +266,6 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 			}
 		}
 	}
-
 
 	envVarStore, err := createEnvironmentVarStore(logger)
 	if err != nil {

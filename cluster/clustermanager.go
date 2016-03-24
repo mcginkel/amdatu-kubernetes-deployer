@@ -20,21 +20,21 @@ import (
 )
 
 type Deployment struct {
-	Id                string     `json:"id,omitempty"`
-	WebHooks          []WebHook  `json:"webhooks,omitempty"`
-	DeploymentType    string     `json:"deploymentType,omitempty"`
-	NewVersion        string     `json:"newVersion,omitempty"`
-	AppName           string     `json:"appName,omitempty"`
-	Replicas          int        `json:"replicas,omitempty"`
-	Frontend          string     `json:"frontend,omitempty"`
-	ProxyPorts        []int      `json:"proxyports,omitempty"`
-	PodSpec           v1.PodSpec `json:"podspec,omitempty"`
-	UseHealthCheck    bool       `json:"useHealthCheck,omitempty"`
-	Namespace         string     `json:"namespace,omitempty"`
-	Email             string     `json:"email,omitempty"`
-	Password          string     `json:"password,omitempty"`
-	HealthCheckUrl    string     `json:"healthcheckUrl,omitempty"`
-	Environment	  map[string]string `json:"environment,omitempty"`
+	Id             string            `json:"id,omitempty"`
+	WebHooks       []WebHook         `json:"webhooks,omitempty"`
+	DeploymentType string            `json:"deploymentType,omitempty"`
+	NewVersion     string            `json:"newVersion,omitempty"`
+	AppName        string            `json:"appName,omitempty"`
+	Replicas       int               `json:"replicas,omitempty"`
+	Frontend       string            `json:"frontend,omitempty"`
+	ProxyPorts     []int             `json:"proxyports,omitempty"`
+	PodSpec        v1.PodSpec        `json:"podspec,omitempty"`
+	UseHealthCheck bool              `json:"useHealthCheck,omitempty"`
+	Namespace      string            `json:"namespace,omitempty"`
+	Email          string            `json:"email,omitempty"`
+	Password       string            `json:"password,omitempty"`
+	HealthCheckUrl string            `json:"healthcheckUrl,omitempty"`
+	Environment    map[string]string `json:"environment,omitempty"`
 }
 
 type DeploymentResult struct {
@@ -228,10 +228,9 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 			v1.EnvVar{Name: "APP_VERSION", Value: deployer.Deployment.NewVersion},
 			v1.EnvVar{Name: "POD_NAME", ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}}})
 
-			for key,val := range deployer.Deployment.Environment {
-				container.Env = append(container.Env, v1.EnvVar{Name: key, Value: val})
-			}
-
+		for key, val := range deployer.Deployment.Environment {
+			container.Env = append(container.Env, v1.EnvVar{Name: key, Value: val})
+		}
 
 		containers = append(containers, container)
 	}
@@ -353,8 +352,6 @@ func (deployer *Deployer) CreatePersistentService() (*v1.Service, error) {
 			Type:            v1.ServiceTypeNodePort,
 			SessionAffinity: "ClientIP",
 		}
-
-
 
 		created, err := deployer.K8client.CreateService(deployer.Deployment.Namespace, srv)
 

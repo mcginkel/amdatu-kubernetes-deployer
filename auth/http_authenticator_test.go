@@ -1,11 +1,11 @@
 package auth
 
 import (
-	"testing"
-	"net/http/httptest"
-	"net/http"
 	"fmt"
 	"github.com/gorilla/mux"
+	"net/http"
+	"net/http/httptest"
+	"testing"
 )
 
 func TestAuthenticate(t *testing.T) {
@@ -28,7 +28,7 @@ func TestAuthenticate(t *testing.T) {
 	}
 }
 
-func Handlers() *mux.Router{
+func Handlers() *mux.Router {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/auth/login", loginHandler).Methods("POST")

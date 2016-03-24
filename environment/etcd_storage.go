@@ -1,15 +1,15 @@
 package environment
 
-import(
+import (
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"strings"
 )
 
 type EnvironmentVarStore struct {
 	etcdClient client.Client
-	log cluster.Logger
+	log        cluster.Logger
 }
 
 func NewEnvironmentVarStore(etcdClient client.Client, log cluster.Logger) *EnvironmentVarStore {
@@ -18,7 +18,7 @@ func NewEnvironmentVarStore(etcdClient client.Client, log cluster.Logger) *Envir
 
 func (store *EnvironmentVarStore) GetEnvironmentVars() map[string]string {
 	kAPI := client.NewKeysAPI(store.etcdClient)
-	result, err := kAPI.Get(context.Background(), "/deployer/environment", &client.GetOptions{Recursive:true})
+	result, err := kAPI.Get(context.Background(), "/deployer/environment", &client.GetOptions{Recursive: true})
 	if err != nil {
 		store.log.Printf("Can't read environment vars from etcd: %v", err.Error())
 		return map[string]string{}
