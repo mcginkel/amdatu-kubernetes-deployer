@@ -245,10 +245,10 @@ func undeployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 	err = unDeploy(vars["namespace"], vars["appname"], user.Email, user.Password, logger)
 	if err != nil {
 		logger.Printf("Error during undeployment: %v\n", err)
-		logger.Println("============================ Deployment Failed =======================")
+		logger.Println("============================ Undeployment Failed =======================")
 		logger.Println("!!{\"success\": \"false\"}") // this is parsed by the frontend!
 	} else {
-		logger.Println("============================ Completed deployment =======================")
+		logger.Println("============================ Completed Undeployment =======================")
 		logger.Println("!!{\"success\": \"true\"}") // this is parsed by the frontend!
 	}
 }

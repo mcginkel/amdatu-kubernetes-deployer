@@ -46,6 +46,8 @@ func NewUndeployer(namespace string, appname string, etcdUrl string,
 
 func (undeployer *undeployer) Undeploy() error {
 
+	undeployer.logger.Printf("Starting undeployment of application %v in namespace %v\n", undeployer.appname, undeployer.namespace)
+	
 	controllers, err := undeployer.getReplicationControllers()
 	if err != nil {
 		undeployer.logger.Printf("error getting controllers: %v\n", err.Error())
@@ -84,6 +86,8 @@ func (undeployer *undeployer) Undeploy() error {
 }
 
 func (undeployer *undeployer) getReplicationControllers() ([]v1.ReplicationController, error) {
+	undeployer.logger.Printf("Getting replication controllers\n")
+
 	labels := map[string]string{"app": undeployer.appname}
 	rcList, err := undeployer.k8sclient.ListReplicationControllersWithLabel(undeployer.namespace, labels)
 	if err != nil {
@@ -93,7 +97,10 @@ func (undeployer *undeployer) getReplicationControllers() ([]v1.ReplicationContr
 }
 
 func (undeployer *undeployer) deleteProxy(backend string) {
+	undeployer.logger.Printf("Deleting proxy backend for %v\n", backend)
 	undeployer.proxy.DeleteDeployment(backend)
+
+	undeployer.logger.Printf("Deleting proxy frontend for %v\n", backend)
 	undeployer.proxy.DeleteFrontendForDeployment(backend)
 }
 
@@ -104,6 +111,7 @@ func (undeployer *undeployer) deleteServices() error {
 		return err
 	}
 	for _, service := range servicelist.Items {
+		undeployer.logger.Printf("Deleting service %v\n", service.ObjectMeta.Name)
 		err := undeployer.k8sclient.DeleteService(undeployer.namespace, service.ObjectMeta.Name)
 		if err != nil {
 			return err
@@ -113,6 +121,7 @@ func (undeployer *undeployer) deleteServices() error {
 }
 
 func (undeployer *undeployer) deleteController(controller v1.ReplicationController) error {
+	undeployer.logger.Printf("Deleting replication controller %v\n", controller.ObjectMeta.Name)
 	err := undeployer.k8sclient.DeleteReplicationController(undeployer.namespace, controller.ObjectMeta.Name)
 	if err != nil {
 		return err
@@ -126,6 +135,7 @@ func (undeployer *undeployer) deleteDeploymentHistories() error {
 		return err
 	}
 	for _, history := range histories {
+		undeployer.logger.Printf("Deleting deployment history with id %v\n", history.Id)
 		err = undeployer.registry.DeleteDeployment(undeployer.namespace, history.Id)
 		if err != nil {
 			return err
