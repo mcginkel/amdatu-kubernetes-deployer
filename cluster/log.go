@@ -17,19 +17,19 @@ func NewHttpLogger(responseWriter http.ResponseWriter) HttpLogger {
 	return HttpLogger{responseWriter, []string{}}
 }
 
-func (logger *HttpLogger) Println(v ...interface{}) {
+func (logger HttpLogger) Println(v ...interface{}) {
 	msg := fmt.Sprintln(v...)
 	log.Println(msg)
 	logger.buffer = append(logger.buffer, msg)
 }
 
-func (logger *HttpLogger) Printf(format string, v ...interface{}) {
+func (logger HttpLogger) Printf(format string, v ...interface{}) {
 	msg := fmt.Sprintf(format, v...)
 	log.Printf(msg)
 	logger.buffer = append(logger.buffer, msg)
 }
 
-func (logger *HttpLogger) Flush() {
+func (logger HttpLogger) Flush() {
 	for _, msg := range logger.buffer {
 		io.WriteString(logger.RespWriter, msg)
 	}
@@ -43,7 +43,7 @@ func NewWebsocketLogger(conn *websocket.Conn) WebsocketLogger {
 	return WebsocketLogger{conn}
 }
 
-func (logger *WebsocketLogger) Println(v ...interface{}) {
+func (logger WebsocketLogger) Println(v ...interface{}) {
 	msg := fmt.Sprintln(v...)
 	log.Println(msg)
 	w, err := logger.Conn.NextWriter(websocket.TextMessage)
@@ -56,7 +56,7 @@ func (logger *WebsocketLogger) Println(v ...interface{}) {
 	w.Close()
 }
 
-func (logger *WebsocketLogger) Printf(format string, v ...interface{}) {
+func (logger WebsocketLogger) Printf(format string, v ...interface{}) {
 	msg := fmt.Sprintf(format, v...)
 	log.Printf(msg)
 	w, err := logger.Conn.NextWriter(websocket.TextMessage)
@@ -68,5 +68,5 @@ func (logger *WebsocketLogger) Printf(format string, v ...interface{}) {
 	w.Write([]byte(msg))
 }
 
-func (logger *WebsocketLogger) Flush() {
+func (logger WebsocketLogger) Flush() {
 }

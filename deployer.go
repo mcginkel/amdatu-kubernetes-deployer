@@ -21,16 +21,17 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/satori/go.uuid"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/environment"
 )
 
-var kubernetesurl, etcdUrl, port, dashboardurl, kubernetesUsername, kubernetesPassword, kafkaUrl, influxUrl, influxUser, influxPassword string
+var kubernetesurl, etcdUrl, port, authurl, kubernetesUsername, kubernetesPassword, kafkaUrl, influxUrl, influxUser, influxPassword string
 var mutex = &sync.Mutex{}
 
 func init() {
 	flag.StringVar(&kubernetesurl, "kubernetes", "", "URL to the Kubernetes API server")
 	flag.StringVar(&etcdUrl, "etcd", "", "Url to etcd")
 	flag.StringVar(&port, "deployport", "8000", "Port to listen for deployments")
-	flag.StringVar(&dashboardurl, "dashboardurl", "noauth", "Dashboard url to use for authentication. Skip authentication when not set.")
+	flag.StringVar(&authurl, "authurl", "noauth", "Url to use for authentication. Skip authentication when not set.")
 	flag.StringVar(&kubernetesUsername, "kubernetesusername", "noauth", "Username to authenticate against Kubernetes API server. Skip authentication when not set")
 	flag.StringVar(&kubernetesPassword, "kubernetespassword", "noauth", "Username to authenticate against Kubernetes API server.")
 	flag.StringVar(&kafkaUrl, "kafka", "", "Kafka url to pass to deployed pods")
@@ -126,6 +127,22 @@ func createDeploymentRegistry(w http.ResponseWriter, r *http.Request) (*deployme
 	return &registry, nil
 }
 
+func createEnvironmentVarStore(logger cluster.Logger) (*environment.EnvironmentVarStore, error) {
+	cfg := etcdclient.Config{
+		Endpoints: []string{etcdUrl},
+	}
+
+	etcdClient, err := etcdclient.New(cfg)
+	if err != nil {
+		logger.Printf("Error connecting to etcd: %v\n", err.Error())
+		return &environment.EnvironmentVarStore{}, err
+	}
+
+	store := environment.NewEnvironmentVarStore(etcdClient, logger)
+	return store, nil
+}
+
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -179,6 +196,8 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		logger.Printf("Error reading body: %v", err)
 	}
 
+	environment.NewEnvironmentVarStore(nil, logger)
+
 	deployment, err := createDeployment(body)
 	if err != nil {
 		logger.Printf("Error parsing body: %v", err)
@@ -211,8 +230,8 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 
 	logger.Printf("%v\n", deployment.String())
 
-	if dashboardurl != "noauth" {
-		namespaces, err := auth.AuthenticateAndGetNamespaces(dashboardurl, deployment.Email, deployment.Password)
+	if authurl != "noauth" {
+		namespaces, err := auth.AuthenticateAndGetNamespaces(authurl, deployment.Email, deployment.Password)
 
 		if err != nil {
 			logger.Println("Could not authenticate: ", err)
@@ -249,6 +268,14 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 		}
 	}
 
+
+	envVarStore, err := createEnvironmentVarStore(logger)
+	if err != nil {
+		return err
+	}
+
+	deployer.Deployment.Environment = envVarStore.GetEnvironmentVars()
+
 	var deploymentError error
 
 	/*Check if namespace has the current version deployed
@@ -256,7 +283,7 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 	*/
 
 	logger.Println("Checking for existing service...")
-	_, err := deployer.K8client.GetService(deployment.Namespace, deployer.CreateRcName())
+	_, err = deployer.K8client.GetService(deployment.Namespace, deployer.CreateRcName())
 
 	if err != nil {
 		logger.Println("No existing service found, starting deployment")
@@ -301,7 +328,7 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 }
 
 func createDeployment(jsonString []byte) (cluster.Deployment, error) {
-	deployment := cluster.Deployment{Kafka: kafkaUrl, InfluxDbUrl: influxUrl, InfluxDbUser: influxUser, InfluxDbUPassword: influxPassword}
+	deployment := cluster.Deployment{}
 
 	if err := json.Unmarshal(jsonString, &deployment); err != nil {
 		return cluster.Deployment{}, err

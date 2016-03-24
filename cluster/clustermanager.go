@@ -34,10 +34,7 @@ type Deployment struct {
 	Email             string     `json:"email,omitempty"`
 	Password          string     `json:"password,omitempty"`
 	HealthCheckUrl    string     `json:"healthcheckUrl,omitempty"`
-	Kafka             string     `json:"kafka,omitempty"`
-	InfluxDbUrl       string     `json:"influxdbUrl,omitempty"`
-	InfluxDbUser      string     `json:"influxdbUser,omitempty"`
-	InfluxDbUPassword string     `json:"influxdbPassword,omitempty"`
+	Environment	  map[string]string `json:"environment,omitempty"`
 }
 
 type DeploymentResult struct {
@@ -229,11 +226,12 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 			v1.EnvVar{Name: "APP_NAME", Value: deployer.Deployment.AppName},
 			v1.EnvVar{Name: "POD_NAMESPACE", Value: deployer.Deployment.Namespace},
 			v1.EnvVar{Name: "APP_VERSION", Value: deployer.Deployment.NewVersion},
-			v1.EnvVar{Name: "KAFKA", Value: deployer.Deployment.Kafka},
-			v1.EnvVar{Name: "INFLUX_URL", Value: deployer.Deployment.InfluxDbUrl},
-			v1.EnvVar{Name: "INFLUX_USERNAME", Value: deployer.Deployment.InfluxDbUser},
-			v1.EnvVar{Name: "INFLUX_PASSWORD", Value: deployer.Deployment.InfluxDbUPassword},
 			v1.EnvVar{Name: "POD_NAME", ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}}})
+
+			for key,val := range deployer.Deployment.Environment {
+				container.Env = append(container.Env, v1.EnvVar{Name: key, Value: val})
+			}
+
 
 		containers = append(containers, container)
 	}
