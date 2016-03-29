@@ -54,7 +54,7 @@ func TestCreateProxyConfigurator(t *testing.T) {
 func TestAddBackendServer_newBackend(t *testing.T) {
 	pc := createProxyConfigurator()
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false); err != nil {
 		t.Error(err)
 	}
 
@@ -85,11 +85,11 @@ func TestAddBackendServer_newBackend(t *testing.T) {
 func TestAddBackendServer_existingBackend(t *testing.T) {
 	pc := createProxyConfigurator()
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false); err != nil {
 		t.Error(err)
 	}
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.2", 8181); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.2", 8181, false); err != nil {
 		t.Error(err)
 	}
 
@@ -105,7 +105,7 @@ func TestAddBackendServer_existingBackend(t *testing.T) {
 
 func TestDeleteDeployment(t *testing.T) {
 	pc := createProxyConfigurator()
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false); err != nil {
 		t.Error(err)
 	}
 
@@ -207,11 +207,11 @@ func TestSwitchBackend(t *testing.T) {
 func TestBackendServer(t *testing.T) {
 	pc := createProxyConfigurator()
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false); err != nil {
 		t.Error(err)
 	}
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.2", 8181); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.2", 8181, false); err != nil {
 		t.Error(err)
 	}
 

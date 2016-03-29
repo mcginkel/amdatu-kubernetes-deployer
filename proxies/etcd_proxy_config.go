@@ -28,8 +28,9 @@ type ProxyConfigurator struct {
 }
 
 type BackendServer struct {
-	IPAddress string
-	Port      int32
+	IPAddress          string
+	Port               int32
+	CompressionEnabled bool
 }
 
 type Frontend struct {
@@ -61,7 +62,7 @@ func (proxyConfigurator *ProxyConfigurator) DeleteFrontendForDeployment(deployme
 
 func (proxyConfigurator *ProxyConfigurator) getFrontendKeysForDeployment(deploymentName string) []string {
 	keys := []string{}
-	
+
 	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
 	result, err := kAPI.Get(context.Background(), "/proxy/frontends", &client.GetOptions{})
 	if err != nil {
@@ -80,15 +81,16 @@ func (proxyConfigurator *ProxyConfigurator) getFrontendKeysForDeployment(deploym
 	return keys
 }
 
-func (proxyConfigurator *ProxyConfigurator) AddBackendServer(deploymentName string, ip string, port int32) error {
+func (proxyConfigurator *ProxyConfigurator) AddBackendServer(deploymentName string, ip string, port int32, useCompression bool) error {
 	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
 	if err := prepareBaseConfig(kAPI); err != nil {
 		return err
 	}
 
 	value := BackendServer{
-		IPAddress: ip,
-		Port:      port,
+		IPAddress:          ip,
+		Port:               port,
+		CompressionEnabled: useCompression,
 	}
 
 	bytes, err := json.Marshal(value)
