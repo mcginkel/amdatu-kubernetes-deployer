@@ -298,7 +298,7 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 
 	logger.Printf("%v\n", deployment.String())
 
-	if err := authenticate(deployment.Namespace, deployment.Email, deployment.Password, logger); err != nil {
+	if err := authorize(deployment.Namespace, deployment.Email, deployment.Password, logger); err != nil {
 		return err
 	}
 
@@ -409,7 +409,7 @@ func unDeploy(namespace string, appname string, email string, password string, l
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	if err := authenticate(namespace, email, password, logger); err != nil {
+	if err := authorize(namespace, email, password, logger); err != nil {
 		return err
 	}
 
@@ -422,7 +422,7 @@ func unDeploy(namespace string, appname string, email string, password string, l
 	return undeployer.Undeploy()
 }
 
-func authenticate(namespace string, email string, password string, logger cluster.Logger) error {
+func authorize(namespace string, email string, password string, logger cluster.Logger) error {
 	if authurl != "noauth" {
 		namespaces, err := auth.AuthenticateAndGetNamespaces(authurl, email, password)
 
@@ -432,7 +432,7 @@ func authenticate(namespace string, email string, password string, logger cluste
 		}
 
 		if !auth.StringInSet(namespace, namespaces) {
-			logger.Printf("User %v not authorised to namespace %v", email, namespace)
+			logger.Printf("User %v not authorized to namespace %v", email, namespace)
 			return errors.New("Not authorized for namespace")
 		}
 	}
