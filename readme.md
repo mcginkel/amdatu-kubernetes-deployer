@@ -103,14 +103,43 @@ For each deployment the following resources are created in Kubernetes.
 
 Deployment history
 ===
+A deployment history is kept in etcd.
+
+Keys are in the following format:
+
+```
+/deployment/[namespace]/[UID]/[data]
+```
+
+The value is the complete deployment descriptor.
 
 Environment variables
 ===
+It's possible to inject extra environment variables into pods.
+This is useful if pods need to discover certain infrastructure services outside Kubernetes, without the need to put them in the deployment descriptor.
+To inject an environment variable, a key has to be created in etcd:
+
+```
+/deployer/environment/[mykey]
+```
+
+The key will be the environment variable name, the value of the etcd key will be the value of the environment variable.
 
 Authentication and authorization
 ===
+For authentication against the Kubernetes API, basic authentication is supported.
+Credentials need to be provided as program arguments.
+There is also preliminary support for namespace authorization.
+A HTTP server providing the following endpoints can be run to take care of the actual authentication and authorization:
+
+* POST /auth/login
+* GET /rtiauth/namespaces
+
+To learn about the data format used, take a look at [auth/http_authenticator_test.go](auth/http_authenticator_test.go).
+**Warning**, the authorization mechanism is likely to be changed soon.
+CoreOS dex is a likely candidate for a future implementation.
 
 Getting involved
 ===
 
-Issues and pull requests are greatly appreciated!
+[Bug reports and feature requests](https://amdatu.atlassian.net/projects/AKD) and of course pull requests are greatly appreciated!
