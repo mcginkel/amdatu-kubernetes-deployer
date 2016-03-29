@@ -50,6 +50,7 @@ type Deployment struct {
 	Password       string            `json:"password,omitempty"`
 	HealthCheckUrl string            `json:"healthcheckUrl,omitempty"`
 	Environment    map[string]string `json:"environment,omitempty"`
+	UseCompression bool              `json:"useCompression,omitempty"`
 }
 
 type DeploymentResult struct {
@@ -71,7 +72,7 @@ type WebHook struct {
 }
 
 type User struct {
-	Email string `json:"email,omitempty"`
+	Email    string `json:"email,omitempty"`
 	Password string `json:"password,omitempty`
 }
 

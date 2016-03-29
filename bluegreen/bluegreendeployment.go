@@ -79,7 +79,8 @@ func (bluegreen *bluegreen) Deploy() error {
 	if len(service.Spec.Ports) > 0 {
 		port := selectPort(service.Spec.Ports)
 		bluegreen.deployer.Logger.Printf("Adding backend for port %v\n", port)
-		bluegreen.deployer.ProxyConfigurator.AddBackendServer(backendId, service.Spec.ClusterIP, int32(port.Port))
+		bluegreen.deployer.ProxyConfigurator.AddBackendServer(backendId, service.Spec.ClusterIP, int32(port.Port),
+			bluegreen.deployer.Deployment.UseCompression)
 	}
 
 	if bluegreen.deployer.Deployment.Frontend != "" {
