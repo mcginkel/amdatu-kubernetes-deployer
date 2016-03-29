@@ -70,6 +70,11 @@ type WebHook struct {
 	Key         string `json:"key,omitempty"`
 }
 
+type User struct {
+	Email string `json:"email,omitempty"`
+	Password string `json:"password,omitempty`
+}
+
 const DNS952LabelFmt string = "[a-z]([-a-z0-9]*[a-z0-9])?"
 
 var dns952LabelRegexp = regexp.MustCompile("^" + DNS952LabelFmt + "$")

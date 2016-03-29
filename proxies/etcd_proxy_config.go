@@ -43,11 +43,30 @@ func NewProxyConfigurator(etcdClient client.Client) *ProxyConfigurator {
 }
 
 func (proxyConfigurator *ProxyConfigurator) FrontendExistsForDeployment(deploymentName string) bool {
+	frontendKeys := proxyConfigurator.getFrontendKeysForDeployment(deploymentName)
+	return len(frontendKeys) > 0
+}
+
+func (proxyConfigurator *ProxyConfigurator) DeleteFrontendForDeployment(deploymentName string) {
+
+	frontendKeys := proxyConfigurator.getFrontendKeysForDeployment(deploymentName)
+
+	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
+	for _, key := range frontendKeys {
+		if _, err := kAPI.Delete(context.Background(), key, nil); err != nil {
+			log.Printf("Error deleting frontend %v", key)
+		}
+	}
+}
+
+func (proxyConfigurator *ProxyConfigurator) getFrontendKeysForDeployment(deploymentName string) []string {
+	keys := []string{}
+	
 	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
 	result, err := kAPI.Get(context.Background(), "/proxy/frontends", &client.GetOptions{})
 	if err != nil {
-		fmt.Println("Error listing frontends, now assuming the frontend doesn't exist")
-		return false
+		fmt.Println("Error listing frontends, now assuming no frontend exists")
+		return keys
 	}
 
 	for _, entry := range result.Node.Nodes {
@@ -55,11 +74,10 @@ func (proxyConfigurator *ProxyConfigurator) FrontendExistsForDeployment(deployme
 		json.Unmarshal([]byte(entry.Value), &value)
 
 		if value.BackendId == deploymentName {
-			return true
+			keys = append(keys, entry.Key)
 		}
 	}
-
-	return false
+	return keys
 }
 
 func (proxyConfigurator *ProxyConfigurator) AddBackendServer(deploymentName string, ip string, port int32) error {
