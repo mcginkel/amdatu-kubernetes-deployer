@@ -12,12 +12,13 @@ import (
 	"sync"
 	"time"
 
-	"com.amdatu.rti.deployment/auth"
-	"com.amdatu.rti.deployment/bluegreen"
-	"com.amdatu.rti.deployment/cluster"
-	"com.amdatu.rti.deployment/deploymentregistry"
-	"com.amdatu.rti.deployment/redeploy"
-	"com.amdatu.rti.deployment/undeploy"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/auth"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/bluegreen"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/deploymentregistry"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/environment"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/redeploy"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/undeploy"
 	etcdclient "github.com/coreos/etcd/client"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -229,7 +230,6 @@ func undeployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 
 	logger := cluster.NewWebsocketLogger(conn)
 
-
 	_, body, err := conn.ReadMessage()
 	if err != nil {
 		logger.Printf("Error reading body: %v", err)
@@ -299,9 +299,9 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 	logger.Printf("%v\n", deployment.String())
 
 	if err := authenticate(deployment.Namespace, deployment.Email, deployment.Password, logger); err != nil {
-		return err;
+		return err
 	}
-	
+
 	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, *deployment, logger)
 	if deployment.NewVersion == "000" {
 		rc, err := deployer.FindCurrentRc()
@@ -410,21 +410,21 @@ func unDeploy(namespace string, appname string, email string, password string, l
 	defer mutex.Unlock()
 
 	if err := authenticate(namespace, email, password, logger); err != nil {
-		return err;
+		return err
 	}
 
 	undeployer, err := undeploy.NewUndeployer(namespace, appname, etcdUrl, kubernetesurl, kubernetesUsername, kubernetesPassword, logger)
-	
+
 	if err != nil {
-		return err;
+		return err
 	}
-	
+
 	return undeployer.Undeploy()
 }
 
 func authenticate(namespace string, email string, password string, logger cluster.Logger) error {
-	if dashboardurl != "noauth" {
-		namespaces, err := auth.AuthenticateAndGetNamespaces(dashboardurl, email, password)
+	if authurl != "noauth" {
+		namespaces, err := auth.AuthenticateAndGetNamespaces(authurl, email, password)
 
 		if err != nil {
 			logger.Println("Could not authenticate: ", err)
@@ -436,6 +436,5 @@ func authenticate(namespace string, email string, password string, logger cluste
 			return errors.New("Not authorized for namespace")
 		}
 	}
-	return nil;
+	return nil
 }
-

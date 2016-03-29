@@ -3,11 +3,11 @@ package undeploy
 import (
 	"errors"
 
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/deploymentregistry"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	k8sclient "bitbucket.org/amdatulabs/amdatu-kubernetes-go/client"
-	"com.amdatu.rti.deployment/cluster"
-	"com.amdatu.rti.deployment/deploymentregistry"
-	"com.amdatu.rti.deployment/proxies"
 	etcdclient "github.com/coreos/etcd/client"
 )
 
@@ -47,7 +47,7 @@ func NewUndeployer(namespace string, appname string, etcdUrl string,
 func (undeployer *undeployer) Undeploy() error {
 
 	undeployer.logger.Printf("Starting undeployment of application %v in namespace %v\n", undeployer.appname, undeployer.namespace)
-	
+
 	controllers, err := undeployer.getReplicationControllers()
 	if err != nil {
 		undeployer.logger.Printf("error getting controllers: %v\n", err.Error())
