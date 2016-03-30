@@ -143,3 +143,27 @@ Getting involved
 ===
 
 [Bug reports and feature requests](https://amdatu.atlassian.net/projects/AKD) and of course pull requests are greatly appreciated!
+The project is built on [Bamboo](https://amdatu.atlassian.net/builds/browse/AKD-MAIN/latest).
+The build produces cross platform binaries and pushed a Docker image.
+
+Versioning
+===
+
+The Docker images are tagged using a alpha/beta/prod schema.
+The continuous build pushes `amdatu/amdatu-kubernetes-deployer:alpha`.
+When a version is stable, we promote it to `beta`.
+The image is not rebuild, but a tag is set in git specifying the version number (e.g. 1.x.x).
+For Docker we set multiple tags:
+
+* beta
+* 1.x.x
+
+This way you can both reference the latest beta version, or a specific tagged version.
+From beta we promote images to `production`.
+The image is not rebuild, but new tags are added:
+
+* prod
+* production
+* latest
+
+This way you can reference the latest stable production version.
