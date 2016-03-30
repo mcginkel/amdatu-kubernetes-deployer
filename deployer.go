@@ -40,7 +40,7 @@ func init() {
 	flag.StringVar(&influxUser, "influx-username", "", "InfluxDB username to pass to deployed pods")
 	flag.StringVar(&influxPassword, "influx-password", "", "InfluxDB password to pass to deployed pods")
 
-	exampleUsage := "Missing required argument %v. Example usage: httplistener -kubernetes http://[kubernetes-api-url]:8080 -etcd http://[etcd-url]:2379 -deployport 8000"
+	exampleUsage := "Missing required argument %v. Example usage: ./deployer_linux_amd64 -kubernetes http://[kubernetes-api-url]:8080 -etcd http://[etcd-url]:2379 -deployport 8000"
 
 	flag.Parse()
 
