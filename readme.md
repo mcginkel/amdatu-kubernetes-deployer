@@ -167,3 +167,5 @@ The image is not rebuild, but new tags are added:
 * latest
 
 This way you can reference the latest stable production version.
+
+The list of tags can be found on [Docker Hub](https://hub.docker.com/r/amdatu/amdatu-kubernetes-deployer/tags).
