@@ -35,17 +35,22 @@ func (store *EnvironmentVarStore) GetEnvironmentVars() map[string]string {
 	kAPI := client.NewKeysAPI(store.etcdClient)
 	result, err := kAPI.Get(context.Background(), "/deployer/environment", &client.GetOptions{Recursive: true})
 	if err != nil {
-		store.log.Printf("Can't read environment vars from etcd: %v", err.Error())
+		store.log.Printf("Can't read environment vars from etcd: %v\n", err.Error())
 		return map[string]string{}
 	}
 
 	vars := map[string]string{}
 	for _, entry := range result.Node.Nodes {
 		idx := strings.LastIndex(entry.Key, "/") + 1
-		key := entry.Key[idx:len(entry.Key)]
+		key := fixEnvVarName(entry.Key[idx:len(entry.Key)])
 
 		vars[key] = entry.Value
 	}
 
 	return vars
+}
+
+func fixEnvVarName(name string) string {
+	keyName := strings.ToUpper(name)
+	return strings.Replace(keyName, "-", "_", -1)
 }
