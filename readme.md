@@ -108,10 +108,18 @@ A deployment history is kept in etcd.
 Keys are in the following format:
 
 ```
-/deployment/[namespace]/[UID]/[data]
+/deployment/[namespace]/[appName]-[UUID]/[timestamp]
 ```
 
-The value is the complete deployment descriptor.
+The value is the complete deployment descriptor with some metadata:
+
+```
+{
+    "date": "[timestamp]",
+    "status": "[success|errorMessage]",
+    "deployment": "[deploymentDescriptor]"
+}
+```
 
 Environment variables
 ===
