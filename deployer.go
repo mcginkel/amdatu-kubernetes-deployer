@@ -25,7 +25,7 @@ import (
 	"github.com/satori/go.uuid"
 )
 
-var kubernetesurl, etcdUrl, port, authurl, kubernetesUsername, kubernetesPassword, kafkaUrl, influxUrl, influxUser, influxPassword string
+var kubernetesurl, etcdUrl, port, authurl, kubernetesUsername, kubernetesPassword string
 var mutex = &sync.Mutex{}
 
 func init() {
@@ -35,10 +35,6 @@ func init() {
 	flag.StringVar(&authurl, "authurl", "noauth", "Url to use for authentication. Skip authentication when not set.")
 	flag.StringVar(&kubernetesUsername, "kubernetesusername", "noauth", "Username to authenticate against Kubernetes API server. Skip authentication when not set")
 	flag.StringVar(&kubernetesPassword, "kubernetespassword", "noauth", "Username to authenticate against Kubernetes API server.")
-	flag.StringVar(&kafkaUrl, "kafka", "", "Kafka url to pass to deployed pods")
-	flag.StringVar(&influxUrl, "influx-url", "", "InfluxDB url to pass to deployed pods")
-	flag.StringVar(&influxUser, "influx-username", "", "InfluxDB username to pass to deployed pods")
-	flag.StringVar(&influxPassword, "influx-password", "", "InfluxDB password to pass to deployed pods")
 
 	exampleUsage := "Missing required argument %v. Example usage: ./deployer_linux_amd64 -kubernetes http://[kubernetes-api-url]:8080 -etcd http://[etcd-url]:2379 -deployport 8000"
 
