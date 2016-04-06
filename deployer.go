@@ -174,7 +174,7 @@ func deployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 		logger.Printf("Error parsing body: %v", err)
 	}
 
-	err = deploy(&deployment, &logger)
+	err = deploy(&deployment, logger)
 	if err != nil {
 		logger.Printf("Error during deployment: %v\n", err)
 		logger.Println("============================ Deployment Failed =======================")
@@ -205,7 +205,7 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		logger.Printf("Error parsing body: %v", err)
 	}
 
-	err = deploy(&deployment, &logger)
+	err = deploy(&deployment, logger)
 	if err != nil {
 		responseWriter.WriteHeader(500)
 		logger.Printf("Error during deployment: %v\n", err)
@@ -267,7 +267,7 @@ func UndeploymentHandler(w http.ResponseWriter, req *http.Request) {
 
 	vars := mux.Vars(req)
 
-	err = unDeploy(vars["namespace"], vars["appname"], user.Email, user.Password, &logger)
+	err = unDeploy(vars["namespace"], vars["appname"], user.Email, user.Password, logger)
 	if err != nil {
 		w.WriteHeader(500)
 		logger.Printf("Error during undeployment: %v\n", err)
