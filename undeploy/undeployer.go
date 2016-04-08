@@ -121,8 +121,16 @@ func (undeployer *undeployer) deleteServices() error {
 }
 
 func (undeployer *undeployer) deleteController(controller v1.ReplicationController) error {
+	undeployer.logger.Printf("Scaling down replication controller %v\n", controller.ObjectMeta.Name)
+	replicas := int32(0)
+	controller.Spec.Replicas = &replicas;
+	_, err := undeployer.k8sclient.UpdateReplicationController(undeployer.namespace, &controller)
+	if err != nil {
+		return err
+	}
+
 	undeployer.logger.Printf("Deleting replication controller %v\n", controller.ObjectMeta.Name)
-	err := undeployer.k8sclient.DeleteReplicationController(undeployer.namespace, controller.ObjectMeta.Name)
+	err = undeployer.k8sclient.DeleteReplicationController(undeployer.namespace, controller.ObjectMeta.Name)
 	if err != nil {
 		return err
 	}
