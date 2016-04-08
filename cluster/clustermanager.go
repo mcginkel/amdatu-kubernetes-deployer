@@ -497,6 +497,15 @@ func (deployer *Deployer) CleaupOldDeployments() {
 func (deployer *Deployer) deleteRc(rc v1.ReplicationController) {
 	deployer.Logger.Printf("Deleting RC %v", rc.Name)
 
+	replicas := int32(0)
+	rc.Spec.Replicas = &replicas;
+
+	deployer.Logger.Printf("Scaling down replication controller: %v\n", rc.Name)
+	_, err := deployer.K8client.UpdateReplicationController(rc.Namespace, &rc)
+	if err != nil {
+		deployer.Logger.Printf("Error scaling down replication controller: %v\n", err.Error())
+	}
+
 	deployer.K8client.DeleteReplicationController(deployer.Deployment.Namespace, rc.Name)
 }
 
