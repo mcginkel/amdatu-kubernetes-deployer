@@ -184,6 +184,7 @@ func prepareBaseConfig(kAPI client.KeysAPI) error {
 		log.Println("/proxy doesn't exists, creating")
 
 		if _, err = kAPI.Set(context.Background(), "/proxy", "", &client.SetOptions{Dir: true}); err != nil {
+			log.Printf("Error creating proxy base config: %v", err)
 			return err
 		}
 
