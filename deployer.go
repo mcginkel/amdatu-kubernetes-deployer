@@ -26,6 +26,7 @@ import (
 )
 
 var kubernetesurl, etcdUrl, port, authurl, kubernetesUsername, kubernetesPassword string
+var healthTimeout int64
 var mutex = &sync.Mutex{}
 
 func init() {
@@ -35,6 +36,7 @@ func init() {
 	flag.StringVar(&authurl, "authurl", "noauth", "Url to use for authentication. Skip authentication when not set.")
 	flag.StringVar(&kubernetesUsername, "kubernetesusername", "noauth", "Username to authenticate against Kubernetes API server. Skip authentication when not set")
 	flag.StringVar(&kubernetesPassword, "kubernetespassword", "noauth", "Username to authenticate against Kubernetes API server.")
+	flag.Int64Var(&healthTimeout, "timeout", 60, "Timeout in seconds for health checks")
 
 	exampleUsage := "Missing required argument %v. Example usage: ./deployer_linux_amd64 -kubernetes http://[kubernetes-api-url]:8080 -etcd http://[etcd-url]:2379 -deployport 8000"
 
@@ -298,7 +300,7 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 		return err
 	}
 
-	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, *deployment, logger)
+	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, *deployment, logger, healthTimeout)
 	if deployment.NewVersion == "000" {
 		rc, err := deployer.FindCurrentRc()
 		if err != nil || len(rc) == 0 {

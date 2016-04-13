@@ -196,6 +196,7 @@ type Deployer struct {
 	Logger            Logger
 	ProxyConfigurator *proxies.ProxyConfigurator
 	EtcdClient        *etcdclient.Client
+	HealthcheckTimeout int64
 }
 
 type Logger interface {
@@ -204,7 +205,7 @@ type Logger interface {
 	Flush()
 }
 
-func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment Deployment, logger Logger) *Deployer {
+func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment Deployment, logger Logger, healthTimeout int64) *Deployer {
 
 	c := k8sClient.NewClient(kubernetesUrl, kubernetesUsername, kubernetesPassword)
 	logger.Printf("Connected to Kubernetes API server on %v\n", kubernetesUrl)
@@ -218,7 +219,7 @@ func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPass
 		log.Fatal("Couldn't connect to etcd")
 	}
 
-	return &Deployer{kubernetesUrl, deployment, etcdUrl, &c, logger, proxies.NewProxyConfigurator(etcdClient), &etcdClient}
+	return &Deployer{kubernetesUrl, deployment, etcdUrl, &c, logger, proxies.NewProxyConfigurator(etcdClient), &etcdClient, healthTimeout }
 
 }
 
