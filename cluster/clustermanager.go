@@ -510,12 +510,12 @@ func (deployer *Deployer) deleteRc(rc v1.ReplicationController) {
 	successChan := make(chan bool)
 
 	go func() {
-		time.Sleep(30 * time.Second)
+		time.Sleep(90 * time.Second)
 		timeoutChan <- true
 		close(timeoutChan)
 	}()
 
-	go deployer.waitForScaleDown(successChan)
+	go deployer.waitForScaleDown(&rc, successChan)
 
 	select {
 	case <- successChan:
@@ -528,7 +528,7 @@ func (deployer *Deployer) deleteRc(rc v1.ReplicationController) {
 	deployer.K8client.DeleteReplicationController(deployer.Deployment.Namespace, rc.Name)
 }
 
-func (deployer *Deployer) waitForScaleDown(successChan chan bool) {
+func (deployer *Deployer) waitForScaleDown(rc *v1.ReplicationController, successChan chan bool) {
 	for {
 		select {
 		case _,ok := <-successChan:
@@ -538,8 +538,11 @@ func (deployer *Deployer) waitForScaleDown(successChan chan bool) {
 			}
 
 		default:
-			pods, _ := deployer.FindCurrentPods(false)
-			if deployer.CountRunningPods(pods) > 0 {
+
+			labels := map[string]string{"app": rc.Labels["app"], "version": rc.Labels["version"]}
+			pods, _ := deployer.K8client.ListPodsWithLabel(deployer.Deployment.Namespace, labels)
+
+			if deployer.CountRunningPods(pods.Items) > 0 {
 				time.Sleep(1 * time.Second)
 			} else {
 				successChan <- true
