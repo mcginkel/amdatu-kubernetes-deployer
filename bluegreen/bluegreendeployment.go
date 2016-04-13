@@ -88,9 +88,9 @@ func (bluegreen *bluegreen) Deploy() error {
 	}
 
 	if bluegreen.deployer.Deployment.Frontend != "" {
-		bluegreen.deployer.Logger.Println("Sleeping for 20 seconds for proxy to reload...")
+		bluegreen.deployer.Logger.Printf("Sleeping for %v seconds for proxy to reload...\n", bluegreen.deployer.ProxyReload)
 
-		//time.Sleep(time.Second * 20)
+		time.Sleep(time.Second * time.Duration(bluegreen.deployer.ProxyReload))
 
 		bluegreen.deployer.Logger.Println("Switch proxy backends....")
 
