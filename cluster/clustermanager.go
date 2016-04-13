@@ -646,7 +646,6 @@ func (deployer *Deployer) CleanupFailedDeployment() {
 	service, err := deployer.findServiceForDeployment()
 
 	if err == nil {
-		deployer.Logger.Printf("Deleting Service %v\n", service.Name)
 		deployer.deleteService(*service)
 	}
 }
