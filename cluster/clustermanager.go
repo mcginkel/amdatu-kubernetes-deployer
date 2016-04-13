@@ -31,6 +31,8 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	k8sClient "bitbucket.org/amdatulabs/amdatu-kubernetes-go/client"
 	etcdclient "github.com/coreos/etcd/client"
+	"net/http"
+	"io/ioutil"
 )
 
 type Deployment struct {
@@ -461,7 +463,7 @@ func (deployer *Deployer) CleaupOldDeployments() {
 
 	for _, rc := range controllers {
 		if rc.Name != "" {
-			deployer.deleteRc(rc)
+			deployer.deleteRc(&rc)
 			deployer.ProxyConfigurator.DeleteDeployment(rc.Namespace + "-" + rc.Name)
 		}
 	}
@@ -494,17 +496,38 @@ func (deployer *Deployer) CleaupOldDeployments() {
 	}
 }
 
-func (deployer *Deployer) deleteRc(rc v1.ReplicationController) {
+func (deployer *Deployer) deleteRc(rc *v1.ReplicationController) {
 	deployer.Logger.Printf("Deleting RC %v", rc.Name)
 
 	replicas := int32(0)
 	rc.Spec.Replicas = &replicas;
 
 	deployer.Logger.Printf("Scaling down replication controller: %v\n", rc.Name)
-	_, err := deployer.K8client.UpdateReplicationController(rc.Namespace, &rc)
+
+
+	jsonBytes := []byte(`{"spec": {"replicas": 0}}`)
+
+	url := deployer.KubernetesUrl + "/api/v1/namespaces/" + rc.Namespace + "/replicationcontrollers/" + rc.Name
+	deployer.Logger.Printf("Requesting patch on %v\n", url)
+
+	deployer.Logger.Printf("%v", string(jsonBytes))
+	req, err := http.NewRequest("PATCH", url, bytes.NewBuffer(jsonBytes))
+
 	if err != nil {
 		deployer.Logger.Printf("Error scaling down replication controller: %v\n", err.Error())
 	}
+
+	req.Header.Add("Content-Type", "application/merge-patch+json")
+
+	resp, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		deployer.Logger.Printf("Error scaling down replication controller: %v\n", err.Error())
+	}
+
+	defer resp.Body.Close()
+	contents, _ := ioutil.ReadAll(resp.Body)
+	deployer.Logger.Printf("%s\n", string(contents))
 
 	timeoutChan := make(chan bool)
 	successChan := make(chan bool)
@@ -515,7 +538,7 @@ func (deployer *Deployer) deleteRc(rc v1.ReplicationController) {
 		close(timeoutChan)
 	}()
 
-	go deployer.waitForScaleDown(&rc, successChan)
+	go deployer.waitForScaleDown(rc, successChan)
 
 	select {
 	case <- successChan:
@@ -633,7 +656,7 @@ func (deployer *Deployer) CleanupFailedDeployment() {
 
 	if err == nil {
 		deployer.Logger.Printf("Deleting ReplicationController %v\n", rc.Name)
-		deployer.deleteRc(*rc)
+		deployer.deleteRc(rc)
 	}
 
 	pods, err := deployer.findPodsForDeployment()
