@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/healthcheck"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/util"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
@@ -507,7 +506,47 @@ func (deployer *Deployer) deleteRc(rc v1.ReplicationController) {
 		deployer.Logger.Printf("Error scaling down replication controller: %v\n", err.Error())
 	}
 
+	timeoutChan := make(chan bool)
+	successChan := make(chan bool)
+
+	go func() {
+		time.Sleep(30 * time.Second)
+		timeoutChan <- true
+		close(timeoutChan)
+	}()
+
+	go deployer.waitForScaleDown(successChan)
+
+	select {
+	case <- successChan:
+		close(successChan)
+	case <- timeoutChan:
+		close(successChan)
+	}
+
+
 	deployer.K8client.DeleteReplicationController(deployer.Deployment.Namespace, rc.Name)
+}
+
+func (deployer *Deployer) waitForScaleDown(successChan chan bool) {
+	for {
+		select {
+		case _,ok := <-successChan:
+			if !ok {
+				deployer.Logger.Println("Timeout waiting for RC to scale down")
+				return
+			}
+
+		default:
+			pods, _ := deployer.FindCurrentPods(false)
+			if deployer.CountRunningPods(pods) > 0 {
+				time.Sleep(1 * time.Second)
+			} else {
+				successChan <- true
+				return
+			}
+		}
+	}
 }
 
 func (deployer *Deployer) DeletePod(pod v1.Pod) {
@@ -533,20 +572,6 @@ func (deployer *Deployer) CountRunningPods(pods []v1.Pod) int {
 	return nrOfRunning
 }
 
-func (deployer *Deployer) CheckPodHealth(pod *v1.Pod) error {
-	if deployer.Deployment.UseHealthCheck {
-
-		port := FindHealthcheckPort(pod)
-		host := pod.Status.PodIP
-		healthy := healthcheck.WaitForPodStarted(deployer.getHealthcheckUrl(host, port), time.Minute*2)
-		if !healthy {
-			return errors.New("Pod didn't get healthy")
-		}
-	}
-
-	return nil
-}
-
 func FindHealthcheckPort(pod *v1.Pod) int32 {
 
 	ports := pod.Spec.Containers[0].Ports
@@ -570,7 +595,7 @@ func FindHealthcheckPort(pod *v1.Pod) int32 {
 	}
 }
 
-func (deployer *Deployer) getHealthcheckUrl(host string, port int32) string {
+func (deployer *Deployer) GetHealthcheckUrl(host string, port int32) string {
 	var healthUrl string
 	if deployer.Deployment.HealthCheckUrl != "" {
 		if strings.HasPrefix(deployer.Deployment.HealthCheckUrl, "/") {

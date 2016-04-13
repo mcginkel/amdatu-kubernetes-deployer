@@ -18,7 +18,6 @@ package redeploy
 import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
-	"time"
 )
 
 /**
@@ -53,51 +52,9 @@ func (redeployer *redeployer) Deploy() error {
 	}
 
 	for _, pod := range pods {
-
-		callBack := make(chan bool)
-		go redeployer.waitForNewPod(callBack, podNames)
-
-		redeployer.deployer.Logger.Printf("Deleting pod %v\n", pod.ObjectMeta.Name)
 		redeployer.deployer.DeletePod(pod)
-
-		<-callBack
-
-		close(callBack)
 	}
 
 	return nil
 }
 
-func (redeployer *redeployer) waitForNewPod(callback chan bool, existingPods map[string]*v1.Pod) {
-	podSelector := map[string]string{"name": redeployer.deployer.CreateRcName(), "version": redeployer.deployer.Deployment.NewVersion}
-
-	watchNew, signals, err := redeployer.deployer.K8client.WatchPodsWithLabel(redeployer.deployer.Deployment.Namespace, podSelector)
-
-	if err != nil {
-		redeployer.deployer.Logger.Println(err)
-		signals <- "cancel"
-		callback <- false
-		return
-	}
-
-	timeout := make(chan string)
-	go func() {
-		time.Sleep(time.Minute * 5)
-		timeout <- "TIMEOUT"
-		close(timeout)
-		signals <- "cancel"
-		callback <- false
-	}()
-
-	for evnt := range watchNew {
-		podObj := evnt.Object
-
-		if evnt.Type == "MODIFIED" && existingPods[podObj.Name] == nil && podObj.Status.PodIP != "" {
-			redeployer.deployer.CheckPodHealth(&podObj)
-			redeployer.deployer.Logger.Println("Found new pod")
-			callback <- true
-			signals <- "cancel"
-			break
-		}
-	}
-}

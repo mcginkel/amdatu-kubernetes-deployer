@@ -29,6 +29,10 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	"errors"
 	"time"
+	"fmt"
+	"net/http"
+	"io/ioutil"
+	"encoding/json"
 )
 
 type bluegreen struct {
@@ -86,7 +90,7 @@ func (bluegreen *bluegreen) Deploy() error {
 	if bluegreen.deployer.Deployment.Frontend != "" {
 		bluegreen.deployer.Logger.Println("Sleeping for 20 seconds for proxy to reload...")
 
-		time.Sleep(time.Second * 20)
+		//time.Sleep(time.Second * 20)
 
 		bluegreen.deployer.Logger.Println("Switch proxy backends....")
 
@@ -125,73 +129,105 @@ func (bluegreen *bluegreen) createReplicationController() error {
 		return nil
 	}
 
-	callBack := make(chan string)
-	timeout := make(chan string)
-
-	go bluegreen.watchPods(bluegreen.deployer.CreateRcName(), bluegreen.deployer.Deployment.NewVersion, callBack)
-	go func() {
-		time.Sleep(1 * time.Minute)
-		timeout <- "TIMEOUT"
-	}()
-
-	//Wait for either the pods to report healthy, or the timeout to happen
-	select {
-	case msg := <-callBack:
-		if msg == "ERROR" {
-			return errors.New("Did not find enough running pods")
-		}
-	case <-timeout:
-		return errors.New("Timeout waiting for pods")
-	}
-
-	return nil
+	return bluegreen.waitForPods(bluegreen.deployer.CreateRcName(), bluegreen.deployer.Deployment.NewVersion)
 }
 
-func (bluegreen *bluegreen) watchPods(name, version string, callback chan string) error {
-	podSelector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.NewVersion}
+func (bluegreen *bluegreen) waitForPods(name, version string) error {
+	healthChan := make(chan bool)
 
-	watchNew, signals, err := bluegreen.deployer.K8client.WatchPodsWithLabel(bluegreen.deployer.Deployment.Namespace, podSelector)
+	bluegreen.deployer.Logger.Printf("Waiting %v seconds for pods to start and to become healthy\n", bluegreen.deployer.HealthcheckTimeout)
 
-	if err != nil {
-		bluegreen.deployer.Logger.Println(err)
-		callback <- "ERROR"
-		return err
+	go bluegreen.checkPods(name, version, healthChan)
+
+	select {
+	case healthy := <- healthChan:
+		if healthy {
+			return nil
+		} else {
+			return errors.New("Error while waiting for pods to become healthy")
+		}
+	case <-time.After(time.Duration(bluegreen.deployer.HealthcheckTimeout) * time.Second):
+		healthChan <- false
+		close(healthChan)
+		return errors.New("Timeout waiting for pods to become healthy")
 	}
 
-	bluegreen.deployer.Logger.Println("Waiting for pods to spin up...")
+}
 
-	for pod := range watchNew {
-		podObj := pod.Object
+func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool) {
+	for {
+		select {
+		case h, ok := <-healthChan:
+			if !ok || !h {
+				return
+			}
+		default:
+			{
+				podSelector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.NewVersion}
+				pods, listErr := bluegreen.deployer.K8client.ListPodsWithLabel(bluegreen.deployer.Deployment.Namespace, podSelector)
+				if listErr != nil {
+					bluegreen.deployer.Logger.Printf(fmt.Sprintf("Error listing pods for new deployment: %\n", listErr))
+					healthChan <- false
 
-		if podObj.Status.Phase == "Running" {
+					return
+				}
 
-			if err := bluegreen.deployer.CheckPodHealth(&podObj); err != nil {
-				signals <- "cancel"
-				callback <- "ERROR"
+				nrOfPods := bluegreen.deployer.CountRunningPods(pods.Items)
 
-				return err
+				if nrOfPods == bluegreen.deployer.Deployment.Replicas {
+					healthy := true
+
+					for _, pod := range pods.Items {
+						if !bluegreen.checkPodHealth(&pod) {
+							healthy = false
+							break
+						}
+					}
+
+					if healthy {
+						healthChan <- true
+						return
+					} else {
+						time.Sleep(1 * time.Second)
+					}
+
+				} else {
+					time.Sleep(1 * time.Second)
+				}
 			}
 
-			pods, listErr := bluegreen.deployer.K8client.ListPodsWithLabel(bluegreen.deployer.Deployment.Namespace, podSelector)
-			if listErr != nil {
-				bluegreen.deployer.Logger.Println(listErr)
-				signals <- "cancel"
-				callback <- "ERROR"
-
-				return err
-			}
-
-			nrOfPods := bluegreen.deployer.CountRunningPods(pods.Items)
-			if nrOfPods == bluegreen.deployer.Deployment.Replicas {
-				bluegreen.deployer.Logger.Printf("Found enough running pods (%v), continue to switch versions...\n", nrOfPods)
-				callback <- "FINISHED"
-				signals <- "cancel"
-				return nil
-			} else {
-				bluegreen.deployer.Logger.Printf("Waiting for %v more pods...\n", bluegreen.deployer.Deployment.Replicas-nrOfPods)
-			}
 		}
 	}
+}
 
-	return nil
+func (bluegreen *bluegreen) checkPodHealth(pod *v1.Pod) bool {
+	var resp *http.Response
+	var err error
+
+
+	port := cluster.FindHealthcheckPort(pod)
+
+	url := bluegreen.deployer.GetHealthcheckUrl(pod.Status.PodIP, port)
+
+	resp, err = http.Post(url, "application/json", nil)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return false
+	}
+
+	var dat = HealthCheckEvent{}
+	if err := json.Unmarshal(body, &dat); err != nil {
+		return false
+	}
+
+	return dat.Healthy
+}
+
+type HealthCheckEvent struct {
+	Healthy bool `json:"healthy,omitempty"`
 }
