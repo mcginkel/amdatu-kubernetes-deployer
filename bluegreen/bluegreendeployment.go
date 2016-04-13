@@ -148,7 +148,6 @@ func (bluegreen *bluegreen) waitForPods(name, version string) error {
 		}
 	case <-time.After(time.Duration(bluegreen.deployer.HealthcheckTimeout) * time.Second):
 		healthChan <- false
-		close(healthChan)
 		return errors.New("Timeout waiting for pods to become healthy")
 	}
 
@@ -157,10 +156,8 @@ func (bluegreen *bluegreen) waitForPods(name, version string) error {
 func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool) {
 	for {
 		select {
-		case h, ok := <-healthChan:
-			if !ok || !h {
-				return
-			}
+		case <-healthChan:
+			return
 		default:
 			{
 				podSelector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.NewVersion}
