@@ -15,6 +15,7 @@ import (
 	"golang.org/x/net/context"
 	"log"
 	"time"
+	"strconv"
 )
 
 var (
@@ -52,7 +53,6 @@ func TestMain(m *testing.M) {
 
 		result := m.Run()
 
-	//	kubernetes.DeleteNamespace(NAMESPACE)
 		os.Exit(result)
 	}
 }
@@ -73,9 +73,11 @@ func TestProxyAfterFirstFailedDeployment(t *testing.T) {
 	if err == nil {
 		t.Error("Proxy frontend not deleted")
 	}
+
+	checkNoReclicationController(t)
 }
 
-func TestSuccessfulDeployment(t *testing.T) {
+func deploySuccessful(t *testing.T) {
 	deployment := createDeployment(true, true)
 	result, err := startDeploy(deployment)
 
@@ -93,6 +95,17 @@ func TestSuccessfulDeployment(t *testing.T) {
 	}
 
 	checkProxyConfig(t, "")
+}
+
+func TestConsecutiveDeployments(t *testing.T) {
+	deploySuccessful(t)
+
+	version := getReplicationControllerVersion(t)
+
+	deploySuccessful(t)
+	checkReplicationControllers(version, t)
+
+
 }
 
 func TestFailedHealthCheck(t *testing.T) {
@@ -200,6 +213,15 @@ func checkProxyConfig(t *testing.T, version string) {
 		t.Errorf("Hostname not set correctly: %v", fr.Hostname)
 	}
 
+	rcList, err := kubernetes.ListReplicationControllers(NAMESPACE)
+	if err != nil || len(rcList.Items) != 1 {
+		t.Fatal("Error listing replication controllers")
+	}
+
+	if fr.BackendId != NAMESPACE + "-" + rcList.Items[0].Name {
+		t.Error("Incorrect proxy backend: " + fr.BackendId)
+	}
+
 }
 
 func countPodsForApp(t *testing.T) int {
@@ -229,6 +251,55 @@ func backgroundDeploy(deployment *cluster.Deployment, resultChan chan bool) {
 	}
 
 	resultChan <- isDeploymentSuccessfull(result)
+}
+
+func getReplicationControllerVersion(t *testing.T) int {
+	rcList, err := kubernetes.ListReplicationControllers(NAMESPACE)
+	if err != nil {
+		t.Fatal("Error listing replication controllers")
+	}
+
+	if len(rcList.Items) == 0 {
+		return 0
+	}
+
+	if len(rcList.Items) > 1 {
+		t.Fatal("Incorrect numer of replication controllers")
+	}
+
+	versionString := rcList.Items[0].Labels["version"]
+	version,_ := strconv.Atoi(versionString)
+
+	return version
+}
+
+func checkNoReclicationController(t *testing.T) {
+	rcList, err := kubernetes.ListReplicationControllers(NAMESPACE)
+	if err != nil {
+		t.Fatal("Error retrieving Replication Controllers")
+	}
+
+	if len(rcList.Items) != 0 {
+		t.Error("Invalid number of replication controllers")
+	}
+}
+
+func checkReplicationControllers(previousVersion int, t *testing.T) {
+	rcList, err := kubernetes.ListReplicationControllers(NAMESPACE)
+	if err != nil {
+		t.Fatal("Error retrieving Replication Controllers")
+	}
+
+	if len(rcList.Items) != 1 {
+		t.Error("Invalid number of replication controllers")
+	}
+
+	versionString := rcList.Items[0].Labels["version"]
+	version,_ := strconv.Atoi(versionString)
+
+	if version != previousVersion +1 {
+		t.Error("Invalid version for replication controller")
+	}
 }
 
 func isDeploymentSuccessfull(log string) bool {
