@@ -376,7 +376,7 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 
 	if deploymentError != nil {
 		deployer.CleanupFailedDeployment()
-		return err
+		return deploymentError
 	}
 
 	return nil
