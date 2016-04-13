@@ -52,7 +52,7 @@ func TestMain(m *testing.M) {
 
 		result := m.Run()
 
-		kubernetes.DeleteNamespace(NAMESPACE)
+	//	kubernetes.DeleteNamespace(NAMESPACE)
 		os.Exit(result)
 	}
 }
@@ -136,6 +136,16 @@ func TestConcurrentDeploy(t *testing.T) {
 
 
 func resetEnvironment() {
+
+	rcList, _ := kubernetes.ListReplicationControllers(NAMESPACE)
+	for _, rc := range rcList.Items {
+		jsonBytes := []byte(`{"spec": {"replicas": 0}}`)
+		url := *kubernetesUrl + "/api/v1/namespaces/" + rc.Namespace + "/replicationcontrollers/" + rc.Name
+		req, _ := http.NewRequest("PATCH", url, bytes.NewBuffer(jsonBytes))
+		req.Header.Add("Content-Type", "application/merge-patch+json")
+		http.DefaultClient.Do(req)
+	}
+
 	err := kubernetes.DeleteNamespace(NAMESPACE)
 
 	if err != nil {
@@ -176,6 +186,7 @@ func checkProxyConfig(t *testing.T, version string) {
 	resp, err := etcd.Get(context.Background(), "/proxy/frontends/deployer-integration-tests.cloudrti.com", &etcdclient.GetOptions{})
 	if err != nil {
 		t.Error(err)
+		return
 	}
 
 	value := resp.Node.Value
