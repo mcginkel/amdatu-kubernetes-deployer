@@ -530,24 +530,17 @@ func (deployer *Deployer) deleteRc(rc *v1.ReplicationController) {
 	contents, _ := ioutil.ReadAll(resp.Body)
 	deployer.Logger.Printf("%s\n", string(contents))
 
-	timeoutChan := make(chan bool)
 	successChan := make(chan bool)
-
-	go func() {
-		time.Sleep(90 * time.Second)
-		timeoutChan <- true
-		close(timeoutChan)
-	}()
 
 	go deployer.waitForScaleDown(rc, successChan)
 
 	select {
 	case <- successChan:
-		close(successChan)
-	case <- timeoutChan:
-		close(successChan)
+		deployer.Logger.Println("Scaledown successful")
+	case <- time.After(time.Second * 90):
+		deployer.Logger.Println("Scaledown failed")
+		successChan <- false
 	}
-
 
 	deployer.K8client.DeleteReplicationController(deployer.Deployment.Namespace, rc.Name)
 }
@@ -555,12 +548,8 @@ func (deployer *Deployer) deleteRc(rc *v1.ReplicationController) {
 func (deployer *Deployer) waitForScaleDown(rc *v1.ReplicationController, successChan chan bool) {
 	for {
 		select {
-		case _,ok := <-successChan:
-			if !ok {
-				deployer.Logger.Println("Timeout waiting for RC to scale down")
-				return
-			}
-
+		case <-successChan:
+			return
 		default:
 
 			labels := map[string]string{"app": rc.Labels["app"], "version": rc.Labels["version"]}
