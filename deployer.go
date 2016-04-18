@@ -17,7 +17,6 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/deploymentregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/environment"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/redeploy"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/undeploy"
 	etcdclient "github.com/coreos/etcd/client"
 	"github.com/gorilla/mux"
@@ -26,6 +25,8 @@ import (
 )
 
 var kubernetesurl, etcdUrl, port, authurl, kubernetesUsername, kubernetesPassword string
+var healthTimeout int64
+var proxyReloadSleep int
 var mutex = &sync.Mutex{}
 
 func init() {
@@ -35,6 +36,8 @@ func init() {
 	flag.StringVar(&authurl, "authurl", "noauth", "Url to use for authentication. Skip authentication when not set.")
 	flag.StringVar(&kubernetesUsername, "kubernetesusername", "noauth", "Username to authenticate against Kubernetes API server. Skip authentication when not set")
 	flag.StringVar(&kubernetesPassword, "kubernetespassword", "noauth", "Username to authenticate against Kubernetes API server.")
+	flag.Int64Var(&healthTimeout, "timeout", 60, "Timeout in seconds for health checks")
+	flag.IntVar(&proxyReloadSleep, "proxysleep", 20, "Seconds to wait for proxy to reload config")
 
 	exampleUsage := "Missing required argument %v. Example usage: ./deployer_linux_amd64 -kubernetes http://[kubernetes-api-url]:8080 -etcd http://[etcd-url]:2379 -deployport 8000"
 
@@ -298,7 +301,7 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 		return err
 	}
 
-	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, *deployment, logger)
+	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, *deployment, logger, healthTimeout, proxyReloadSleep)
 	if deployment.NewVersion == "000" {
 		rc, err := deployer.FindCurrentRc()
 		if err != nil || len(rc) == 0 {
@@ -348,8 +351,7 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 			deploymentError = errors.New(fmt.Sprintf("Unknown type of deployment: %v", deployment.DeploymentType))
 		}
 	} else {
-		logger.Println("Existing service found. Using redeployer")
-		deploymentError = redeploy.NewRedeployer(deployer).Deploy()
+		return errors.New("Existing service found, this version is already deployed. Exiting deployment.")
 	}
 
 	if deployment.Id == "" {
@@ -374,7 +376,7 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 
 	if deploymentError != nil {
 		deployer.CleanupFailedDeployment()
-		return err
+		return deploymentError
 	}
 
 	return nil

@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/healthcheck"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/util"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
@@ -196,6 +195,8 @@ type Deployer struct {
 	Logger            Logger
 	ProxyConfigurator *proxies.ProxyConfigurator
 	EtcdClient        *etcdclient.Client
+	HealthcheckTimeout int64
+	ProxyReload	  int
 }
 
 type Logger interface {
@@ -204,7 +205,7 @@ type Logger interface {
 	Flush()
 }
 
-func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment Deployment, logger Logger) *Deployer {
+func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment Deployment, logger Logger, healthTimeout int64, proxyReload int) *Deployer {
 
 	c := k8sClient.NewClient(kubernetesUrl, kubernetesUsername, kubernetesPassword)
 	logger.Printf("Connected to Kubernetes API server on %v\n", kubernetesUrl)
@@ -218,7 +219,7 @@ func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPass
 		log.Fatal("Couldn't connect to etcd")
 	}
 
-	return &Deployer{kubernetesUrl, deployment, etcdUrl, &c, logger, proxies.NewProxyConfigurator(etcdClient), &etcdClient}
+	return &Deployer{kubernetesUrl, deployment, etcdUrl, &c, logger, proxies.NewProxyConfigurator(etcdClient), &etcdClient, healthTimeout, proxyReload}
 
 }
 
@@ -461,7 +462,7 @@ func (deployer *Deployer) CleaupOldDeployments() {
 
 	for _, rc := range controllers {
 		if rc.Name != "" {
-			deployer.deleteRc(rc)
+			deployer.deleteRc(&rc)
 			deployer.ProxyConfigurator.DeleteDeployment(rc.Namespace + "-" + rc.Name)
 		}
 	}
@@ -494,19 +495,54 @@ func (deployer *Deployer) CleaupOldDeployments() {
 	}
 }
 
-func (deployer *Deployer) deleteRc(rc v1.ReplicationController) {
+func (deployer *Deployer) deleteRc(rc *v1.ReplicationController) {
 	deployer.Logger.Printf("Deleting RC %v", rc.Name)
 
 	replicas := int32(0)
 	rc.Spec.Replicas = &replicas;
 
 	deployer.Logger.Printf("Scaling down replication controller: %v\n", rc.Name)
-	_, err := deployer.K8client.UpdateReplicationController(rc.Namespace, &rc)
+
+
+	err := deployer.K8client.Patch(rc.Namespace, "replicationcontrollers", rc.Name, `{"spec": {"replicas": 0}}`)
+
 	if err != nil {
 		deployer.Logger.Printf("Error scaling down replication controller: %v\n", err.Error())
 	}
 
+	successChan := make(chan bool)
+
+	go deployer.waitForScaleDown(rc, successChan)
+
+	select {
+	case <- successChan:
+		deployer.Logger.Println("Scaledown successful")
+	case <- time.After(time.Second * 90):
+		deployer.Logger.Println("Scaledown failed")
+		successChan <- false
+	}
+
 	deployer.K8client.DeleteReplicationController(deployer.Deployment.Namespace, rc.Name)
+}
+
+func (deployer *Deployer) waitForScaleDown(rc *v1.ReplicationController, successChan chan bool) {
+	for {
+		select {
+		case <-successChan:
+			return
+		default:
+
+			labels := map[string]string{"app": rc.Labels["app"], "version": rc.Labels["version"]}
+			pods, _ := deployer.K8client.ListPodsWithLabel(deployer.Deployment.Namespace, labels)
+
+			if deployer.CountRunningPods(pods.Items) > 0 {
+				time.Sleep(1 * time.Second)
+			} else {
+				successChan <- true
+				return
+			}
+		}
+	}
 }
 
 func (deployer *Deployer) DeletePod(pod v1.Pod) {
@@ -532,20 +568,6 @@ func (deployer *Deployer) CountRunningPods(pods []v1.Pod) int {
 	return nrOfRunning
 }
 
-func (deployer *Deployer) CheckPodHealth(pod *v1.Pod) error {
-	if deployer.Deployment.UseHealthCheck {
-
-		port := FindHealthcheckPort(pod)
-		host := pod.Status.PodIP
-		healthy := healthcheck.WaitForPodStarted(deployer.getHealthcheckUrl(host, port), time.Minute*2)
-		if !healthy {
-			return errors.New("Pod didn't get healthy")
-		}
-	}
-
-	return nil
-}
-
 func FindHealthcheckPort(pod *v1.Pod) int32 {
 
 	ports := pod.Spec.Containers[0].Ports
@@ -569,7 +591,7 @@ func FindHealthcheckPort(pod *v1.Pod) int32 {
 	}
 }
 
-func (deployer *Deployer) getHealthcheckUrl(host string, port int32) string {
+func (deployer *Deployer) GetHealthcheckUrl(host string, port int32) string {
 	var healthUrl string
 	if deployer.Deployment.HealthCheckUrl != "" {
 		if strings.HasPrefix(deployer.Deployment.HealthCheckUrl, "/") {
@@ -604,7 +626,7 @@ func (deployer *Deployer) CleanupFailedDeployment() {
 
 	if err == nil {
 		deployer.Logger.Printf("Deleting ReplicationController %v\n", rc.Name)
-		deployer.deleteRc(*rc)
+		deployer.deleteRc(rc)
 	}
 
 	pods, err := deployer.findPodsForDeployment()
@@ -620,7 +642,6 @@ func (deployer *Deployer) CleanupFailedDeployment() {
 	service, err := deployer.findServiceForDeployment()
 
 	if err == nil {
-		deployer.Logger.Printf("Deleting Service %v\n", service.Name)
 		deployer.deleteService(*service)
 	}
 }

@@ -108,6 +108,9 @@ func (proxyConfigurator *ProxyConfigurator) AddBackendServer(deploymentName stri
 }
 
 func (proxyConfigurator *ProxyConfigurator) DeleteDeployment(deploymentName string) {
+
+	proxyConfigurator.DeleteFrontendForDeployment(deploymentName)
+
 	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
 	keyName := fmt.Sprintf("/proxy/backends/%v", deploymentName)
 	if _, err := kAPI.Delete(context.Background(), keyName, &client.DeleteOptions{Recursive: true}); err != nil {

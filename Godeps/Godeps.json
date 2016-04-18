@@ -7,23 +7,23 @@
 	"Deps": [
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/resource",
-			"Rev": "45cce2c76e78614942d97ab2ec979970a6d17d69"
+			"Rev": "1a3cfdb7f4895a23fc4aa0e5be1ca33aa5c6c52e"
 		},
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/unversioned",
-			"Rev": "45cce2c76e78614942d97ab2ec979970a6d17d69"
+			"Rev": "1a3cfdb7f4895a23fc4aa0e5be1ca33aa5c6c52e"
 		},
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/util",
-			"Rev": "45cce2c76e78614942d97ab2ec979970a6d17d69"
+			"Rev": "1a3cfdb7f4895a23fc4aa0e5be1ca33aa5c6c52e"
 		},
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1",
-			"Rev": "45cce2c76e78614942d97ab2ec979970a6d17d69"
+			"Rev": "1a3cfdb7f4895a23fc4aa0e5be1ca33aa5c6c52e"
 		},
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/client",
-			"Rev": "45cce2c76e78614942d97ab2ec979970a6d17d69"
+			"Rev": "1a3cfdb7f4895a23fc4aa0e5be1ca33aa5c6c52e"
 		},
 		{
 			"ImportPath": "github.com/coreos/etcd/Godeps/_workspace/src/github.com/ugorji/go/codec",

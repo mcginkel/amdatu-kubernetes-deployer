@@ -1,4 +1,6 @@
 /*
+amdatu-kubernetes-go is a client library for Kubernetes. It uses the Kuberentes REST API internally.
+
 Copyright (c) 2016 The Amdatu Foundation
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -42,16 +44,21 @@ type Client struct {
 
 type Labels map[string]string
 
+// NewClient creates a new Client. If authentication on the API server is disabled, the username/password arguments can remain empty strings.
 func NewClient(url, username, password string) Client {
 	httpClient := &http.Client{}
 
 	return Client{HttpClient: httpClient, Url: url, Username: username, Password: password}
 }
 
+// NewClientWithHttpClient creates a new Client, based on a pre-configured httpClient.
+// This is useful for configuring SSL for example.
+// If authentication on the API server is disabled, the username/password arguments can remain empty strings.
 func NewClientWithHttpClient(httpClient *http.Client, url, username, password string) Client {
 	return Client{HttpClient: httpClient, Url: url, Username: username, Password: password}
 }
 
+// ListPods lists pods within a namespace. If no namespace is specified (empty string), it returns all pods in all namespaces.
 func (c *Client) ListPods(namespace string) (*v1.PodList, error) {
 
 	result := v1.PodList{}
@@ -73,6 +80,8 @@ func (c *Client) ListPods(namespace string) (*v1.PodList, error) {
 	return &result, nil
 }
 
+// ListPodsWithLabel lists pods within a namespace, filtered by the pod's labels.
+// If no namespace is specified (empty string), it returns all pods in all namespaces, filtered by labels.
 func (c *Client) ListPodsWithLabel(namespace string, labels Labels) (*v1.PodList, error) {
 
 	result := v1.PodList{}
@@ -89,6 +98,8 @@ func (c *Client) ListPodsWithLabel(namespace string, labels Labels) (*v1.PodList
 	return &result, nil
 }
 
+// WatchPodsWithLabel watches pods, filtered by labels. This starts a new go routine, and results are posted to the returned channel.
+// The second return value is a signal channel, which can be used to cancel the watch.
 func (c *Client) WatchPodsWithLabel(namespace string, labels Labels) (chan PodEvent, chan string, error) {
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/pods"
 
@@ -160,6 +171,8 @@ type PodEvent struct {
 	Object v1.Pod
 }
 
+// UpdatePod updates a pod and return the updated version
+// Note that this method updates uses a PUT, so the existing object is overwritten.
 func (c *Client) UpdatePod(namespace string, pod *v1.Pod) (*v1.Pod, error) {
 	result := v1.Pod{}
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/pods/" + pod.Name
@@ -172,6 +185,8 @@ func (c *Client) UpdatePod(namespace string, pod *v1.Pod) (*v1.Pod, error) {
 	return &result, nil
 }
 
+// GetPod finds a pod by name within the namespace
+// When the pod is not found an error will be returned.
 func (c *Client) GetPod(namespace, podName string) (*v1.Pod, error) {
 	result := v1.Pod{}
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/pods/" + podName
@@ -185,12 +200,14 @@ func (c *Client) GetPod(namespace, podName string) (*v1.Pod, error) {
 	return &result, nil
 }
 
+// DeletePod deletes a pod by name within the namespace
 func (c *Client) DeletePod(namespace, pod string) error {
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/pods/" + pod
 
 	return c.delete(url)
 }
 
+// ListReplicationControllers lists replication controllers within a namespace
 func (c *Client) ListReplicationControllers(namespace string) (*v1.ReplicationControllerList, error) {
 
 	result := v1.ReplicationControllerList{}
@@ -205,6 +222,8 @@ func (c *Client) ListReplicationControllers(namespace string) (*v1.ReplicationCo
 	return &result, nil
 }
 
+// GetReplicationController finds a replication controller by name within a namespace
+// When the replication controller is not found an error will be returned.
 func (c *Client) GetReplicationController(namespace, replicationController string) (*v1.ReplicationController, error) {
 
 	result := v1.ReplicationController{}
@@ -219,6 +238,7 @@ func (c *Client) GetReplicationController(namespace, replicationController strin
 	return &result, nil
 }
 
+// ListReplicationControllersWithLabel finds replication controllers by name within a namespace, filtered by labels.
 func (c *Client) ListReplicationControllersWithLabel(namespace string, labels Labels) (*v1.ReplicationControllerList, error) {
 
 	result := v1.ReplicationControllerList{}
@@ -234,6 +254,8 @@ func (c *Client) ListReplicationControllersWithLabel(namespace string, labels La
 	return &result, nil
 }
 
+// CreateReplicationController creates a new replication controller within the namespace.
+// Returns the created resource.
 func (c *Client) CreateReplicationController(namespace string, rc *v1.ReplicationController) (*v1.ReplicationController, error) {
 
 	result := v1.ReplicationController{}
@@ -247,6 +269,8 @@ func (c *Client) CreateReplicationController(namespace string, rc *v1.Replicatio
 	return &result, nil
 }
 
+// UpdateReplicationController updates a replication controller within the namespace.
+// Note that this method updates uses a PUT, so the existing object is overwritten.
 func (c *Client) UpdateReplicationController(namespace string, rc *v1.ReplicationController) (*v1.ReplicationController, error) {
 	result := v1.ReplicationController{}
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/replicationcontrollers/" + rc.Name
@@ -259,6 +283,7 @@ func (c *Client) UpdateReplicationController(namespace string, rc *v1.Replicatio
 	return &result, nil
 }
 
+// DeleteReplicationController deletes a replication controller by name within a namespace.
 func (c *Client) DeleteReplicationController(namespace, replicationController string) error {
 
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/replicationcontrollers/" + replicationController
@@ -290,6 +315,20 @@ func (c *Client) DeleteNamespace(namespace string) error {
 	return c.delete(url)
 }
 
+func (c *Client) ListNamespaces() (*v1.NamespaceList, error) {
+	result := v1.NamespaceList{}
+	url := c.Url + "/api/v1/namespaces"
+
+	err := c.get(url, &result)
+
+	if err != nil {
+		return &v1.NamespaceList{}, err
+	}
+
+	return &result, nil
+}
+
+// ListServices lists services within a namespace
 func (c *Client) ListServices(namespace string) (*v1.ServiceList, error) {
 	result := v1.ServiceList{}
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/services"
@@ -303,6 +342,7 @@ func (c *Client) ListServices(namespace string) (*v1.ServiceList, error) {
 	return &result, nil
 }
 
+// ListServicesWithLabel lists services within a namespace, filtered by labels.
 func (c *Client) ListServicesWithLabel(namespace string, labels Labels) (*v1.ServiceList, error) {
 	result := v1.ServiceList{}
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/services"
@@ -317,6 +357,8 @@ func (c *Client) ListServicesWithLabel(namespace string, labels Labels) (*v1.Ser
 	return &result, nil
 }
 
+// GetService finds a service by name within a namespace.
+// When the service is not found an error will be returned.
 func (c *Client) GetService(namespace, service string) (*v1.Service, error) {
 	result := v1.Service{}
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/services/" + service
@@ -355,6 +397,8 @@ func (c *Client) GetNode(node string) (*v1.Node, error) {
 	return &result, nil
 }
 
+// UpdateNode updates a node.
+// Note that this method updates uses a PUT, so the existing object is overwritten.
 func (c *Client) UpdateNode(node *v1.Node) (*v1.Node, error) {
 
 	result := v1.Node{}
@@ -412,6 +456,26 @@ func (c *Client) DeleteService(namespace, service string) error {
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/services/" + service
 	return c.delete(url)
 }
+
+func (c *Client) Patch(namespace, resourceType, objectName, jsonPatch string) error {
+	jsonBytes := []byte(jsonPatch)
+
+	url := c.Url + "/api/v1/namespaces/" + namespace + "/" + resourceType +"/" + objectName
+	log.Printf("Requesting patch on %v\n", url)
+
+	req, err := http.NewRequest("PATCH", url, bytes.NewBuffer(jsonBytes))
+
+	if err != nil {
+		log.Printf("Error scaling down replication controller: %v\n", err.Error())
+	}
+
+	req.Header.Add("Content-Type", "application/merge-patch+json")
+
+	_, err = c.HttpClient.Do(req)
+	return err
+}
+
+
 
 func (c *Client) createRequest(method, url string, body io.Reader) (*http.Request, error) {
 	request, err := http.NewRequest(method, url, body)
