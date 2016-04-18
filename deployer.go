@@ -351,7 +351,7 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 			deploymentError = errors.New(fmt.Sprintf("Unknown type of deployment: %v", deployment.DeploymentType))
 		}
 	} else {
-		deploymentError = errors.New("Existing service found, this version is already deployed. Exiting deployment.")
+		return errors.New("Existing service found, this version is already deployed. Exiting deployment.")
 	}
 
 	if deployment.Id == "" {
