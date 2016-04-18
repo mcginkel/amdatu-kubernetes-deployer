@@ -31,8 +31,6 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	k8sClient "bitbucket.org/amdatulabs/amdatu-kubernetes-go/client"
 	etcdclient "github.com/coreos/etcd/client"
-	"net/http"
-	"io/ioutil"
 )
 
 type Deployment struct {
@@ -506,29 +504,11 @@ func (deployer *Deployer) deleteRc(rc *v1.ReplicationController) {
 	deployer.Logger.Printf("Scaling down replication controller: %v\n", rc.Name)
 
 
-	jsonBytes := []byte(`{"spec": {"replicas": 0}}`)
-
-	url := deployer.KubernetesUrl + "/api/v1/namespaces/" + rc.Namespace + "/replicationcontrollers/" + rc.Name
-	deployer.Logger.Printf("Requesting patch on %v\n", url)
-
-	deployer.Logger.Printf("%v", string(jsonBytes))
-	req, err := http.NewRequest("PATCH", url, bytes.NewBuffer(jsonBytes))
+	err := deployer.K8client.Patch(rc.Namespace, "replicationcontrollers", rc.Name, `{"spec": {"replicas": 0}}`)
 
 	if err != nil {
 		deployer.Logger.Printf("Error scaling down replication controller: %v\n", err.Error())
 	}
-
-	req.Header.Add("Content-Type", "application/merge-patch+json")
-
-	resp, err := http.DefaultClient.Do(req)
-
-	if err != nil {
-		deployer.Logger.Printf("Error scaling down replication controller: %v\n", err.Error())
-	}
-
-	defer resp.Body.Close()
-	contents, _ := ioutil.ReadAll(resp.Body)
-	deployer.Logger.Printf("%s\n", string(contents))
 
 	successChan := make(chan bool)
 

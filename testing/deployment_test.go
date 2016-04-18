@@ -147,16 +147,97 @@ func TestConcurrentDeploy(t *testing.T) {
 	checkProxyConfig(t, "")
 }
 
+func TestDeployWithoutHealthCheck(t *testing.T) {
+	deployment := &cluster.Deployment{
+		DeploymentType: "blue-green",
+		NewVersion: "#",
+		AppName: "nginx",
+		Replicas: 2,
+		PodSpec: v1.PodSpec{
+			Containers: []v1.Container{{
+				Name: "nginx",
+				Image: "nginx",
+				Ports: []v1.ContainerPort{{
+					ContainerPort: 80,
+				}},
+			},
+			},
+		},
+		UseHealthCheck: false,
+		Namespace: NAMESPACE,
+	}
+
+	result, err := startDeploy(deployment)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !isDeploymentSuccessfull(result) {
+		t.Error("Failed deployment")
+	}
+
+	nrOfPods := countPodsForApp(t)
+	if nrOfPods != 2 {
+		t.Errorf("Incorrect number of pods found: %v", nrOfPods)
+	}
+}
+
+func TestRedeployShouldFail(t *testing.T) {
+
+	labels := make(map[string] string)
+	labels["app"] = "nginx"
+	rcList, err := kubernetes.ListReplicationControllersWithLabel(NAMESPACE, labels)
+
+	if err != nil {
+		t.Fatal("Incorrect numer of replication controllers")
+	}
+
+	if len(rcList.Items) == 0 {
+		t.Fatal("Incorrect numer of replication controllers")
+	}
+
+	if len(rcList.Items) > 1 {
+		t.Fatal("Incorrect numer of replication controllers")
+	}
+
+	version := rcList.Items[0].Labels["version"]
+
+	deployment := &cluster.Deployment{
+		DeploymentType: "blue-green",
+		NewVersion: version,
+		AppName: "nginx",
+		Replicas: 2,
+		PodSpec: v1.PodSpec{
+			Containers: []v1.Container{{
+				Name: "nginx",
+				Image: "nginx",
+				Ports: []v1.ContainerPort{{
+					ContainerPort: 80,
+				}},
+			},
+			},
+		},
+		UseHealthCheck: false,
+		Namespace: NAMESPACE,
+	}
+
+	result, err := startDeploy(deployment)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if isDeploymentSuccessfull(result) {
+		t.Error("Deploying the same version again should fail the deployment")
+	}
+}
 
 func resetEnvironment() {
 
 	rcList, _ := kubernetes.ListReplicationControllers(NAMESPACE)
 	for _, rc := range rcList.Items {
-		jsonBytes := []byte(`{"spec": {"replicas": 0}}`)
-		url := *kubernetesUrl + "/api/v1/namespaces/" + rc.Namespace + "/replicationcontrollers/" + rc.Name
-		req, _ := http.NewRequest("PATCH", url, bytes.NewBuffer(jsonBytes))
-		req.Header.Add("Content-Type", "application/merge-patch+json")
-		http.DefaultClient.Do(req)
+		kubernetes.Patch(NAMESPACE, "replicationcontrollers", rc.Name, `{"spec": {"replicas": 0}}`)
 	}
 
 	err := kubernetes.DeleteNamespace(NAMESPACE)

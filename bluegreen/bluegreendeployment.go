@@ -129,7 +129,11 @@ func (bluegreen *bluegreen) createReplicationController() error {
 		return nil
 	}
 
-	return bluegreen.waitForPods(bluegreen.deployer.CreateRcName(), bluegreen.deployer.Deployment.NewVersion)
+	if bluegreen.deployer.Deployment.UseHealthCheck {
+		return bluegreen.waitForPods(bluegreen.deployer.CreateRcName(), bluegreen.deployer.Deployment.NewVersion)
+	} else {
+		return nil
+	}
 }
 
 func (bluegreen *bluegreen) waitForPods(name, version string) error {

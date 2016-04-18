@@ -17,7 +17,6 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/deploymentregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/environment"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/redeploy"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/undeploy"
 	etcdclient "github.com/coreos/etcd/client"
 	"github.com/gorilla/mux"
@@ -352,8 +351,7 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 			deploymentError = errors.New(fmt.Sprintf("Unknown type of deployment: %v", deployment.DeploymentType))
 		}
 	} else {
-		logger.Println("Existing service found. Using redeployer")
-		deploymentError = redeploy.NewRedeployer(deployer).Deploy()
+		deploymentError = errors.New("Existing service found, this version is already deployed. Exiting deployment.")
 	}
 
 	if deployment.Id == "" {
