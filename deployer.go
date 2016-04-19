@@ -59,8 +59,10 @@ func main() {
 	r.HandleFunc("/deployments/history/{namespace}/{id}", deleteDeploymentHistory).Methods("DELETE")
 	r.HandleFunc("/deployments/{namespace}/{appname}", UndeploymentHandler).Methods("DELETE")
 	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
+	
+	r.HandleFunc("/validate", ValidationHandler).Methods("POST")
 
-	fmt.Printf("Dployer started and listening on port %v\n", port)
+	fmt.Printf("Deployer started and listening on port %v\n", port)
 
 	r.HandleFunc("/deployment/stream", deployWebsocketHandler)
 	r.HandleFunc("/undeployment/stream/{namespace}/{appname}", undeployWebsocketHandler)
@@ -217,6 +219,29 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		logger.Println("============================ Completed deployment =======================")
 	}
 
+}
+
+func ValidationHandler(responseWriter http.ResponseWriter, req *http.Request) {
+
+	logger := cluster.NewHttpLogger(responseWriter)
+	defer logger.Flush()
+
+	defer req.Body.Close()
+	body, err := ioutil.ReadAll(req.Body)
+
+	if err != nil {
+		logger.Printf("Error reading body: %v", err)
+	} else {
+		deployment, err := createDeployment(body)
+		if err != nil {
+			logger.Printf("Error parsing body: %v", err)
+		} else {
+			err = deployment.SetDefaults().Validate();
+			if err != nil {
+				logger.Printf("Invalid deployment descriptor: %v", err)
+			}
+		}
+	}
 }
 
 func undeployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
