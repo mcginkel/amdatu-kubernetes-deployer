@@ -22,7 +22,7 @@ type undeployer struct {
 
 func NewUndeployer(namespace string, appname string, etcdUrl string,
 	kubernetesUrl string, kubernetesUsername string, kubernetesPassword string,
-	logger cluster.Logger) (*undeployer, error) {
+	logger cluster.Logger, proxyRestUrl string, proxyReloadSleep int) (*undeployer, error) {
 
 	cfg := etcdclient.Config{
 		Endpoints: []string{etcdUrl},
@@ -36,7 +36,7 @@ func NewUndeployer(namespace string, appname string, etcdUrl string,
 
 	registry := deploymentregistry.NewDeploymentRegistry(&etcdClient)
 
-	proxy := proxies.NewProxyConfigurator(etcdClient)
+	proxy := proxies.NewProxyConfigurator(etcdClient, proxyRestUrl, proxyReloadSleep)
 
 	client := k8sclient.NewClient(kubernetesUrl, kubernetesUsername, kubernetesPassword)
 	logger.Printf("Connected to Kubernetes API server on %v\n", kubernetesUrl)

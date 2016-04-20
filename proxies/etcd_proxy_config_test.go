@@ -22,6 +22,10 @@ import (
 	"log"
 	"os"
 	"testing"
+	"net/http/httptest"
+	"net/http"
+	"fmt"
+	"time"
 )
 
 var kAPI client.KeysAPI
@@ -39,20 +43,20 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func createProxyConfigurator() *ProxyConfigurator {
+func createProxyConfigurator(restUrl string) *ProxyConfigurator {
 	c := createEtcdClient()
-	return NewProxyConfigurator(c)
+	return NewProxyConfigurator(c, restUrl, 2)
 
 }
 
 func TestCreateProxyConfigurator(t *testing.T) {
-	if createProxyConfigurator() == nil {
+	if createProxyConfigurator("") == nil {
 		t.FailNow()
 	}
 }
 
 func TestAddBackendServer_newBackend(t *testing.T) {
-	pc := createProxyConfigurator()
+	pc := createProxyConfigurator("")
 
 	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false); err != nil {
 		t.Error(err)
@@ -83,7 +87,7 @@ func TestAddBackendServer_newBackend(t *testing.T) {
 }
 
 func TestAddBackendServer_existingBackend(t *testing.T) {
-	pc := createProxyConfigurator()
+	pc := createProxyConfigurator("")
 
 	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false); err != nil {
 		t.Error(err)
@@ -104,7 +108,7 @@ func TestAddBackendServer_existingBackend(t *testing.T) {
 }
 
 func TestDeleteDeployment(t *testing.T) {
-	pc := createProxyConfigurator()
+	pc := createProxyConfigurator("")
 	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false); err != nil {
 		t.Error(err)
 	}
@@ -119,13 +123,13 @@ func TestDeleteDeployment(t *testing.T) {
 }
 
 func TestDeleteDeployment_NotExistingShouldntFail(t *testing.T) {
-	pc := createProxyConfigurator()
+	pc := createProxyConfigurator("")
 
 	pc.DeleteDeployment("testbackend")
 }
 
 func TestCreateFrontend(t *testing.T) {
-	pc := createProxyConfigurator()
+	pc := createProxyConfigurator("")
 
 	frontend := Frontend{
 		Hostname:  "myhostname.com",
@@ -145,7 +149,7 @@ func TestCreateFrontend(t *testing.T) {
 }
 
 func TestCreateFrontend_ExistingShouldNotBeOverwritten(t *testing.T) {
-	pc := createProxyConfigurator()
+	pc := createProxyConfigurator("")
 
 	frontend := Frontend{
 		Hostname:  "myhostname.com",
@@ -178,7 +182,7 @@ func TestCreateFrontend_ExistingShouldNotBeOverwritten(t *testing.T) {
 }
 
 func TestSwitchBackend(t *testing.T) {
-	pc := createProxyConfigurator()
+	pc := createProxyConfigurator("")
 
 	frontend := Frontend{
 		Hostname:  "myhostname.com",
@@ -205,7 +209,7 @@ func TestSwitchBackend(t *testing.T) {
 }
 
 func TestBackendServer(t *testing.T) {
-	pc := createProxyConfigurator()
+	pc := createProxyConfigurator("")
 
 	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false); err != nil {
 		t.Error(err)
@@ -232,7 +236,7 @@ func TestBackendServer(t *testing.T) {
 }
 
 func TestFrontendExistsForBackend_NotExisting(t *testing.T) {
-	pc := createProxyConfigurator()
+	pc := createProxyConfigurator("")
 
 	exists := pc.FrontendExistsForDeployment("somebackend")
 
@@ -242,7 +246,7 @@ func TestFrontendExistsForBackend_NotExisting(t *testing.T) {
 }
 
 func TestFrontendExistsForBackend_Existing(t *testing.T) {
-	pc := createProxyConfigurator()
+	pc := createProxyConfigurator("")
 
 	kAPI.Delete(context.Background(), "/proxy", &client.DeleteOptions{Recursive: true, Dir: true})
 	frontend := Frontend{
@@ -260,9 +264,68 @@ func TestFrontendExistsForBackend_Existing(t *testing.T) {
 	}
 }
 
+func TestWaitForBackend_DOWN(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "DOWN")
+	}))
+
+	defer ts.Close()
+
+	pc := createProxyConfigurator(ts.URL)
+
+	successChan := make(chan bool)
+
+	go runWaitForBackend(pc, successChan)
+
+	select {
+	case result := <-successChan:
+		if result {
+			t.Error("Backend available but shouldn't")
+		}
+		return
+	case <-time.After(time.Second * 5):
+		t.Error("Test timed out")
+		return
+	}
+
+}
+
+func TestWaitForBackend_UP(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "UP")
+	}))
+
+	defer ts.Close()
+
+	pc := createProxyConfigurator(ts.URL)
+
+	successChan := make(chan bool)
+
+	go runWaitForBackend(pc, successChan)
+
+	select {
+	case result := <-successChan:
+		if !result {
+			t.Error("Backend did not report available")
+		}
+		return
+	case <-time.After(time.Second * 5):
+		t.Error("Test timed out")
+		return
+	}
+
+}
+
+func runWaitForBackend(pc *ProxyConfigurator, successChan chan bool) {
+	r := pc.WaitForBackend("mybackend")
+
+	successChan <-r
+	return
+}
+
 func createEtcdClient() client.Client {
 	cfg := client.Config{
-		Endpoints: []string{"http://127.0.0.1:2379"},
+		Endpoints: []string{"http://192.168.64.3:2379"},
 	}
 
 	c, err := client.New(cfg)

@@ -24,7 +24,7 @@ import (
 	"github.com/satori/go.uuid"
 )
 
-var kubernetesurl, etcdUrl, port, authurl, kubernetesUsername, kubernetesPassword string
+var kubernetesurl, etcdUrl, port, authurl, kubernetesUsername, kubernetesPassword, proxyRestUrl string
 var healthTimeout int64
 var proxyReloadSleep int
 var mutex = &sync.Mutex{}
@@ -38,6 +38,7 @@ func init() {
 	flag.StringVar(&kubernetesPassword, "kubernetespassword", "noauth", "Username to authenticate against Kubernetes API server.")
 	flag.Int64Var(&healthTimeout, "timeout", 60, "Timeout in seconds for health checks")
 	flag.IntVar(&proxyReloadSleep, "proxysleep", 20, "Seconds to wait for proxy to reload config")
+	flag.StringVar(&proxyRestUrl, "proxyrest", "", "Proxy REST url")
 
 	exampleUsage := "Missing required argument %v. Example usage: ./deployer_linux_amd64 -kubernetes http://[kubernetes-api-url]:8080 -etcd http://[etcd-url]:2379 -deployport 8000"
 
@@ -326,7 +327,7 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 		return err
 	}
 
-	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, *deployment, logger, healthTimeout, proxyReloadSleep)
+	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, *deployment, logger, healthTimeout, proxyRestUrl, proxyReloadSleep)
 	if deployment.NewVersion == "000" {
 		rc, err := deployer.FindCurrentRc()
 		if err != nil || len(rc) == 0 {
@@ -436,7 +437,7 @@ func unDeploy(namespace string, appname string, email string, password string, l
 		return err
 	}
 
-	undeployer, err := undeploy.NewUndeployer(namespace, appname, etcdUrl, kubernetesurl, kubernetesUsername, kubernetesPassword, logger)
+	undeployer, err := undeploy.NewUndeployer(namespace, appname, etcdUrl, kubernetesurl, kubernetesUsername, kubernetesPassword, logger, proxyRestUrl, proxyReloadSleep)
 
 	if err != nil {
 		return err

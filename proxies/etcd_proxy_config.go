@@ -21,10 +21,16 @@ import (
 	"github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
 	"log"
+	"time"
+	"net/http"
+	"io/ioutil"
+	"strings"
 )
 
 type ProxyConfigurator struct {
 	etcdClient client.Client
+	RestUrl string
+	ProxyReload int
 }
 
 type BackendServer struct {
@@ -39,8 +45,8 @@ type Frontend struct {
 	BackendId string
 }
 
-func NewProxyConfigurator(etcdClient client.Client) *ProxyConfigurator {
-	return &ProxyConfigurator{etcdClient}
+func NewProxyConfigurator(etcdClient client.Client, restUrl string, proxyReload int) *ProxyConfigurator {
+	return &ProxyConfigurator{etcdClient, restUrl, proxyReload}
 }
 
 func (proxyConfigurator *ProxyConfigurator) FrontendExistsForDeployment(deploymentName string) bool {
@@ -177,6 +183,67 @@ func (proxyConfigurator *ProxyConfigurator) DeleteBackendServer(deploymentName s
 	keyName := fmt.Sprintf("/proxy/backends/%v/%v", deploymentName, ip)
 	if _, err := kAPI.Delete(context.Background(), keyName, nil); err != nil {
 		log.Printf("Key %v not found, nothing deleted", keyName)
+	}
+}
+
+func (proxyConfigurator *ProxyConfigurator) WaitForBackend(newBackendName string) bool {
+	if proxyConfigurator.RestUrl == "" {
+		log.Printf("Sleeping for %v seconds for proxy to reload...\n", proxyConfigurator.ProxyReload)
+		time.Sleep(time.Second * time.Duration(proxyConfigurator.ProxyReload))
+	} else {
+		successChan := make(chan bool)
+
+		go proxyConfigurator.monitorBackend(newBackendName, successChan)
+
+		select {
+		case <- successChan:
+			return true
+		case <- time.After(time.Second * time.Duration(proxyConfigurator.ProxyReload)):
+			log.Println("Waiting for proxy to get backend available timed out")
+			successChan <- false
+		println("returning")
+			return false
+		}
+	}
+
+	return true
+}
+
+func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string, successChan chan bool) {
+	url := fmt.Sprintf("%s/stats/backend/%s/status", proxyConfigurator.RestUrl, newBackendName)
+	println(url)
+
+	for {
+		select {
+		case <-successChan:
+			return
+		default:
+			resp, err := http.Get(url)
+			if err != nil {
+				log.Printf("Error checking proxy backend: %v\n", err)
+				successChan <- false
+				return
+			}
+
+			bytes, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				log.Printf("Error checking proxy backend: %v\n", err)
+				successChan <- false
+				resp.Body.Close()
+				return
+			}
+
+			resp.Body.Close()
+
+			body := string(bytes)
+			if  strings.TrimSpace(body) == "UP" {
+				successChan <- true
+				return
+			}
+
+			time.Sleep(time.Second * 1)
+		}
+
 	}
 }
 
