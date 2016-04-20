@@ -236,7 +236,7 @@ func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string
 			resp.Body.Close()
 
 			body := string(bytes)
-			if  strings.TrimSpace(body) == "UP" {
+			if  strings.TrimSpace(body) == `"UP"` {
 				successChan <- true
 				return
 			}
