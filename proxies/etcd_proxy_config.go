@@ -201,7 +201,6 @@ func (proxyConfigurator *ProxyConfigurator) WaitForBackend(newBackendName string
 		case <- time.After(time.Second * time.Duration(proxyConfigurator.ProxyReload)):
 			log.Println("Waiting for proxy to get backend available timed out")
 			successChan <- false
-		println("returning")
 			return false
 		}
 	}
@@ -239,6 +238,8 @@ func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string
 			if  strings.TrimSpace(body) == `"UP"` {
 				successChan <- true
 				return
+			} else {
+				log.Printf("Invalid status for proxy backend: %v\n", strings.TrimSpace(body))
 			}
 
 			time.Sleep(time.Second * 1)

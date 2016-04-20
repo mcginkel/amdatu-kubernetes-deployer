@@ -266,7 +266,7 @@ func TestFrontendExistsForBackend_Existing(t *testing.T) {
 
 func TestWaitForBackend_DOWN(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "DOWN")
+		fmt.Fprintln(w, `"DOWN"`)
 	}))
 
 	defer ts.Close()
@@ -292,7 +292,7 @@ func TestWaitForBackend_DOWN(t *testing.T) {
 
 func TestWaitForBackend_UP(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "UP")
+		fmt.Fprintln(w, `"UP"`)
 	}))
 
 	defer ts.Close()
