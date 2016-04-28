@@ -502,10 +502,9 @@ func (deployer *Deployer) deleteRc(rc *v1.ReplicationController) {
 	deployer.Logger.Printf("Deleting RC %v", rc.Name)
 
 	replicas := int32(0)
-	rc.Spec.Replicas = &replicas;
+	rc.Spec.Replicas = &replicas
 
 	deployer.Logger.Printf("Scaling down replication controller: %v\n", rc.Name)
-
 
 	err := deployer.K8client.Patch(rc.Namespace, "replicationcontrollers", rc.Name, `{"spec": {"replicas": 0}}`)
 
@@ -518,9 +517,9 @@ func (deployer *Deployer) deleteRc(rc *v1.ReplicationController) {
 	go deployer.waitForScaleDown(rc, successChan)
 
 	select {
-	case <- successChan:
+	case <-successChan:
 		deployer.Logger.Println("Scaledown successful")
-	case <- time.After(time.Second * 90):
+	case <-time.After(time.Second * 90):
 		deployer.Logger.Println("Scaledown failed")
 		successChan <- false
 	}

@@ -60,7 +60,7 @@ func main() {
 	r.HandleFunc("/deployments/history/{namespace}/{id}", deleteDeploymentHistory).Methods("DELETE")
 	r.HandleFunc("/deployments/{namespace}/{appname}", UndeploymentHandler).Methods("DELETE")
 	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
-	
+
 	r.HandleFunc("/validate", ValidationHandler).Methods("POST")
 
 	fmt.Printf("Deployer started and listening on port %v\n", port)
@@ -237,7 +237,7 @@ func ValidationHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			logger.Printf("Error parsing body: %v", err)
 		} else {
-			err = deployment.SetDefaults().Validate();
+			err = deployment.SetDefaults().Validate()
 			if err != nil {
 				logger.Printf("Invalid deployment descriptor: %v", err)
 			}
