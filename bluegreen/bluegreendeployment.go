@@ -128,7 +128,7 @@ func (bluegreen *bluegreen) createReplicationController() error {
 	}
 
 	if bluegreen.deployer.Deployment.UseHealthCheck {
-		return bluegreen.waitForPods(bluegreen.deployer.CreateRcName(), bluegreen.deployer.Deployment.NewVersion)
+		return bluegreen.waitForPods(bluegreen.deployer.CreateRcName(), bluegreen.deployer.Deployment.DeployedVersion)
 	} else {
 		return nil
 	}
@@ -162,7 +162,7 @@ func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool
 			return
 		default:
 			{
-				podSelector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.NewVersion}
+				podSelector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.DeployedVersion}
 				pods, listErr := bluegreen.deployer.K8client.ListPodsWithLabel(bluegreen.deployer.Deployment.Namespace, podSelector)
 				if listErr != nil {
 					bluegreen.deployer.Logger.Printf(fmt.Sprintf("Error listing pods for new deployment: %\n", listErr))

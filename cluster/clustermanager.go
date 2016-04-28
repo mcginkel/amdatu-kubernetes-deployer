@@ -34,22 +34,23 @@ import (
 )
 
 type Deployment struct {
-	Id             string            `json:"id,omitempty"`
-	WebHooks       []WebHook         `json:"webhooks,omitempty"`
-	DeploymentType string            `json:"deploymentType,omitempty"`
-	NewVersion     string            `json:"newVersion,omitempty"`
-	AppName        string            `json:"appName,omitempty"`
-	Replicas       int               `json:"replicas,omitempty"`
-	Frontend       string            `json:"frontend,omitempty"`
-	ProxyPorts     []int             `json:"proxyports,omitempty"`
-	PodSpec        v1.PodSpec        `json:"podspec,omitempty"`
-	UseHealthCheck bool              `json:"useHealthCheck,omitempty"`
-	Namespace      string            `json:"namespace,omitempty"`
-	Email          string            `json:"email,omitempty"`
-	Password       string            `json:"password,omitempty"`
-	HealthCheckUrl string            `json:"healthcheckUrl,omitempty"`
-	Environment    map[string]string `json:"environment,omitempty"`
-	UseCompression bool              `json:"useCompression,omitempty"`
+	Id              string            `json:"id,omitempty"`
+	WebHooks        []WebHook         `json:"webhooks,omitempty"`
+	DeploymentType  string            `json:"deploymentType,omitempty"`
+	NewVersion      string            `json:"newVersion,omitempty"`
+	DeployedVersion string            `json:"deployedVersion,omitempty"`
+	AppName         string            `json:"appName,omitempty"`
+	Replicas        int               `json:"replicas,omitempty"`
+	Frontend        string            `json:"frontend,omitempty"`
+	ProxyPorts      []int             `json:"proxyports,omitempty"`
+	PodSpec         v1.PodSpec        `json:"podspec,omitempty"`
+	UseHealthCheck  bool              `json:"useHealthCheck,omitempty"`
+	Namespace       string            `json:"namespace,omitempty"`
+	Email           string            `json:"email,omitempty"`
+	Password        string            `json:"password,omitempty"`
+	HealthCheckUrl  string            `json:"healthcheckUrl,omitempty"`
+	Environment     map[string]string `json:"environment,omitempty"`
+	UseCompression  bool              `json:"useCompression,omitempty"`
 }
 
 type DeploymentResult struct {
@@ -122,18 +123,17 @@ func (deployment *Deployment) SetDefaults() *Deployment {
 
 	deployment.AppName = strings.Replace(deployment.AppName, ".", "-", -1)
 	deployment.AppName = strings.Replace(deployment.AppName, "_", "-", -1)
-
-	deployment.NewVersion = strings.Replace(deployment.NewVersion, ".", "-", -1)
-	deployment.NewVersion = strings.Replace(deployment.NewVersion, "_", "-", -1)
-
 	deployment.AppName = strings.ToLower(deployment.AppName)
 
-	if strings.ToLower(deployment.NewVersion) == "#" {
+	if deployment.NewVersion == "#" {
 		//Make sure to pass validation, but assume a version of 3 characters. Value will be replaced later
-		deployment.NewVersion = "000"
+		deployment.DeployedVersion = "000"
+	} else {
+		deployment.NewVersion = strings.Replace(deployment.NewVersion, ".", "-", -1)
+		deployment.NewVersion = strings.Replace(deployment.NewVersion, "_", "-", -1)
+		deployment.NewVersion = strings.ToLower(deployment.NewVersion)
+		deployment.DeployedVersion = deployment.NewVersion
 	}
-
-	deployment.NewVersion = strings.ToLower(deployment.NewVersion)
 
 	return deployment
 }
@@ -159,6 +159,10 @@ func (deployment *Deployment) Validate() error {
 		messageBuffer.WriteString("Missing required property 'newVersion'\n")
 	}
 
+	if deployment.DeployedVersion == "" {
+		messageBuffer.WriteString("Missing required property 'deployedVersion'\n")
+	}
+
 	if len(deployment.PodSpec.Containers) == 0 {
 		messageBuffer.WriteString("No containers specified in PodSpec\n")
 	}
@@ -169,7 +173,7 @@ func (deployment *Deployment) Validate() error {
 		}
 	}
 
-	appName := deployment.AppName + "-" + deployment.NewVersion
+	appName := deployment.AppName + "-" + deployment.DeployedVersion
 	if len(appName) > 24 {
 		messageBuffer.WriteString(fmt.Sprintf("Application name %v is too long. A maximum of 24 characters is allowed\n", appName))
 	}
@@ -188,13 +192,13 @@ func (deployment *Deployment) Validate() error {
 }
 
 type Deployer struct {
-	KubernetesUrl     string
-	Deployment        Deployment
-	EtcdUrl           string
-	K8client          *k8sClient.Client
-	Logger            Logger
-	ProxyConfigurator *proxies.ProxyConfigurator
-	EtcdClient        *etcdclient.Client
+	KubernetesUrl      string
+	Deployment         *Deployment
+	EtcdUrl            string
+	K8client           *k8sClient.Client
+	Logger             Logger
+	ProxyConfigurator  *proxies.ProxyConfigurator
+	EtcdClient         *etcdclient.Client
 	HealthcheckTimeout int64
 }
 
@@ -204,7 +208,7 @@ type Logger interface {
 	Flush()
 }
 
-func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment Deployment, logger Logger, healthTimeout int64, proxyRestUrl string, proxyReload int) *Deployer {
+func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment *Deployment, logger Logger, healthTimeout int64, proxyRestUrl string, proxyReload int) *Deployer {
 
 	c := k8sClient.NewClient(kubernetesUrl, kubernetesUsername, kubernetesPassword)
 	logger.Printf("Connected to Kubernetes API server on %v\n", kubernetesUrl)
@@ -223,7 +227,7 @@ func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPass
 }
 
 func (deployer *Deployer) CreateRcName() string {
-	return deployer.Deployment.AppName + "-" + deployer.Deployment.NewVersion
+	return deployer.Deployment.AppName + "-" + deployer.Deployment.DeployedVersion
 }
 
 func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationController, error) {
@@ -234,7 +238,7 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 
 	labels := make(map[string]string)
 	labels["name"] = rcName
-	labels["version"] = deployer.Deployment.NewVersion
+	labels["version"] = deployer.Deployment.DeployedVersion
 	labels["app"] = deployer.Deployment.AppName
 
 	ctrl.Labels = labels
@@ -246,7 +250,7 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 		container.Env = append(container.Env,
 			v1.EnvVar{Name: "APP_NAME", Value: deployer.Deployment.AppName},
 			v1.EnvVar{Name: "POD_NAMESPACE", Value: deployer.Deployment.Namespace},
-			v1.EnvVar{Name: "APP_VERSION", Value: deployer.Deployment.NewVersion},
+			v1.EnvVar{Name: "APP_VERSION", Value: deployer.Deployment.DeployedVersion},
 			v1.EnvVar{Name: "POD_NAME", ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}}})
 
 		for key, val := range deployer.Deployment.Environment {
@@ -266,7 +270,7 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 	ctrl.Spec = v1.ReplicationControllerSpec{
 		Selector: map[string]string{
 			"name":    rcName,
-			"version": deployer.Deployment.NewVersion,
+			"version": deployer.Deployment.DeployedVersion,
 			"app":     deployer.Deployment.AppName,
 		},
 		Replicas: &replicas,
@@ -274,7 +278,7 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 			ObjectMeta: v1.ObjectMeta{
 				Labels: map[string]string{
 					"name":    rcName,
-					"version": deployer.Deployment.NewVersion,
+					"version": deployer.Deployment.DeployedVersion,
 					"app":     deployer.Deployment.AppName,
 				},
 			},
@@ -302,7 +306,7 @@ func (deployer *Deployer) CreateService() (*v1.Service, error) {
 
 	selector := make(map[string]string)
 	selector["name"] = deployer.CreateRcName()
-	selector["version"] = deployer.Deployment.NewVersion
+	selector["version"] = deployer.Deployment.DeployedVersion
 	selector["app"] = deployer.Deployment.AppName
 
 	srv.Labels = selector
@@ -394,7 +398,7 @@ func (deployer *Deployer) FindCurrentRc() ([]v1.ReplicationController, error) {
 	replicationControllers, _ := deployer.K8client.ListReplicationControllersWithLabel(deployer.Deployment.Namespace, labels)
 
 	for _, rc := range replicationControllers.Items {
-		if rc.Labels["version"] != deployer.Deployment.NewVersion {
+		if rc.Labels["version"] != deployer.Deployment.DeployedVersion {
 
 			result = append(result, rc)
 		}
@@ -414,7 +418,7 @@ func (deployer *Deployer) FindCurrentPods(allowSameVersion bool) ([]v1.Pod, erro
 	pods, _ := deployer.K8client.ListPodsWithLabel(deployer.Deployment.Namespace, labels)
 
 	for _, rc := range pods.Items {
-		if allowSameVersion || rc.Labels["version"] != deployer.Deployment.NewVersion {
+		if allowSameVersion || rc.Labels["version"] != deployer.Deployment.DeployedVersion {
 
 			result = append(result, rc)
 		}
@@ -438,7 +442,7 @@ func (deployer *Deployer) FindCurrentService() ([]v1.Service, error) {
 	}
 
 	for _, service := range services.Items {
-		if service.Labels["version"] != deployer.Deployment.NewVersion && service.Labels["persistent"] != "true" {
+		if service.Labels["version"] != deployer.Deployment.DeployedVersion && service.Labels["persistent"] != "true" {
 
 			result = append(result, service)
 		}
@@ -614,7 +618,7 @@ func (deployer *Deployer) findServiceForDeployment() (*v1.Service, error) {
 }
 
 func (deployer *Deployer) findPodsForDeployment() (*v1.PodList, error) {
-	rcLabelSelector := map[string]string{"app": deployer.Deployment.AppName, "version": deployer.Deployment.NewVersion}
+	rcLabelSelector := map[string]string{"app": deployer.Deployment.AppName, "version": deployer.Deployment.DeployedVersion}
 	return deployer.K8client.ListPodsWithLabel(deployer.Deployment.Namespace, rcLabelSelector)
 }
 
