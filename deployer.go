@@ -60,7 +60,7 @@ func main() {
 	r.HandleFunc("/deployments/history/{namespace}/{id}", deleteDeploymentHistory).Methods("DELETE")
 	r.HandleFunc("/deployments/{namespace}/{appname}", UndeploymentHandler).Methods("DELETE")
 	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
-	
+
 	r.HandleFunc("/validate", ValidationHandler).Methods("POST")
 
 	fmt.Printf("Deployer started and listening on port %v\n", port)
@@ -237,7 +237,7 @@ func ValidationHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			logger.Printf("Error parsing body: %v", err)
 		} else {
-			err = deployment.SetDefaults().Validate();
+			err = deployment.SetDefaults().Validate()
 			if err != nil {
 				logger.Printf("Invalid deployment descriptor: %v", err)
 			}
@@ -327,11 +327,11 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 		return err
 	}
 
-	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, *deployment, logger, healthTimeout, proxyRestUrl, proxyReloadSleep)
-	if deployment.NewVersion == "000" {
+	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, deployment, logger, healthTimeout, proxyRestUrl, proxyReloadSleep)
+	if deployment.DeployedVersion == "000" {
 		rc, err := deployer.FindCurrentRc()
 		if err != nil || len(rc) == 0 {
-			deployer.Deployment.NewVersion = "1"
+			deployer.Deployment.DeployedVersion = "1"
 		} else if len(rc) > 1 {
 			logger.Println("Could not determine next deployment version, more than a singe Replication Controller found")
 			return err
@@ -345,7 +345,8 @@ func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
 
 					return err
 				} else {
-					deployer.Deployment.NewVersion = newVersion
+					logger.Printf("New deployment version: %v", newVersion)
+					deployer.Deployment.DeployedVersion = newVersion
 				}
 			}
 		}

@@ -27,12 +27,12 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
-	"errors"
-	"time"
-	"fmt"
-	"net/http"
-	"io/ioutil"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"time"
 )
 
 type bluegreen struct {
@@ -128,7 +128,7 @@ func (bluegreen *bluegreen) createReplicationController() error {
 	}
 
 	if bluegreen.deployer.Deployment.UseHealthCheck {
-		return bluegreen.waitForPods(bluegreen.deployer.CreateRcName(), bluegreen.deployer.Deployment.NewVersion)
+		return bluegreen.waitForPods(bluegreen.deployer.CreateRcName(), bluegreen.deployer.Deployment.DeployedVersion)
 	} else {
 		return nil
 	}
@@ -142,7 +142,7 @@ func (bluegreen *bluegreen) waitForPods(name, version string) error {
 	go bluegreen.checkPods(name, version, healthChan)
 
 	select {
-	case healthy := <- healthChan:
+	case healthy := <-healthChan:
 		if healthy {
 			return nil
 		} else {
@@ -162,7 +162,7 @@ func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool
 			return
 		default:
 			{
-				podSelector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.NewVersion}
+				podSelector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.DeployedVersion}
 				pods, listErr := bluegreen.deployer.K8client.ListPodsWithLabel(bluegreen.deployer.Deployment.Namespace, podSelector)
 				if listErr != nil {
 					bluegreen.deployer.Logger.Printf(fmt.Sprintf("Error listing pods for new deployment: %\n", listErr))
@@ -202,7 +202,6 @@ func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool
 func (bluegreen *bluegreen) checkPodHealth(pod *v1.Pod) bool {
 	var resp *http.Response
 	var err error
-
 
 	port := cluster.FindHealthcheckPort(pod)
 
