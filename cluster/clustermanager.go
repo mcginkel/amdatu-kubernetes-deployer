@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/util"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
@@ -196,19 +197,13 @@ type Deployer struct {
 	Deployment         *Deployment
 	EtcdUrl            string
 	K8client           *k8sClient.Client
-	Logger             Logger
+	Logger             logger.Logger
 	ProxyConfigurator  *proxies.ProxyConfigurator
 	EtcdClient         *etcdclient.Client
 	HealthcheckTimeout int64
 }
 
-type Logger interface {
-	Println(v ...interface{})
-	Printf(format string, v ...interface{})
-	Flush()
-}
-
-func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment *Deployment, logger Logger, healthTimeout int64, proxyRestUrl string, proxyReload int) *Deployer {
+func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment *Deployment, logger logger.Logger, healthTimeout int64, proxyRestUrl string, proxyReload int) *Deployer {
 
 	c := k8sClient.NewClient(kubernetesUrl, kubernetesUsername, kubernetesPassword)
 	logger.Printf("Connected to Kubernetes API server on %v\n", kubernetesUrl)

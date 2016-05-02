@@ -17,6 +17,7 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/deploymentregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/environment"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/undeploy"
 	etcdclient "github.com/coreos/etcd/client"
 	"github.com/gorilla/mux"
@@ -75,7 +76,7 @@ func main() {
 
 func listDeployments(w http.ResponseWriter, r *http.Request) {
 
-	logger := cluster.NewHttpLogger(w)
+	logger := logger.NewHttpLogger(w)
 	defer logger.Flush()
 
 	registry, err := createDeploymentRegistry(logger)
@@ -105,7 +106,7 @@ func listDeployments(w http.ResponseWriter, r *http.Request) {
 
 func deleteDeploymentHistory(w http.ResponseWriter, r *http.Request) {
 
-	logger := cluster.NewHttpLogger(w)
+	logger := logger.NewHttpLogger(w)
 	defer logger.Flush()
 
 	registry, err := createDeploymentRegistry(logger)
@@ -125,7 +126,7 @@ func deleteDeploymentHistory(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func createDeploymentRegistry(logger cluster.Logger) (*deploymentregistry.DeploymentRegistry, error) {
+func createDeploymentRegistry(logger logger.Logger) (*deploymentregistry.DeploymentRegistry, error) {
 	cfg := etcdclient.Config{
 		Endpoints: []string{etcdUrl},
 	}
@@ -140,7 +141,7 @@ func createDeploymentRegistry(logger cluster.Logger) (*deploymentregistry.Deploy
 	return &registry, nil
 }
 
-func createEnvironmentVarStore(logger cluster.Logger) (*environment.EnvironmentVarStore, error) {
+func createEnvironmentVarStore(logger logger.Logger) (*environment.EnvironmentVarStore, error) {
 	cfg := etcdclient.Config{
 		Endpoints: []string{etcdUrl},
 	}
@@ -168,7 +169,7 @@ func deployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger := cluster.NewWebsocketLogger(conn)
+	logger := logger.NewWebsocketLogger(conn)
 
 	_, body, err := conn.ReadMessage()
 	if err != nil {
@@ -194,7 +195,7 @@ func deployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 
 func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 
-	logger := cluster.NewHttpLogger(responseWriter)
+	logger := logger.NewHttpLogger(responseWriter)
 	defer logger.Flush()
 
 	defer req.Body.Close()
@@ -224,7 +225,7 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 
 func ValidationHandler(responseWriter http.ResponseWriter, req *http.Request) {
 
-	logger := cluster.NewHttpLogger(responseWriter)
+	logger := logger.NewHttpLogger(responseWriter)
 	defer logger.Flush()
 
 	defer req.Body.Close()
@@ -253,7 +254,7 @@ func undeployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger := cluster.NewWebsocketLogger(conn)
+	logger := logger.NewWebsocketLogger(conn)
 
 	_, body, err := conn.ReadMessage()
 	if err != nil {
@@ -280,7 +281,7 @@ func undeployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 
 func UndeploymentHandler(w http.ResponseWriter, req *http.Request) {
 
-	logger := cluster.NewHttpLogger(w)
+	logger := logger.NewHttpLogger(w)
 	defer logger.Flush()
 
 	defer req.Body.Close()
@@ -312,7 +313,7 @@ type DeploymentRequest struct {
 	Req            *http.Request
 }
 
-func deploy(deployment *cluster.Deployment, logger cluster.Logger) error {
+func deploy(deployment *cluster.Deployment, logger logger.Logger) error {
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -429,7 +430,7 @@ func createUser(jsonString []byte) (cluster.User, error) {
 	return user, nil
 }
 
-func unDeploy(namespace string, appname string, email string, password string, logger cluster.Logger) error {
+func unDeploy(namespace string, appname string, email string, password string, logger logger.Logger) error {
 
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -447,7 +448,7 @@ func unDeploy(namespace string, appname string, email string, password string, l
 	return undeployer.Undeploy()
 }
 
-func authorize(namespace string, email string, password string, logger cluster.Logger) error {
+func authorize(namespace string, email string, password string, logger logger.Logger) error {
 	if authurl != "noauth" {
 		namespaces, err := auth.AuthenticateAndGetNamespaces(authurl, email, password)
 

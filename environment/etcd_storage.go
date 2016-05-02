@@ -16,7 +16,7 @@ limitations under the License.
 package environment
 
 import (
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
 	"strings"
@@ -24,10 +24,10 @@ import (
 
 type EnvironmentVarStore struct {
 	etcdClient client.Client
-	log        cluster.Logger
+	log        logger.Logger
 }
 
-func NewEnvironmentVarStore(etcdClient client.Client, log cluster.Logger) *EnvironmentVarStore {
+func NewEnvironmentVarStore(etcdClient client.Client, log logger.Logger) *EnvironmentVarStore {
 	return &EnvironmentVarStore{etcdClient, log}
 }
 
