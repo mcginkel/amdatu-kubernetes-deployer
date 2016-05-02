@@ -188,47 +188,52 @@ func (proxyConfigurator *ProxyConfigurator) DeleteBackendServer(deploymentName s
 	}
 }
 
-func (proxyConfigurator *ProxyConfigurator) WaitForBackend(newBackendName string) bool {
+func (proxyConfigurator *ProxyConfigurator) WaitForBackend(newBackendName string) error {
 	if proxyConfigurator.RestUrl == "" {
-		log.Printf("Sleeping for %v seconds for proxy to reload...\n", proxyConfigurator.ProxyReload)
+		proxyConfigurator.logger.Printf("Sleeping for %v seconds for proxy to reload...\n", proxyConfigurator.ProxyReload)
 		time.Sleep(time.Second * time.Duration(proxyConfigurator.ProxyReload))
 	} else {
-		successChan := make(chan bool)
+		proxyConfigurator.logger.Println("Waiting for proxy to reload...")
 
-		go proxyConfigurator.monitorBackend(newBackendName, successChan)
+		successChan := make(chan bool)
+		timeoutChan := make(chan bool, 2) // don't block if we timeout, but monitorBackend still waits for connection
+
+		go proxyConfigurator.monitorBackend(newBackendName, successChan, timeoutChan)
 
 		select {
-		case <- successChan:
-			return true
-		case <- time.After(time.Second * time.Duration(proxyConfigurator.ProxyReload)):
-			log.Println("Waiting for proxy to get backend available timed out")
-			successChan <- false
-			return false
+		case success := <-successChan:
+			if success {
+				return nil
+			} else {
+				return errors.New("Error getting proxy status")
+			}
+		case <-time.After(time.Second * time.Duration(proxyConfigurator.ProxyReload)):
+			timeoutChan <- true
+			return errors.New("Waiting for proxy to get backend available timed out")
 		}
 	}
 
-	return true
+	return nil
 }
 
-func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string, successChan chan bool) {
+func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string, successChan chan bool, timeoutChan chan bool) {
 	url := fmt.Sprintf("%s/stats/backend/%s/status", proxyConfigurator.RestUrl, newBackendName)
-	println(url)
 
 	for {
 		select {
-		case <-successChan:
+		case <-timeoutChan:
 			return
 		default:
 			resp, err := http.Get(url)
 			if err != nil {
-				log.Printf("Error checking proxy backend: %v\n", err)
+				proxyConfigurator.logger.Printf("Error checking proxy backend: %v\n", err)
 				successChan <- false
 				return
 			}
 
 			bytes, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
-				log.Printf("Error checking proxy backend: %v\n", err)
+				proxyConfigurator.logger.Printf("Error checking proxy backend: %v\n", err)
 				successChan <- false
 				resp.Body.Close()
 				return
@@ -241,7 +246,7 @@ func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string
 				successChan <- true
 				return
 			} else {
-				log.Printf("Invalid status for proxy backend: %v\n", strings.TrimSpace(body))
+				proxyConfigurator.logger.Printf("Invalid status for proxy backend: %v\n", strings.TrimSpace(body))
 			}
 
 			time.Sleep(time.Second * 1)

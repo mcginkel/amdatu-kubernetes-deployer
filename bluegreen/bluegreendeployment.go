@@ -88,7 +88,10 @@ func (bluegreen *bluegreen) Deploy() error {
 	}
 
 	if bluegreen.deployer.Deployment.Frontend != "" {
-		bluegreen.deployer.ProxyConfigurator.WaitForBackend(backendId)
+		if err := bluegreen.deployer.ProxyConfigurator.WaitForBackend(backendId); err != nil {
+			bluegreen.deployer.Logger.Println(err)
+			return err
+		}
 
 		bluegreen.deployer.Logger.Println("Switch proxy backends....")
 
