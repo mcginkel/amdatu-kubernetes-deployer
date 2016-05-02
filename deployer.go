@@ -334,8 +334,7 @@ func deploy(deployment *cluster.Deployment, logger logger.Logger) error {
 		if err != nil || len(rc) == 0 {
 			deployer.Deployment.DeployedVersion = "1"
 		} else if len(rc) > 1 {
-			logger.Println("Could not determine next deployment version, more than a singe Replication Controller found")
-			return err
+			return errors.New("Could not determine next deployment version, more than a singe Replication Controller found")
 		} else {
 			for _, ctrl := range rc {
 				logger.Println(ctrl.Name)
