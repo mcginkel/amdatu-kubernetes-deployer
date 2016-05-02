@@ -24,15 +24,16 @@ package bluegreen
 */
 
 import (
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
+
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 )
 
 type bluegreen struct {

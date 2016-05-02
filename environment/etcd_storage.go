@@ -16,10 +16,11 @@ limitations under the License.
 package environment
 
 import (
+	"strings"
+
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
-	"strings"
 )
 
 type EnvironmentVarStore struct {

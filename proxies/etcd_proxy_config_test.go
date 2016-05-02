@@ -17,16 +17,17 @@ package proxies
 
 import (
 	"encoding/json"
-	"github.com/coreos/etcd/client"
-	"golang.org/x/net/context"
+	"fmt"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
-	"net/http/httptest"
-	"net/http"
-	"fmt"
 	"time"
+
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
+	"github.com/coreos/etcd/client"
+	"golang.org/x/net/context"
 )
 
 var kAPI client.KeysAPI
@@ -320,7 +321,7 @@ func TestWaitForBackend_UP(t *testing.T) {
 func runWaitForBackend(pc *ProxyConfigurator, successChan chan bool) {
 	r := pc.WaitForBackend("mybackend")
 
-	successChan <-r
+	successChan <- r
 	return
 }
 

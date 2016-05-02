@@ -17,20 +17,22 @@ package proxies
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"strings"
+	"time"
+
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
-	"log"
-	"time"
-	"net/http"
-	"io/ioutil"
-	"strings"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 )
 
 type ProxyConfigurator struct {
-	etcdClient client.Client
-	RestUrl string
+	etcdClient  client.Client
+	RestUrl     string
 	ProxyReload int
 	logger      logger.Logger
 }
@@ -242,7 +244,7 @@ func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string
 			resp.Body.Close()
 
 			body := string(bytes)
-			if  strings.TrimSpace(body) == `"UP"` {
+			if strings.TrimSpace(body) == `"UP"` {
 				successChan <- true
 				return
 			} else {
