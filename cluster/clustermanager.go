@@ -217,7 +217,7 @@ func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPass
 		log.Fatal("Couldn't connect to etcd")
 	}
 
-	return &Deployer{kubernetesUrl, deployment, etcdUrl, &c, logger, proxies.NewProxyConfigurator(etcdClient, proxyRestUrl, proxyReload), &etcdClient, healthTimeout}
+	return &Deployer{kubernetesUrl, deployment, etcdUrl, &c, logger, proxies.NewProxyConfigurator(etcdClient, proxyRestUrl, proxyReload, logger), &etcdClient, healthTimeout}
 
 }
 

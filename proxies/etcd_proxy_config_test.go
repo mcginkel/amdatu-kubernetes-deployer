@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"fmt"
 	"time"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 )
 
 var kAPI client.KeysAPI
@@ -45,7 +46,7 @@ func TestMain(m *testing.M) {
 
 func createProxyConfigurator(restUrl string) *ProxyConfigurator {
 	c := createEtcdClient()
-	return NewProxyConfigurator(c, restUrl, 2)
+	return NewProxyConfigurator(c, restUrl, 2, logger.NewConsoleLogger())
 
 }
 

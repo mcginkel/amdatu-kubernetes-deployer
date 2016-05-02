@@ -25,12 +25,14 @@ import (
 	"net/http"
 	"io/ioutil"
 	"strings"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 )
 
 type ProxyConfigurator struct {
 	etcdClient client.Client
 	RestUrl string
 	ProxyReload int
+	logger      logger.Logger
 }
 
 type BackendServer struct {
@@ -45,8 +47,8 @@ type Frontend struct {
 	BackendId string
 }
 
-func NewProxyConfigurator(etcdClient client.Client, restUrl string, proxyReload int) *ProxyConfigurator {
-	return &ProxyConfigurator{etcdClient, restUrl, proxyReload}
+func NewProxyConfigurator(etcdClient client.Client, restUrl string, proxyReload int, logger logger.Logger) *ProxyConfigurator {
+	return &ProxyConfigurator{etcdClient, restUrl, proxyReload, logger}
 }
 
 func (proxyConfigurator *ProxyConfigurator) FrontendExistsForDeployment(deploymentName string) bool {
@@ -61,7 +63,7 @@ func (proxyConfigurator *ProxyConfigurator) DeleteFrontendForDeployment(deployme
 	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
 	for _, key := range frontendKeys {
 		if _, err := kAPI.Delete(context.Background(), key, nil); err != nil {
-			log.Printf("Error deleting frontend %v", key)
+			proxyConfigurator.logger.Printf("Error deleting frontend %v", key)
 		}
 	}
 }
@@ -72,7 +74,7 @@ func (proxyConfigurator *ProxyConfigurator) getFrontendKeysForDeployment(deploym
 	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
 	result, err := kAPI.Get(context.Background(), "/proxy/frontends", &client.GetOptions{})
 	if err != nil {
-		fmt.Println("Error listing frontends, now assuming no frontend exists")
+		proxyConfigurator.logger.Println("Error listing frontends, now assuming no frontend exists")
 		return keys
 	}
 

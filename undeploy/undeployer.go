@@ -36,7 +36,7 @@ func NewUndeployer(namespace string, appname string, etcdUrl string,
 
 	registry := deploymentregistry.NewDeploymentRegistry(&etcdClient)
 
-	proxy := proxies.NewProxyConfigurator(etcdClient, proxyRestUrl, proxyReloadSleep)
+	proxy := proxies.NewProxyConfigurator(etcdClient, proxyRestUrl, proxyReloadSleep, logger)
 
 	client := k8sclient.NewClient(kubernetesUrl, kubernetesUsername, kubernetesPassword)
 	logger.Printf("Connected to Kubernetes API server on %v\n", kubernetesUrl)
