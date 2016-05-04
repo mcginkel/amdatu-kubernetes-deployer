@@ -17,20 +17,24 @@ package proxies
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"strings"
+	"time"
+
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
-	"log"
-	"time"
-	"net/http"
-	"io/ioutil"
-	"strings"
 )
 
 type ProxyConfigurator struct {
-	etcdClient client.Client
-	RestUrl string
+	etcdClient  client.Client
+	RestUrl     string
 	ProxyReload int
+	logger      logger.Logger
 }
 
 type BackendServer struct {
@@ -45,8 +49,8 @@ type Frontend struct {
 	BackendId string
 }
 
-func NewProxyConfigurator(etcdClient client.Client, restUrl string, proxyReload int) *ProxyConfigurator {
-	return &ProxyConfigurator{etcdClient, restUrl, proxyReload}
+func NewProxyConfigurator(etcdClient client.Client, restUrl string, proxyReload int, logger logger.Logger) *ProxyConfigurator {
+	return &ProxyConfigurator{etcdClient, restUrl, proxyReload, logger}
 }
 
 func (proxyConfigurator *ProxyConfigurator) FrontendExistsForDeployment(deploymentName string) bool {
@@ -61,7 +65,7 @@ func (proxyConfigurator *ProxyConfigurator) DeleteFrontendForDeployment(deployme
 	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
 	for _, key := range frontendKeys {
 		if _, err := kAPI.Delete(context.Background(), key, nil); err != nil {
-			log.Printf("Error deleting frontend %v", key)
+			proxyConfigurator.logger.Printf("Error deleting frontend %v", key)
 		}
 	}
 }
@@ -72,7 +76,7 @@ func (proxyConfigurator *ProxyConfigurator) getFrontendKeysForDeployment(deploym
 	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
 	result, err := kAPI.Get(context.Background(), "/proxy/frontends", &client.GetOptions{})
 	if err != nil {
-		fmt.Println("Error listing frontends, now assuming no frontend exists")
+		proxyConfigurator.logger.Println("Error listing frontends, now assuming no frontend exists")
 		return keys
 	}
 
@@ -186,47 +190,52 @@ func (proxyConfigurator *ProxyConfigurator) DeleteBackendServer(deploymentName s
 	}
 }
 
-func (proxyConfigurator *ProxyConfigurator) WaitForBackend(newBackendName string) bool {
+func (proxyConfigurator *ProxyConfigurator) WaitForBackend(newBackendName string) error {
 	if proxyConfigurator.RestUrl == "" {
-		log.Printf("Sleeping for %v seconds for proxy to reload...\n", proxyConfigurator.ProxyReload)
+		proxyConfigurator.logger.Printf("Sleeping for %v seconds for proxy to reload...\n", proxyConfigurator.ProxyReload)
 		time.Sleep(time.Second * time.Duration(proxyConfigurator.ProxyReload))
 	} else {
-		successChan := make(chan bool)
+		proxyConfigurator.logger.Println("Waiting for proxy to reload...")
 
-		go proxyConfigurator.monitorBackend(newBackendName, successChan)
+		successChan := make(chan bool)
+		timeoutChan := make(chan bool, 2) // don't block if we timeout, but monitorBackend still waits for connection
+
+		go proxyConfigurator.monitorBackend(newBackendName, successChan, timeoutChan)
 
 		select {
-		case <- successChan:
-			return true
-		case <- time.After(time.Second * time.Duration(proxyConfigurator.ProxyReload)):
-			log.Println("Waiting for proxy to get backend available timed out")
-			successChan <- false
-			return false
+		case success := <-successChan:
+			if success {
+				return nil
+			} else {
+				return errors.New("Error getting proxy status")
+			}
+		case <-time.After(time.Second * time.Duration(proxyConfigurator.ProxyReload)):
+			timeoutChan <- true
+			return errors.New("Waiting for proxy to get backend available timed out")
 		}
 	}
 
-	return true
+	return nil
 }
 
-func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string, successChan chan bool) {
+func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string, successChan chan bool, timeoutChan chan bool) {
 	url := fmt.Sprintf("%s/stats/backend/%s/status", proxyConfigurator.RestUrl, newBackendName)
-	println(url)
 
 	for {
 		select {
-		case <-successChan:
+		case <-timeoutChan:
 			return
 		default:
 			resp, err := http.Get(url)
 			if err != nil {
-				log.Printf("Error checking proxy backend: %v\n", err)
+				proxyConfigurator.logger.Printf("Error checking proxy backend: %v\n", err)
 				successChan <- false
 				return
 			}
 
 			bytes, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
-				log.Printf("Error checking proxy backend: %v\n", err)
+				proxyConfigurator.logger.Printf("Error checking proxy backend: %v\n", err)
 				successChan <- false
 				resp.Body.Close()
 				return
@@ -235,11 +244,11 @@ func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string
 			resp.Body.Close()
 
 			body := string(bytes)
-			if  strings.TrimSpace(body) == `"UP"` {
+			if strings.TrimSpace(body) == `"UP"` {
 				successChan <- true
 				return
 			} else {
-				log.Printf("Invalid status for proxy backend: %v\n", strings.TrimSpace(body))
+				proxyConfigurator.logger.Printf("Invalid status for proxy backend: %v\n", strings.TrimSpace(body))
 			}
 
 			time.Sleep(time.Second * 1)

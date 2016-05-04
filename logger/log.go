@@ -13,15 +13,22 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package cluster
+package logger
 
 import (
 	"fmt"
-	"github.com/gorilla/websocket"
 	"io"
 	"log"
 	"net/http"
+
+	"github.com/gorilla/websocket"
 )
+
+type Logger interface {
+	Println(v ...interface{})
+	Printf(format string, v ...interface{})
+	Flush()
+}
 
 type HttpLogger struct {
 	RespWriter http.ResponseWriter
@@ -81,7 +88,27 @@ func (logger *WebsocketLogger) Printf(format string, v ...interface{}) {
 	}
 
 	w.Write([]byte(msg))
+	w.Close()
 }
 
 func (logger *WebsocketLogger) Flush() {
+}
+
+type ConsoleLogger struct{}
+
+func NewConsoleLogger() *ConsoleLogger {
+	return &ConsoleLogger{}
+}
+
+func (logger *ConsoleLogger) Println(v ...interface{}) {
+	msg := fmt.Sprintln(v...)
+	log.Println(msg)
+}
+
+func (logger *ConsoleLogger) Printf(format string, v ...interface{}) {
+	msg := fmt.Sprintf(format, v...)
+	log.Printf(msg)
+}
+
+func (logger *ConsoleLogger) Flush() {
 }

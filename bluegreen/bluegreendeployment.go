@@ -24,15 +24,16 @@ package bluegreen
 */
 
 import (
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
+
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 )
 
 type bluegreen struct {
@@ -88,7 +89,10 @@ func (bluegreen *bluegreen) Deploy() error {
 	}
 
 	if bluegreen.deployer.Deployment.Frontend != "" {
-		bluegreen.deployer.ProxyConfigurator.WaitForBackend(backendId)
+		if err := bluegreen.deployer.ProxyConfigurator.WaitForBackend(backendId); err != nil {
+			bluegreen.deployer.Logger.Println(err)
+			return err
+		}
 
 		bluegreen.deployer.Logger.Println("Switch proxy backends....")
 

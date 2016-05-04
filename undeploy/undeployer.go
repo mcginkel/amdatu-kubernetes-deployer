@@ -3,8 +3,8 @@ package undeploy
 import (
 	"errors"
 
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/deploymentregistry"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	k8sclient "bitbucket.org/amdatulabs/amdatu-kubernetes-go/client"
@@ -17,12 +17,12 @@ type undeployer struct {
 	registry  *deploymentregistry.DeploymentRegistry
 	proxy     *proxies.ProxyConfigurator
 	k8sclient k8sclient.Client
-	logger    cluster.Logger
+	logger    logger.Logger
 }
 
 func NewUndeployer(namespace string, appname string, etcdUrl string,
 	kubernetesUrl string, kubernetesUsername string, kubernetesPassword string,
-	logger cluster.Logger, proxyRestUrl string, proxyReloadSleep int) (*undeployer, error) {
+	logger logger.Logger, proxyRestUrl string, proxyReloadSleep int) (*undeployer, error) {
 
 	cfg := etcdclient.Config{
 		Endpoints: []string{etcdUrl},
@@ -36,7 +36,7 @@ func NewUndeployer(namespace string, appname string, etcdUrl string,
 
 	registry := deploymentregistry.NewDeploymentRegistry(&etcdClient)
 
-	proxy := proxies.NewProxyConfigurator(etcdClient, proxyRestUrl, proxyReloadSleep)
+	proxy := proxies.NewProxyConfigurator(etcdClient, proxyRestUrl, proxyReloadSleep, logger)
 
 	client := k8sclient.NewClient(kubernetesUrl, kubernetesUsername, kubernetesPassword)
 	logger.Printf("Connected to Kubernetes API server on %v\n", kubernetesUrl)
@@ -123,7 +123,7 @@ func (undeployer *undeployer) deleteServices() error {
 func (undeployer *undeployer) deleteController(controller v1.ReplicationController) error {
 	undeployer.logger.Printf("Scaling down replication controller %v\n", controller.ObjectMeta.Name)
 	replicas := int32(0)
-	controller.Spec.Replicas = &replicas;
+	controller.Spec.Replicas = &replicas
 	_, err := undeployer.k8sclient.UpdateReplicationController(undeployer.namespace, &controller)
 	if err != nil {
 		return err
