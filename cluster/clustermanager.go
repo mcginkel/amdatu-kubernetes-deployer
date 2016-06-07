@@ -242,7 +242,7 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 
 	annotations := make(map[string]string)
 	annotations["appName"] = deployer.Deployment.AppName
-	annotations["version"] = deployer.Deployment.NewVersion
+	annotations["version"] = deployer.Deployment.DeployedVersion
 	annotations["useHealthCheck"] = strconv.FormatBool(deployer.Deployment.UseHealthCheck)
 	annotations["healthCheckUrl"] = deployer.Deployment.HealthCheckUrl
 	annotations["useExternalHealthCheck"] = strconv.FormatBool(deployer.Deployment.UseExternalHealthCheck)
