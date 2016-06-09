@@ -79,6 +79,9 @@ func ParseDeploymentHistory(nodes client.Nodes) (cluster.DeploymentHistory, erro
 			deploymentHistory.AppName = deploymentResult.Deployment.AppName
 		}
 
+		// remove environment, that's internal information only
+		deploymentResult.Deployment.Environment = nil
+
 		deploymentHistory.DeploymentResults = append(deploymentHistory.DeploymentResults, deploymentResult)
 	}
 
