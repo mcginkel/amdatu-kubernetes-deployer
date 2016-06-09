@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/deploymentregistry"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
@@ -67,7 +68,7 @@ func (undeployer *undeployer) Undeploy() error {
 	}
 
 	for _, controller := range controllers {
-		if undeployer.deleteController(controller); err != nil {
+		if helper.ShutdownReplicationController(&controller, &undeployer.k8sclient, undeployer.logger); err != nil {
 			undeployer.logger.Printf("error deleting controller: %v\n", err.Error())
 			error += err.Error() + "\n"
 		}
@@ -116,23 +117,6 @@ func (undeployer *undeployer) deleteServices() error {
 		if err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func (undeployer *undeployer) deleteController(controller v1.ReplicationController) error {
-	undeployer.logger.Printf("Scaling down replication controller %v\n", controller.ObjectMeta.Name)
-	replicas := int32(0)
-	controller.Spec.Replicas = &replicas
-	_, err := undeployer.k8sclient.UpdateReplicationController(undeployer.namespace, &controller)
-	if err != nil {
-		return err
-	}
-
-	undeployer.logger.Printf("Deleting replication controller %v\n", controller.ObjectMeta.Name)
-	err = undeployer.k8sclient.DeleteReplicationController(undeployer.namespace, controller.ObjectMeta.Name)
-	if err != nil {
-		return err
 	}
 	return nil
 }
