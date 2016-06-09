@@ -185,6 +185,10 @@ func (deployment *Deployment) Validate() error {
 		messageBuffer.WriteString(fmt.Sprintf("Application name %v doesn't match pattern [a-z]([-a-z0-9]*[a-z0-9])?\n", appName))
 	}
 
+	if strings.Contains(deployment.Frontend, "://") {
+		messageBuffer.WriteString(fmt.Sprintf("Frontend Url %v must not contain the protocol (e.g. https://)\n", deployment.Frontend))
+	}
+
 	message := messageBuffer.String()
 
 	if len(message) > 0 {
