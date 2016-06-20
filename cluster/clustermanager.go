@@ -24,8 +24,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/util"
@@ -477,7 +477,7 @@ func (deployer *Deployer) CleaupOldDeployments() {
 
 	for _, rc := range controllers {
 		if rc.Name != "" {
-			deployer.deleteRc(&rc)
+			helper.ShutdownReplicationController(&rc, deployer.K8client, deployer.Logger)
 			deployer.ProxyConfigurator.DeleteDeployment(rc.Namespace + "-" + rc.Name)
 		}
 	}
@@ -510,55 +510,6 @@ func (deployer *Deployer) CleaupOldDeployments() {
 	}
 }
 
-func (deployer *Deployer) deleteRc(rc *v1.ReplicationController) {
-	deployer.Logger.Printf("Deleting RC %v", rc.Name)
-
-	replicas := int32(0)
-	rc.Spec.Replicas = &replicas
-
-	deployer.Logger.Printf("Scaling down replication controller: %v\n", rc.Name)
-
-	err := deployer.K8client.Patch(rc.Namespace, "replicationcontrollers", rc.Name, `{"spec": {"replicas": 0}}`)
-
-	if err != nil {
-		deployer.Logger.Printf("Error scaling down replication controller: %v\n", err.Error())
-	}
-
-	successChan := make(chan bool)
-
-	go deployer.waitForScaleDown(rc, successChan)
-
-	select {
-	case <-successChan:
-		deployer.Logger.Println("Scaledown successful")
-	case <-time.After(time.Second * 90):
-		deployer.Logger.Println("Scaledown failed")
-		successChan <- false
-	}
-
-	deployer.K8client.DeleteReplicationController(deployer.Deployment.Namespace, rc.Name)
-}
-
-func (deployer *Deployer) waitForScaleDown(rc *v1.ReplicationController, successChan chan bool) {
-	for {
-		select {
-		case <-successChan:
-			return
-		default:
-
-			labels := map[string]string{"app": rc.Labels["app"], "version": rc.Labels["version"]}
-			pods, _ := deployer.K8client.ListPodsWithLabel(deployer.Deployment.Namespace, labels)
-
-			if deployer.CountRunningPods(pods.Items) > 0 {
-				time.Sleep(1 * time.Second)
-			} else {
-				successChan <- true
-				return
-			}
-		}
-	}
-}
-
 func (deployer *Deployer) DeletePod(pod v1.Pod) {
 	deployer.Logger.Printf("Deleting Pod %v", pod.Name)
 
@@ -568,18 +519,6 @@ func (deployer *Deployer) DeletePod(pod v1.Pod) {
 func (deployer *Deployer) deleteService(service v1.Service) {
 	deployer.Logger.Printf("Deleting Service %v", service.Name)
 	deployer.K8client.DeleteService(deployer.Deployment.Namespace, service.Name)
-}
-
-func (deployer *Deployer) CountRunningPods(pods []v1.Pod) int {
-	nrOfRunning := 0
-
-	for _, pod := range pods {
-		if pod.Status.Phase == "Running" {
-			nrOfRunning++
-		}
-	}
-
-	return nrOfRunning
 }
 
 func FindHealthcheckPort(pod *v1.Pod) int32 {
@@ -640,7 +579,7 @@ func (deployer *Deployer) CleanupFailedDeployment() {
 
 	if err == nil {
 		deployer.Logger.Printf("Deleting ReplicationController %v\n", rc.Name)
-		deployer.deleteRc(rc)
+		helper.ShutdownReplicationController(rc, deployer.K8client, deployer.Logger)
 	}
 
 	pods, err := deployer.findPodsForDeployment()
