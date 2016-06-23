@@ -54,6 +54,7 @@ type Deployment struct {
 	UseCompression          bool              `json:"useCompression,omitempty"`
 	UseExternalHealthCheck  bool              `json:"useExternalHealthCheck,omitempty"`
 	ExternalHealthCheckPath string            `json:"externalHealthCheckPath,omitempty"`
+	DeploymentTs		string		  `json:"deploymentTs,omitempty"`
 }
 
 type DeploymentResult struct {
@@ -245,6 +246,8 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 	ctrl.Labels = labels
 
 	annotations := make(map[string]string)
+	annotations["id"] = deployer.Deployment.Id
+	annotations["deploymentTs"] = deployer.Deployment.DeploymentTs
 	annotations["appName"] = deployer.Deployment.AppName
 	annotations["version"] = deployer.Deployment.DeployedVersion
 	annotations["useHealthCheck"] = strconv.FormatBool(deployer.Deployment.UseHealthCheck)
