@@ -317,6 +317,9 @@ func deploy(deployment *cluster.Deployment, logger logger.Logger) error {
 	mutex.Lock()
 	defer mutex.Unlock()
 
+	deploymentTs := time.Now().Format(time.RFC3339)
+	deployment.DeploymentTs = deploymentTs
+
 	if err := deployment.SetDefaults().Validate(); err != nil {
 		logger.Printf("Deployment descriptor incorrect: \n %v", err.Error())
 		return err
@@ -394,7 +397,7 @@ func deploy(deployment *cluster.Deployment, logger logger.Logger) error {
 	}
 
 	result := cluster.DeploymentResult{}
-	result.Date = time.Now().Format(time.RFC3339)
+	result.Date = deploymentTs
 	result.Status = deploymentLog
 	result.Deployment = *deployment
 
