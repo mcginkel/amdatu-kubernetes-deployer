@@ -268,6 +268,8 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 			v1.EnvVar{Name: "APP_VERSION", Value: deployer.Deployment.DeployedVersion},
 			v1.EnvVar{Name: "POD_NAME", ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}}})
 
+		// ATTENTION: if you add more EnvVars here, also remove them in deploymentregistry.go/ParseDeploymentHistory() !
+
 		for key, val := range deployer.Deployment.Environment {
 			container.Env = append(container.Env, v1.EnvVar{Name: key, Value: val})
 		}
