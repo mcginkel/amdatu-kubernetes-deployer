@@ -35,26 +35,25 @@ import (
 )
 
 type Deployment struct {
-	Id                      string            `json:"id,omitempty"`
-	WebHooks                []WebHook         `json:"webhooks,omitempty"`
-	DeploymentType          string            `json:"deploymentType,omitempty"`
-	NewVersion              string            `json:"newVersion,omitempty"`
-	DeployedVersion         string            `json:"deployedVersion,omitempty"`
-	AppName                 string            `json:"appName,omitempty"`
-	Replicas                int               `json:"replicas,omitempty"`
-	Frontend                string            `json:"frontend,omitempty"`
-	ProxyPorts              []int             `json:"proxyports,omitempty"`
-	PodSpec                 v1.PodSpec        `json:"podspec,omitempty"`
-	UseHealthCheck          bool              `json:"useHealthCheck,omitempty"`
-	Namespace               string            `json:"namespace,omitempty"`
-	Email                   string            `json:"email,omitempty"`
-	Password                string            `json:"password,omitempty"`
-	HealthCheckUrl          string            `json:"healthcheckUrl,omitempty"`
-	Environment             map[string]string `json:"environment,omitempty"`
-	UseCompression          bool              `json:"useCompression,omitempty"`
-	UseExternalHealthCheck  bool              `json:"useExternalHealthCheck,omitempty"`
-	ExternalHealthCheckPath string            `json:"externalHealthCheckPath,omitempty"`
-	DeploymentTs		string		  `json:"deploymentTs,omitempty"`
+	Id                string            `json:"id,omitempty"`
+	WebHooks          []WebHook         `json:"webhooks,omitempty"`
+	DeploymentType    string            `json:"deploymentType,omitempty"`
+	NewVersion        string            `json:"newVersion,omitempty"`
+	DeployedVersion   string            `json:"deployedVersion,omitempty"`
+	AppName           string            `json:"appName,omitempty"`
+	Replicas          int               `json:"replicas,omitempty"`
+	Frontend          string            `json:"frontend,omitempty"`
+	PodSpec           v1.PodSpec        `json:"podspec,omitempty"`
+	Namespace         string            `json:"namespace,omitempty"`
+	Email             string            `json:"email,omitempty"`
+	Password          string            `json:"password,omitempty"`
+	Environment       map[string]string `json:"environment,omitempty"`
+	UseCompression    bool              `json:"useCompression,omitempty"`
+	UseHealthCheck bool              `json:"useHealthCheck,omitempty"`
+	HealthCheckPath   string            `json:"healthCheckPath,omitempty"`
+	HealthCheckPort   int               `json:"healthCheckPort,omitempty"`
+	HealthCheckType   string            `json:"healthCheckType,omitempty"`
+	DeploymentTs      string            `json:"deploymentTs,omitempty"`
 }
 
 type DeploymentResult struct {
@@ -251,9 +250,9 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 	annotations["appName"] = deployer.Deployment.AppName
 	annotations["version"] = deployer.Deployment.DeployedVersion
 	annotations["useHealthCheck"] = strconv.FormatBool(deployer.Deployment.UseHealthCheck)
-	annotations["healthCheckUrl"] = deployer.Deployment.HealthCheckUrl
-	annotations["useExternalHealthCheck"] = strconv.FormatBool(deployer.Deployment.UseExternalHealthCheck)
-	annotations["externalHealthCheckPath"] = deployer.Deployment.ExternalHealthCheckPath
+	annotations["healthCheckPath"] = deployer.Deployment.HealthCheckPath
+	annotations["healthCheckPort"] = strconv.Itoa(deployer.Deployment.HealthCheckPort)
+	annotations["healthCheckType"] = deployer.Deployment.HealthCheckType
 	annotations["frontend"] = deployer.Deployment.Frontend
 
 	ctrl.Annotations = annotations
@@ -549,11 +548,11 @@ func FindHealthcheckPort(pod *v1.Pod) int32 {
 
 func (deployer *Deployer) GetHealthcheckUrl(host string, port int32) string {
 	var healthUrl string
-	if deployer.Deployment.HealthCheckUrl != "" {
-		if strings.HasPrefix(deployer.Deployment.HealthCheckUrl, "/") {
-			healthUrl = strings.TrimPrefix(deployer.Deployment.HealthCheckUrl, "/")
+	if deployer.Deployment.HealthCheckPath != "" {
+		if strings.HasPrefix(deployer.Deployment.HealthCheckPath, "/") {
+			healthUrl = strings.TrimPrefix(deployer.Deployment.HealthCheckPath, "/")
 		} else {
-			healthUrl = deployer.Deployment.HealthCheckUrl
+			healthUrl = deployer.Deployment.HealthCheckPath
 		}
 	} else {
 		healthUrl = "health"
