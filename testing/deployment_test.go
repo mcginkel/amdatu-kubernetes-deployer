@@ -59,7 +59,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestProxyAfterFirstFailedDeployment(t *testing.T) {
-	deployment := createDeployment(false, true)
+	deployment := createDeployment(false, true, false)
 	result, err := startDeploy(deployment)
 
 	if err != nil {
@@ -79,7 +79,7 @@ func TestProxyAfterFirstFailedDeployment(t *testing.T) {
 }
 
 func deploySuccessful(t *testing.T) {
-	deployment := createDeployment(true, true)
+	deployment := createDeployment(true, true, false)
 	result, err := startDeploy(deployment)
 
 	if err != nil {
@@ -110,7 +110,7 @@ func TestConsecutiveDeployments(t *testing.T) {
 }
 
 func TestFailedHealthCheck(t *testing.T) {
-	deployment := createDeployment(false, true)
+	deployment := createDeployment(false, true, false)
 	result, err := startDeploy(deployment)
 
 	if err != nil {
@@ -122,10 +122,21 @@ func TestFailedHealthCheck(t *testing.T) {
 	}
 }
 
+func TestIgnoreFailedHealthCheck(t *testing.T) {
+	deployment := createDeployment(false, true, true)
+	result, err := startDeploy(deployment)
 
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !isDeploymentSuccessfull(result) {
+		t.Error("Health check should be ignored, but deployment failed")
+	}
+}
 
 func TestConcurrentDeploy(t *testing.T) {
-	deployment := createDeployment(true, false)
+	deployment := createDeployment(true, false, false)
 
 	results := make(chan bool)
 
@@ -412,7 +423,7 @@ func startDeploy(deployment *cluster.Deployment) (string, error) {
 
 }
 
-func createDeployment(healthy bool, useHealthCheck bool) *cluster.Deployment {
+func createDeployment(healthy bool, useHealthCheck bool, ignoreHealthCheck bool) *cluster.Deployment {
 	var tag string
 	if healthy {
 		tag = "healthy"
@@ -438,6 +449,7 @@ func createDeployment(healthy bool, useHealthCheck bool) *cluster.Deployment {
 		},
 		UseHealthCheck: useHealthCheck,
 		Namespace: *namespace,
+		IgnoreHealthCheck: ignoreHealthCheck,
 	}
 }
 

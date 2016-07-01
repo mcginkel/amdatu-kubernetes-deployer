@@ -49,10 +49,11 @@ type Deployment struct {
 	Password          string            `json:"password,omitempty"`
 	Environment       map[string]string `json:"environment,omitempty"`
 	UseCompression    bool              `json:"useCompression,omitempty"`
-	UseHealthCheck bool              `json:"useHealthCheck,omitempty"`
+	UseHealthCheck    bool              `json:"useHealthCheck,omitempty"`
 	HealthCheckPath   string            `json:"healthCheckPath,omitempty"`
 	HealthCheckPort   int               `json:"healthCheckPort,omitempty"`
 	HealthCheckType   string            `json:"healthCheckType,omitempty"`
+	IgnoreHealthCheck bool              `json:"ignoreHealthCheck,omitempty"`
 	DeploymentTs      string            `json:"deploymentTs,omitempty"`
 }
 
