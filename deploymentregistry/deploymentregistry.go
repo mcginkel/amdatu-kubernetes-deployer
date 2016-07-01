@@ -21,6 +21,7 @@ import (
 	"log"
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	"github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
 )
@@ -79,6 +80,31 @@ func ParseDeploymentHistory(nodes client.Nodes) (cluster.DeploymentHistory, erro
 			deploymentHistory.AppName = deploymentResult.Deployment.AppName
 		}
 
+		// remove additional  env vars
+		keysToRemove := make([]string, 0)
+		keysToRemove = append(keysToRemove, "APP_NAME")
+		keysToRemove = append(keysToRemove, "POD_NAMESPACE")
+		keysToRemove = append(keysToRemove, "APP_VERSION")
+		keysToRemove = append(keysToRemove, "POD_NAME")
+		for key := range deploymentResult.Deployment.Environment {
+			keysToRemove = append(keysToRemove, key)
+		}
+		for i, container := range deploymentResult.Deployment.PodSpec.Containers {
+			newEnv := make([]v1.EnvVar, 0)
+			for _, env := range container.Env {
+				keep := true
+				for _, key := range keysToRemove {
+					if env.Name == key {
+						keep = false
+						break
+					}
+				}
+				if keep {
+					newEnv = append(newEnv, env)
+				}
+			}
+			deploymentResult.Deployment.PodSpec.Containers[i].Env = newEnv
+		}
 		// remove environment, that's internal information only
 		deploymentResult.Deployment.Environment = nil
 
