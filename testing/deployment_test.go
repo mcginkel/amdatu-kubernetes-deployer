@@ -16,6 +16,7 @@ import (
 	"log"
 	"time"
 	"strconv"
+	"fmt"
 )
 
 var (
@@ -23,10 +24,10 @@ var (
 	kubernetesUrl = flag.String("kubernetes", "", "kubernetes API url")
 	etcdUrl = flag.String("etcd", "", "etcd cluster urls")
 	nrOfConcurrentRuns = flag.Int("concurrent", 0, "Number of concurrent deployments to test")
+	namespace = flag.String("namespace", "integrationtests", "namespace to test in")
 )
 
 const APPNAME = "integrationtest"
-const NAMESPACE = "integrationtests"
 
 var kubernetes client.Client
 var etcd etcdclient.KeysAPI
@@ -69,7 +70,7 @@ func TestProxyAfterFirstFailedDeployment(t *testing.T) {
 		t.Error("Health check failed, but deployment was successful")
 	}
 
-	_, err = etcd.Get(context.Background(), "/proxy/frontends/deployer-integration-tests.cloudrti.com", &etcdclient.GetOptions{})
+	_, err = etcd.Get(context.Background(), "/proxy/frontends/deployer-" + *namespace + ".cloudrti.com", &etcdclient.GetOptions{})
 	if err == nil {
 		t.Error("Proxy frontend not deleted")
 	}
@@ -129,6 +130,7 @@ func TestConcurrentDeploy(t *testing.T) {
 	results := make(chan bool)
 
 	for i := 0; i < *nrOfConcurrentRuns; i++ {
+		fmt.Printf("Spinning up deployment: %v\n", i)
 		go backgroundDeploy(deployment, results)
 	}
 
@@ -164,7 +166,7 @@ func TestDeployWithoutHealthCheck(t *testing.T) {
 			},
 		},
 		UseHealthCheck: false,
-		Namespace: NAMESPACE,
+		Namespace: *namespace,
 	}
 
 	result, err := startDeploy(deployment)
@@ -187,7 +189,7 @@ func TestRedeployShouldFail(t *testing.T) {
 
 	labels := make(map[string] string)
 	labels["app"] = "nginx"
-	rcList, err := kubernetes.ListReplicationControllersWithLabel(NAMESPACE, labels)
+	rcList, err := kubernetes.ListReplicationControllersWithLabel(*namespace, labels)
 
 	if err != nil {
 		t.Fatal("Incorrect numer of replication controllers")
@@ -219,7 +221,7 @@ func TestRedeployShouldFail(t *testing.T) {
 			},
 		},
 		UseHealthCheck: false,
-		Namespace: NAMESPACE,
+		Namespace: *namespace,
 	}
 
 	result, err := startDeploy(deployment)
@@ -235,12 +237,12 @@ func TestRedeployShouldFail(t *testing.T) {
 
 func resetEnvironment() {
 
-	rcList, _ := kubernetes.ListReplicationControllers(NAMESPACE)
+	rcList, _ := kubernetes.ListReplicationControllers(*namespace)
 	for _, rc := range rcList.Items {
-		kubernetes.Patch(NAMESPACE, "replicationcontrollers", rc.Name, `{"spec": {"replicas": 0}}`)
+		kubernetes.Patch(*namespace, "replicationcontrollers", rc.Name, `{"spec": {"replicas": 0}}`)
 	}
 
-	err := kubernetes.DeleteNamespace(NAMESPACE)
+	err := kubernetes.DeleteNamespace(*namespace)
 
 	if err != nil {
 		log.Println("Namespace not deleted")
@@ -255,7 +257,7 @@ func resetEnvironment() {
 		}
 
 		for _, ns := range namespaces.Items {
-			if ns.Name == NAMESPACE {
+			if ns.Name == *namespace {
 				foundTestNamespace = true
 			}
 		}
@@ -267,17 +269,17 @@ func resetEnvironment() {
 		}
 	}
 
-	_,err = kubernetes.CreateNamespace(NAMESPACE)
+	_,err = kubernetes.CreateNamespace(*namespace)
 	if err != nil {
 		log.Fatal("Error creating namespace: %v", err)
 	}
 
-	etcd.Delete(context.Background(), "/proxy/frontends/deployer-integration-tests.cloudrti.com", &etcdclient.DeleteOptions{})
+	etcd.Delete(context.Background(), "/proxy/frontends/deployer-" + *namespace + ".cloudrti.com", &etcdclient.DeleteOptions{})
 }
 
 
 func checkProxyConfig(t *testing.T, version string) {
-	resp, err := etcd.Get(context.Background(), "/proxy/frontends/deployer-integration-tests.cloudrti.com", &etcdclient.GetOptions{})
+	resp, err := etcd.Get(context.Background(), "/proxy/frontends/deployer-" + *namespace + ".cloudrti.com", &etcdclient.GetOptions{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -290,16 +292,16 @@ func checkProxyConfig(t *testing.T, version string) {
 		t.Error(err)
 	}
 
-	if fr.Hostname != "deployer-integration-tests.cloudrti.com" {
+	if fr.Hostname != "deployer-" + *namespace +".cloudrti.com" {
 		t.Errorf("Hostname not set correctly: %v", fr.Hostname)
 	}
 
-	rcList, err := kubernetes.ListReplicationControllers(NAMESPACE)
+	rcList, err := kubernetes.ListReplicationControllers(*namespace)
 	if err != nil || len(rcList.Items) != 1 {
 		t.Fatal("Error listing replication controllers")
 	}
 
-	if fr.BackendId != NAMESPACE + "-" + rcList.Items[0].Name {
+	if fr.BackendId != *namespace + "-" + rcList.Items[0].Name {
 		t.Error("Incorrect proxy backend: " + fr.BackendId)
 	}
 
@@ -308,7 +310,7 @@ func checkProxyConfig(t *testing.T, version string) {
 func countPodsForApp(t *testing.T) int {
 	labels := map[string]string {"app": APPNAME}
 
-	pods, err := kubernetes.ListPodsWithLabel(NAMESPACE, labels)
+	pods, err := kubernetes.ListPodsWithLabel(*namespace, labels)
 	if err != nil {
 		t.Error(err)
 	}
@@ -335,7 +337,7 @@ func backgroundDeploy(deployment *cluster.Deployment, resultChan chan bool) {
 }
 
 func getReplicationControllerVersion(t *testing.T) int {
-	rcList, err := kubernetes.ListReplicationControllers(NAMESPACE)
+	rcList, err := kubernetes.ListReplicationControllers(*namespace)
 	if err != nil {
 		t.Fatal("Error listing replication controllers")
 	}
@@ -355,7 +357,7 @@ func getReplicationControllerVersion(t *testing.T) int {
 }
 
 func checkNoReclicationController(t *testing.T) {
-	rcList, err := kubernetes.ListReplicationControllers(NAMESPACE)
+	rcList, err := kubernetes.ListReplicationControllers(*namespace)
 	if err != nil {
 		t.Fatal("Error retrieving Replication Controllers")
 	}
@@ -366,7 +368,7 @@ func checkNoReclicationController(t *testing.T) {
 }
 
 func checkReplicationControllers(previousVersion int, t *testing.T) {
-	rcList, err := kubernetes.ListReplicationControllers(NAMESPACE)
+	rcList, err := kubernetes.ListReplicationControllers(*namespace)
 	if err != nil {
 		t.Fatal("Error retrieving Replication Controllers")
 	}
@@ -423,7 +425,7 @@ func createDeployment(healthy bool, useHealthCheck bool) *cluster.Deployment {
 		NewVersion: "#",
 		AppName: APPNAME,
 		Replicas: 2,
-		Frontend: "deployer-integration-tests.cloudrti.com",
+		Frontend: "deployer-" + *namespace + ".cloudrti.com",
 		PodSpec: v1.PodSpec{
 			Containers: []v1.Container{{
 				Name: "deployer-demo",
@@ -435,7 +437,7 @@ func createDeployment(healthy bool, useHealthCheck bool) *cluster.Deployment {
 			},
 		},
 		UseHealthCheck: useHealthCheck,
-		Namespace: NAMESPACE,
+		Namespace: *namespace,
 	}
 }
 

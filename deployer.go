@@ -29,6 +29,7 @@ var kubernetesurl, etcdUrl, port, authurl, kubernetesUsername, kubernetesPasswor
 var healthTimeout int64
 var proxyReloadSleep int
 var mutex = &sync.Mutex{}
+var namespaceMutexes = map[string]*sync.Mutex{}
 
 func init() {
 	flag.StringVar(&kubernetesurl, "kubernetes", "", "URL to the Kubernetes API server")
@@ -314,8 +315,15 @@ type DeploymentRequest struct {
 }
 
 func deploy(deployment *cluster.Deployment, logger logger.Logger) error {
-	mutex.Lock()
-	defer mutex.Unlock()
+	if _, ok := namespaceMutexes[deployment.Namespace]; !ok {
+		namespaceMutexes[deployment.Namespace] = &sync.Mutex{}
+	}
+
+	logger.Printf("Trying to acquire mutex for namesapce %v\n", deployment.Namespace)
+	namespaceMutexes[deployment.Namespace].Lock()
+	defer namespaceMutexes[deployment.Namespace].Unlock()
+
+	logger.Printf("Acquired mutex for namesapce %v\n", deployment.Namespace)
 
 	deploymentTs := time.Now().Format(time.RFC3339)
 	deployment.DeploymentTs = deploymentTs
