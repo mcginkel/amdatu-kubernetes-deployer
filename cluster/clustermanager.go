@@ -54,6 +54,8 @@ type Deployment struct {
 	HealthCheckPort   int               `json:"healthCheckPort,omitempty"`
 	HealthCheckType   string            `json:"healthCheckType,omitempty"`
 	IgnoreHealthCheck bool              `json:"ignoreHealthCheck,omitempty"`
+	UseExternalHealthCheck bool	    `json:"useExternalHealthCheck,omitempty"`
+	ExternalHealthCheckPath string	    `json:"externalHealthCheckPath,omitempty"`
 	DeploymentTs      string            `json:"deploymentTs,omitempty"`
 }
 
