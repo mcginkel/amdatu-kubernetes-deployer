@@ -35,6 +35,8 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
+	etcdclient "github.com/coreos/etcd/client"
+	"golang.org/x/net/context"
 )
 
 type bluegreen struct {
@@ -45,7 +47,7 @@ func NewBlueGreen(deployer *cluster.Deployer) *bluegreen {
 	return &bluegreen{deployer}
 }
 
-func (bluegreen *bluegreen) Deploy() error {
+func (bluegreen *bluegreen) Deploy()  error {
 
 	bluegreen.deployer.Logger.Println("Starting blue-green deployment")
 
@@ -223,12 +225,25 @@ func (bluegreen *bluegreen) checkPodHealth(pod *v1.Pod) bool {
 		return false
 	}
 
+	bluegreen.logHealth(pod, string(body))
+
 	var dat = HealthCheckEvent{}
 	if err := json.Unmarshal(body, &dat); err != nil {
+		bluegreen.deployer.Logger.Println(err)
 		return false
 	}
 
 	return dat.Healthy
+}
+
+func (bluegreen *bluegreen) logHealth(pod *v1.Pod, health string) {
+	etcdApi := etcdclient.NewKeysAPI(bluegreen.deployer.EtcdClient)
+
+	keyName := fmt.Sprintf("/deployment/healthlog/%v/%v/%v/%v", bluegreen.deployer.Deployment.Namespace, bluegreen.deployer.Deployment.Id, bluegreen.deployer.Deployment.DeploymentTs, pod.Name)
+
+	bluegreen.deployer.Logger.Printf("Writing pod health to %v\n", keyName)
+
+	etcdApi.Set(context.Background(), keyName, health, nil)
 }
 
 type HealthCheckEvent struct {

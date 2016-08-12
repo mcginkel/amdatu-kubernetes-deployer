@@ -35,7 +35,7 @@ func NewUndeployer(namespace string, appname string, etcdUrl string,
 		return nil, err
 	}
 
-	registry := deploymentregistry.NewDeploymentRegistry(&etcdClient)
+	registry := deploymentregistry.NewDeploymentRegistry(etcdClient)
 
 	proxy := proxies.NewProxyConfigurator(etcdClient, proxyRestUrl, proxyReloadSleep, logger)
 
