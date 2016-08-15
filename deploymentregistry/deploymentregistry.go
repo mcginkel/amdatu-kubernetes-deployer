@@ -30,8 +30,8 @@ type DeploymentRegistry struct {
 	etcdApi client.KeysAPI
 }
 
-func NewDeploymentRegistry(etcdClient *client.Client) DeploymentRegistry {
-	etcdApi := client.NewKeysAPI(*etcdClient)
+func NewDeploymentRegistry(etcdClient client.Client) DeploymentRegistry {
+	etcdApi := client.NewKeysAPI(etcdClient)
 
 	return DeploymentRegistry{etcdApi}
 }

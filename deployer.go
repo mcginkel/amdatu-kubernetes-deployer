@@ -23,6 +23,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/satori/go.uuid"
+	"golang.org/x/net/context"
+	"strings"
 )
 
 var kubernetesurl, etcdUrl, port, authurl, kubernetesUsername, kubernetesPassword, proxyRestUrl string
@@ -70,9 +72,48 @@ func main() {
 	r.HandleFunc("/deployment/stream", deployWebsocketHandler)
 	r.HandleFunc("/undeployment/stream/{namespace}/{appname}", undeployWebsocketHandler)
 
+	r.HandleFunc("/healthcheckdata", healthcheckDataHandler);
+
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func healthcheckDataHandler(w http.ResponseWriter, r *http.Request) {
+	cfg := etcdclient.Config{
+		Endpoints: []string{etcdUrl},
+	}
+
+	etcdClient, err := etcdclient.New(cfg)
+	if err != nil {
+		log.Println("Couldn't connect to etcd")
+	}
+
+	etcdApi := etcdclient.NewKeysAPI(etcdClient)
+	dirPath := r.URL.Query().Get("dir")
+	dirPath = strings.Replace(dirPath, " ", "+", -1)
+	dir, err := etcdApi.Get(context.Background(), dirPath, &etcdclient.GetOptions{Recursive: true})
+
+	log.Printf("Getting directory %v from etcd\n", dirPath)
+
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	result := []string{}
+
+	for _,node := range dir.Node.Nodes {
+		result = append(result, node.Value)
+	}
+
+	jsonStr, err := json.Marshal(result)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	w.Write(jsonStr)
 }
 
 func listDeployments(w http.ResponseWriter, r *http.Request) {
@@ -138,7 +179,7 @@ func createDeploymentRegistry(logger logger.Logger) (*deploymentregistry.Deploym
 		return nil, err
 	}
 
-	registry := deploymentregistry.NewDeploymentRegistry(&etcdClient)
+	registry := deploymentregistry.NewDeploymentRegistry(etcdClient)
 	return &registry, nil
 }
 
@@ -183,15 +224,17 @@ func deployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = deploy(&deployment, logger)
+	keyName := fmt.Sprintf("/deployment/healthlog/%v/%v/%v", deployment.Namespace, deployment.Id, deployment.DeploymentTs)
 	if err != nil {
 		logger.Printf("Error during deployment: %v\n", err)
 		logger.Println("============================ Deployment Failed =======================")
-		logger.Println("!!{\"success\": \"false\"}") // this is parsed by the frontend!
+		logger.Println("!!{\"success\": \"false\", \"podstatus\": \"" + keyName + "\"}") // this is parsed by the frontend!
 	} else {
 		logger.Println("============================ Completed deployment =======================")
-		logger.Println("!!{\"success\": \"true\", \"id\": \"" + deployment.Id + "\"}") // this is parsed by the frontend!
+		logger.Println("!!{\"success\": \"true\", \"id\": \"" + deployment.Id + "\", \"podstatus\": \"" + keyName + "\"}") // this is parsed by the frontend!
 	}
 
+	conn.WriteMessage(websocket.CloseMessage, []byte{})
 }
 
 func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
@@ -339,7 +382,23 @@ func deploy(deployment *cluster.Deployment, logger logger.Logger) error {
 		return err
 	}
 
-	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdUrl, deployment, logger, healthTimeout, proxyRestUrl, proxyReloadSleep)
+	cfg := etcdclient.Config{
+		Endpoints: []string{etcdUrl},
+	}
+
+	etcdClient, err := etcdclient.New(cfg)
+	if err != nil {
+		log.Fatal("Couldn't connect to etcd")
+	}
+
+	registry := deploymentregistry.NewDeploymentRegistry(etcdClient)
+
+	if deployment.Id == "" {
+		id := uuid.NewV1().String()
+		deployment.Id = deployment.AppName + "-" + string(id)
+	}
+
+	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdClient, deployment, logger, healthTimeout, proxyRestUrl, proxyReloadSleep)
 	if deployment.DeployedVersion == "000" {
 		rc, err := deployer.FindCurrentRc()
 		if err != nil || len(rc) == 0 {
@@ -392,10 +451,7 @@ func deploy(deployment *cluster.Deployment, logger logger.Logger) error {
 		return errors.New("Existing service found, this version is already deployed. Exiting deployment.")
 	}
 
-	if deployment.Id == "" {
-		id := uuid.NewV1().String()
-		deployment.Id = deployment.AppName + "-" + string(id)
-	}
+
 
 	var deploymentLog string
 	if deploymentError == nil {
@@ -409,7 +465,7 @@ func deploy(deployment *cluster.Deployment, logger logger.Logger) error {
 	result.Status = deploymentLog
 	result.Deployment = *deployment
 
-	registry := deploymentregistry.NewDeploymentRegistry(deployer.EtcdClient)
+
 	registry.StoreDeployment(result)
 
 	if deploymentError != nil {

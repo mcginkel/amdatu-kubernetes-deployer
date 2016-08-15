@@ -60,9 +60,10 @@ type Deployment struct {
 }
 
 type DeploymentResult struct {
-	Date       string     `json:"date,omitempty"`
-	Status     string     `json:"status,omitempty"`
-	Deployment Deployment `json:"deployment,omitempty"`
+	Date       string     	`json:"date,omitempty"`
+	Status     string     	`json:"status,omitempty"`
+	Deployment Deployment 	`json:"deployment,omitempty"`
+	HealthcheckData	string 	`json:"healthcheckData,omitempty"`
 }
 
 type DeploymentHistory struct {
@@ -204,30 +205,19 @@ func (deployment *Deployment) Validate() error {
 type Deployer struct {
 	KubernetesUrl      string
 	Deployment         *Deployment
-	EtcdUrl            string
 	K8client           *k8sClient.Client
 	Logger             logger.Logger
 	ProxyConfigurator  *proxies.ProxyConfigurator
-	EtcdClient         *etcdclient.Client
+	EtcdClient         etcdclient.Client
 	HealthcheckTimeout int64
 }
 
-func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdUrl string, deployment *Deployment, logger logger.Logger, healthTimeout int64, proxyRestUrl string, proxyReload int) *Deployer {
+func NewDeployer(kubernetesUrl string, kubernetesUsername string, kubernetesPassword string, etcdClient etcdclient.Client, deployment *Deployment, logger logger.Logger, healthTimeout int64, proxyRestUrl string, proxyReload int) *Deployer {
 
 	c := k8sClient.NewClient(kubernetesUrl, kubernetesUsername, kubernetesPassword)
 	logger.Printf("Connected to Kubernetes API server on %v\n", kubernetesUrl)
 
-	cfg := etcdclient.Config{
-		Endpoints: []string{etcdUrl},
-	}
-
-	etcdClient, err := etcdclient.New(cfg)
-	if err != nil {
-		log.Fatal("Couldn't connect to etcd")
-	}
-
-	return &Deployer{kubernetesUrl, deployment, etcdUrl, &c, logger, proxies.NewProxyConfigurator(etcdClient, proxyRestUrl, proxyReload, logger), &etcdClient, healthTimeout}
-
+	return &Deployer{kubernetesUrl, deployment, &c, logger, proxies.NewProxyConfigurator(etcdClient, proxyRestUrl, proxyReload, logger), etcdClient, healthTimeout}
 }
 
 func (deployer *Deployer) CreateRcName() string {
