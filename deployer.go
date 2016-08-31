@@ -231,7 +231,7 @@ func deployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 		logger.Println("!!{\"success\": \"false\", \"podstatus\": \"" + keyName + "\"}") // this is parsed by the frontend!
 	} else {
 		logger.Println("============================ Completed deployment =======================")
-		logger.Println("!!{\"success\": \"true\", \"id\": \"" + deployment.Id + "\", \"podstatus\": \"" + keyName + "\"}") // this is parsed by the frontend!
+		logger.Println("!!{\"success\": \"true\", \"id\": \"" + deployment.Id + "\", \"ts\": \"" + deployment.DeploymentTs + "\", \"podstatus\": \"" + keyName + "\"}") // this is parsed by the frontend!
 	}
 
 	conn.WriteMessage(websocket.CloseMessage, []byte{})
