@@ -33,6 +33,13 @@ var proxyReloadSleep int
 var mutex = &sync.Mutex{}
 var namespaceMutexes = map[string]*sync.Mutex{}
 
+type deploymentStatus struct {
+	Success   bool   `json:"success"`
+	Id        string `json:"id,omitempty"`
+	Ts        string `json:"ts,omitempty"`
+	Podstatus string `json:"podstatus,omitempty"`
+}
+
 func init() {
 	flag.StringVar(&kubernetesurl, "kubernetes", "", "URL to the Kubernetes API server")
 	flag.StringVar(&etcdUrl, "etcd", "", "Url to etcd")
@@ -72,7 +79,7 @@ func main() {
 	r.HandleFunc("/deployment/stream", deployWebsocketHandler)
 	r.HandleFunc("/undeployment/stream/{namespace}/{appname}", undeployWebsocketHandler)
 
-	r.HandleFunc("/healthcheckdata", healthcheckDataHandler);
+	r.HandleFunc("/healthcheckdata", healthcheckDataHandler)
 
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
@@ -103,7 +110,7 @@ func healthcheckDataHandler(w http.ResponseWriter, r *http.Request) {
 
 	result := []string{}
 
-	for _,node := range dir.Node.Nodes {
+	for _, node := range dir.Node.Nodes {
 		result = append(result, node.Value)
 	}
 
@@ -225,13 +232,26 @@ func deployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = deploy(&deployment, logger)
 	keyName := fmt.Sprintf("/deployment/healthlog/%v/%v/%v", deployment.Namespace, deployment.Id, deployment.DeploymentTs)
-	if err != nil {
+
+	status := &deploymentStatus{}
+	if err == nil {
+		status.Success = true
+		status.Id = deployment.Id
+		status.Ts = deployment.DeploymentTs
+	} else {
+		status.Success = false
+	}
+	status.Podstatus = keyName
+	statusBytes, _ := json.Marshal(status)
+	statusString := "!!" + string(statusBytes)
+
+	if !status.Success {
 		logger.Printf("Error during deployment: %v\n", err)
 		logger.Println("============================ Deployment Failed =======================")
-		logger.Println("!!{\"success\": \"false\", \"podstatus\": \"" + keyName + "\"}") // this is parsed by the frontend!
+		logger.Println(statusString) // this is parsed by the frontend!
 	} else {
 		logger.Println("============================ Completed deployment =======================")
-		logger.Println("!!{\"success\": \"true\", \"id\": \"" + deployment.Id + "\", \"podstatus\": \"" + keyName + "\"}") // this is parsed by the frontend!
+		logger.Println(statusString) // this is parsed by the frontend!
 	}
 
 	conn.WriteMessage(websocket.CloseMessage, []byte{})
@@ -313,13 +333,19 @@ func undeployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
 	err = unDeploy(vars["namespace"], vars["appname"], user.Email, user.Password, logger)
-	if err != nil {
+
+	status := &deploymentStatus{}
+	status.Success = err == nil
+	statusBytes, _ := json.Marshal(status)
+	statusString := "!!" + string(statusBytes)
+
+	if !status.Success {
 		logger.Printf("Error during undeployment: %v\n", err)
 		logger.Println("============================ Undeployment Failed =======================")
-		logger.Println("!!{\"success\": \"false\"}") // this is parsed by the frontend!
+		logger.Println(statusString) // this is parsed by the frontend!
 	} else {
 		logger.Println("============================ Completed Undeployment =======================")
-		logger.Println("!!{\"success\": \"true\"}") // this is parsed by the frontend!
+		logger.Println(statusString) // this is parsed by the frontend!
 	}
 }
 
@@ -451,8 +477,6 @@ func deploy(deployment *cluster.Deployment, logger logger.Logger) error {
 		return errors.New("Existing service found, this version is already deployed. Exiting deployment.")
 	}
 
-
-
 	var deploymentLog string
 	if deploymentError == nil {
 		deploymentLog = "success"
@@ -464,7 +488,6 @@ func deploy(deployment *cluster.Deployment, logger logger.Logger) error {
 	result.Date = deploymentTs
 	result.Status = deploymentLog
 	result.Deployment = *deployment
-
 
 	registry.StoreDeployment(result)
 
