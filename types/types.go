@@ -76,8 +76,8 @@ type WebHook struct {
 }
 
 type HttpHeader struct {
-	Header string `json:"header,omitempty"`
-	Value  string `json:"value,omitempty"`
+	Header string `json:"Header,omitempty"`
+	Value  string `json:"Value,omitempty"`
 }
 
 type User struct {
