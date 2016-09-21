@@ -4,7 +4,7 @@ import (
 	"testing"
 	"flag"
 	"os"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	"net/http"
 	"encoding/json"
@@ -161,7 +161,7 @@ func TestConcurrentDeploy(t *testing.T) {
 }
 
 func TestDeployWithoutHealthCheck(t *testing.T) {
-	deployment := &cluster.Deployment{
+	deployment := &types.Deployment{
 		DeploymentType: "blue-green",
 		NewVersion: "#",
 		AppName: "nginx",
@@ -216,7 +216,7 @@ func TestRedeployShouldFail(t *testing.T) {
 
 	version := rcList.Items[0].Labels["version"]
 
-	deployment := &cluster.Deployment{
+	deployment := &types.Deployment{
 		DeploymentType: "blue-green",
 		NewVersion: version,
 		AppName: "nginx",
@@ -337,7 +337,7 @@ func countPodsForApp(t *testing.T) int {
 	return nrOfRunning
 }
 
-func backgroundDeploy(deployment *cluster.Deployment, resultChan chan bool) {
+func backgroundDeploy(deployment *types.Deployment, resultChan chan bool) {
 	result, err := startDeploy(deployment)
 	if err != nil {
 		resultChan <- false
@@ -400,7 +400,7 @@ func isDeploymentSuccessfull(log string) bool {
 	return strings.Contains(log, "Completed deployment")
 }
 
-func startDeploy(deployment *cluster.Deployment) (string, error) {
+func startDeploy(deployment *types.Deployment) (string, error) {
 	buf, err := json.Marshal(deployment)
 	if err != nil {
 		return "", err
@@ -423,7 +423,7 @@ func startDeploy(deployment *cluster.Deployment) (string, error) {
 
 }
 
-func createDeployment(healthy bool, useHealthCheck bool, ignoreHealthCheck bool) *cluster.Deployment {
+func createDeployment(healthy bool, useHealthCheck bool, ignoreHealthCheck bool) *types.Deployment {
 	var tag string
 	if healthy {
 		tag = "healthy"
@@ -431,7 +431,7 @@ func createDeployment(healthy bool, useHealthCheck bool, ignoreHealthCheck bool)
 		tag = "unhealthy"
 	}
 
-	return &cluster.Deployment{
+	return &types.Deployment{
 		DeploymentType: "blue-green",
 		NewVersion: "#",
 		AppName: APPNAME,

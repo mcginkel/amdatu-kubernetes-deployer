@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	"github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
 )
@@ -38,9 +39,10 @@ type ProxyConfigurator struct {
 }
 
 type BackendServer struct {
-	IPAddress          string
-	Port               int32
-	CompressionEnabled bool
+	IPAddress           string
+	Port                int32
+	CompressionEnabled  bool
+	AdditionHttpHeaders []types.HttpHeader
 }
 
 type Frontend struct {
@@ -91,16 +93,18 @@ func (proxyConfigurator *ProxyConfigurator) getFrontendKeysForDeployment(deploym
 	return keys
 }
 
-func (proxyConfigurator *ProxyConfigurator) AddBackendServer(deploymentName string, ip string, port int32, useCompression bool) error {
+func (proxyConfigurator *ProxyConfigurator) AddBackendServer(deploymentName string, ip string, port int32,
+	useCompression bool, additionHttpHeaders []types.HttpHeader) error {
 	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
 	if err := prepareBaseConfig(kAPI); err != nil {
 		return err
 	}
 
 	value := BackendServer{
-		IPAddress:          ip,
-		Port:               port,
-		CompressionEnabled: useCompression,
+		IPAddress:           ip,
+		Port:                port,
+		CompressionEnabled:  useCompression,
+		AdditionHttpHeaders: additionHttpHeaders,
 	}
 
 	bytes, err := json.Marshal(value)
