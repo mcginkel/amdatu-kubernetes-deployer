@@ -348,6 +348,9 @@ func undeployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 		logger.Println("============================ Completed Undeployment =======================")
 		logger.Println(statusString) // this is parsed by the frontend!
 	}
+
+	conn.WriteMessage(websocket.CloseMessage, []byte{})
+
 }
 
 func UndeploymentHandler(w http.ResponseWriter, req *http.Request) {
