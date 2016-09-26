@@ -17,6 +17,7 @@ import (
 	"time"
 	"strconv"
 	"fmt"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 )
 
 var (
@@ -424,11 +425,11 @@ func startDeploy(deployment *types.Deployment) (string, error) {
 }
 
 func createDeployment(healthy bool, useHealthCheck bool, ignoreHealthCheck bool) *types.Deployment {
-	var tag string
+	var path string
 	if healthy {
-		tag = "healthy"
+		path = "healthy"
 	} else {
-		tag = "unhealthy"
+		path = "unhealthy"
 	}
 
 	return &types.Deployment{
@@ -440,7 +441,7 @@ func createDeployment(healthy bool, useHealthCheck bool, ignoreHealthCheck bool)
 		PodSpec: v1.PodSpec{
 			Containers: []v1.Container{{
 				Name: "deployer-demo",
-				Image: "paulbakker/deployer-demo:" + tag,
+				Image: "amdatu/amdatu-kubernetes-deployer-demo:alpha",
 				Ports: []v1.ContainerPort{{
 					ContainerPort: 9999,
 				}},
@@ -448,6 +449,9 @@ func createDeployment(healthy bool, useHealthCheck bool, ignoreHealthCheck bool)
 			},
 		},
 		UseHealthCheck: useHealthCheck,
+		HealthCheckPath: path,
+		HealthCheckType: "probe",
+		HealthCheckPort: 9999,
 		Namespace: *namespace,
 		IgnoreHealthCheck: ignoreHealthCheck,
 	}
