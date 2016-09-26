@@ -1,30 +1,31 @@
 package testing
 
 import (
-	"testing"
+	"bytes"
+	"encoding/json"
 	"flag"
+	"fmt"
+	"log"
+	"net/http"
 	"os"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
-	"net/http"
-	"encoding/json"
-	"bytes"
-	"strings"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/client"
 	etcdclient "github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
-	"log"
-	"time"
-	"strconv"
-	"fmt"
 )
 
 var (
-	deployerUrl = flag.String("deployer", "", "Deployer API url")
-	kubernetesUrl = flag.String("kubernetes", "", "kubernetes API url")
-	etcdUrl = flag.String("etcd", "", "etcd cluster urls")
+	deployerUrl        = flag.String("deployer", "", "Deployer API url")
+	kubernetesUrl      = flag.String("kubernetes", "", "kubernetes API url")
+	etcdUrl            = flag.String("etcd", "", "etcd cluster urls")
 	nrOfConcurrentRuns = flag.Int("concurrent", 0, "Number of concurrent deployments to test")
-	namespace = flag.String("namespace", "integrationtests", "namespace to test in")
+	namespace          = flag.String("namespace", "integrationtests", "namespace to test in")
 )
 
 const APPNAME = "integrationtest"
@@ -32,14 +33,12 @@ const APPNAME = "integrationtest"
 var kubernetes client.Client
 var etcd etcdclient.KeysAPI
 
-
 func TestMain(m *testing.M) {
 	flag.Parse()
 
 	cfg := etcdclient.Config{
 		Endpoints: []string{*etcdUrl},
 	}
-
 
 	etcdClient, err := etcdclient.New(cfg)
 	etcd = etcdclient.NewKeysAPI(etcdClient)
@@ -59,7 +58,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestProxyAfterFirstFailedDeployment(t *testing.T) {
-	deployment := createDeployment(false, true, false)
+	deployment := createDeployment("probe", false, true, false)
 	result, err := startDeploy(deployment)
 
 	if err != nil {
@@ -70,7 +69,7 @@ func TestProxyAfterFirstFailedDeployment(t *testing.T) {
 		t.Error("Health check failed, but deployment was successful")
 	}
 
-	_, err = etcd.Get(context.Background(), "/proxy/frontends/deployer-" + *namespace + ".cloudrti.com", &etcdclient.GetOptions{})
+	_, err = etcd.Get(context.Background(), "/proxy/frontends/deployer-"+*namespace+".cloudrti.com", &etcdclient.GetOptions{})
 	if err == nil {
 		t.Error("Proxy frontend not deleted")
 	}
@@ -78,8 +77,8 @@ func TestProxyAfterFirstFailedDeployment(t *testing.T) {
 	checkNoReclicationController(t)
 }
 
-func deploySuccessful(t *testing.T) {
-	deployment := createDeployment(true, true, false)
+func deploySuccessful(t *testing.T, healthcheckType string) {
+	deployment := createDeployment(healthcheckType, true, true, false)
 	result, err := startDeploy(deployment)
 
 	if err != nil {
@@ -99,18 +98,30 @@ func deploySuccessful(t *testing.T) {
 }
 
 func TestConsecutiveDeployments(t *testing.T) {
-	deploySuccessful(t)
+	deploySuccessful(t, "probe")
 
 	version := getReplicationControllerVersion(t)
 
-	deploySuccessful(t)
+	deploySuccessful(t, "simple")
 	checkReplicationControllers(version, t)
-
 
 }
 
-func TestFailedHealthCheck(t *testing.T) {
-	deployment := createDeployment(false, true, false)
+func TestFailedProbeHealthCheck(t *testing.T) {
+	deployment := createDeployment("probe", false, true, false)
+	result, err := startDeploy(deployment)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if isDeploymentSuccessfull(result) {
+		t.Error("Health check failed, but deployment was successful")
+	}
+}
+
+func TestFailedSimpleHealthCheck(t *testing.T) {
+	deployment := createDeployment("simple", false, true, false)
 	result, err := startDeploy(deployment)
 
 	if err != nil {
@@ -123,7 +134,7 @@ func TestFailedHealthCheck(t *testing.T) {
 }
 
 func TestIgnoreFailedHealthCheck(t *testing.T) {
-	deployment := createDeployment(false, true, true)
+	deployment := createDeployment("probe", false, true, true)
 	result, err := startDeploy(deployment)
 
 	if err != nil {
@@ -136,7 +147,7 @@ func TestIgnoreFailedHealthCheck(t *testing.T) {
 }
 
 func TestConcurrentDeploy(t *testing.T) {
-	deployment := createDeployment(true, false, false)
+	deployment := createDeployment("probe", true, false, false)
 
 	results := make(chan bool)
 
@@ -163,12 +174,12 @@ func TestConcurrentDeploy(t *testing.T) {
 func TestDeployWithoutHealthCheck(t *testing.T) {
 	deployment := &types.Deployment{
 		DeploymentType: "blue-green",
-		NewVersion: "#",
-		AppName: "nginx",
-		Replicas: 2,
+		NewVersion:     "#",
+		AppName:        "nginx",
+		Replicas:       2,
 		PodSpec: v1.PodSpec{
 			Containers: []v1.Container{{
-				Name: "nginx",
+				Name:  "nginx",
 				Image: "nginx",
 				Ports: []v1.ContainerPort{{
 					ContainerPort: 80,
@@ -177,7 +188,7 @@ func TestDeployWithoutHealthCheck(t *testing.T) {
 			},
 		},
 		UseHealthCheck: false,
-		Namespace: *namespace,
+		Namespace:      *namespace,
 	}
 
 	result, err := startDeploy(deployment)
@@ -198,7 +209,7 @@ func TestDeployWithoutHealthCheck(t *testing.T) {
 
 func TestRedeployShouldFail(t *testing.T) {
 
-	labels := make(map[string] string)
+	labels := make(map[string]string)
 	labels["app"] = "nginx"
 	rcList, err := kubernetes.ListReplicationControllersWithLabel(*namespace, labels)
 
@@ -218,12 +229,12 @@ func TestRedeployShouldFail(t *testing.T) {
 
 	deployment := &types.Deployment{
 		DeploymentType: "blue-green",
-		NewVersion: version,
-		AppName: "nginx",
-		Replicas: 2,
+		NewVersion:     version,
+		AppName:        "nginx",
+		Replicas:       2,
 		PodSpec: v1.PodSpec{
 			Containers: []v1.Container{{
-				Name: "nginx",
+				Name:  "nginx",
 				Image: "nginx",
 				Ports: []v1.ContainerPort{{
 					ContainerPort: 80,
@@ -232,7 +243,7 @@ func TestRedeployShouldFail(t *testing.T) {
 			},
 		},
 		UseHealthCheck: false,
-		Namespace: *namespace,
+		Namespace:      *namespace,
 	}
 
 	result, err := startDeploy(deployment)
@@ -276,21 +287,20 @@ func resetEnvironment() {
 		if foundTestNamespace {
 			time.Sleep(1 * time.Second)
 		} else {
-			break;
+			break
 		}
 	}
 
-	_,err = kubernetes.CreateNamespace(*namespace)
+	_, err = kubernetes.CreateNamespace(*namespace)
 	if err != nil {
 		log.Fatal("Error creating namespace: %v", err)
 	}
 
-	etcd.Delete(context.Background(), "/proxy/frontends/deployer-" + *namespace + ".cloudrti.com", &etcdclient.DeleteOptions{})
+	etcd.Delete(context.Background(), "/proxy/frontends/deployer-"+*namespace+".cloudrti.com", &etcdclient.DeleteOptions{})
 }
 
-
 func checkProxyConfig(t *testing.T, version string) {
-	resp, err := etcd.Get(context.Background(), "/proxy/frontends/deployer-" + *namespace + ".cloudrti.com", &etcdclient.GetOptions{})
+	resp, err := etcd.Get(context.Background(), "/proxy/frontends/deployer-"+*namespace+".cloudrti.com", &etcdclient.GetOptions{})
 	if err != nil {
 		t.Error(err)
 		return
@@ -303,7 +313,7 @@ func checkProxyConfig(t *testing.T, version string) {
 		t.Error(err)
 	}
 
-	if fr.Hostname != "deployer-" + *namespace +".cloudrti.com" {
+	if fr.Hostname != "deployer-"+*namespace+".cloudrti.com" {
 		t.Errorf("Hostname not set correctly: %v", fr.Hostname)
 	}
 
@@ -312,14 +322,14 @@ func checkProxyConfig(t *testing.T, version string) {
 		t.Fatal("Error listing replication controllers")
 	}
 
-	if fr.BackendId != *namespace + "-" + rcList.Items[0].Name {
+	if fr.BackendId != *namespace+"-"+rcList.Items[0].Name {
 		t.Error("Incorrect proxy backend: " + fr.BackendId)
 	}
 
 }
 
 func countPodsForApp(t *testing.T) int {
-	labels := map[string]string {"app": APPNAME}
+	labels := map[string]string{"app": APPNAME}
 
 	pods, err := kubernetes.ListPodsWithLabel(*namespace, labels)
 	if err != nil {
@@ -327,7 +337,7 @@ func countPodsForApp(t *testing.T) int {
 	}
 
 	nrOfRunning := 0
-	for _,pod := range pods.Items {
+	for _, pod := range pods.Items {
 		if pod.Status.Phase == "Running" {
 			println(pod.Name)
 			nrOfRunning++
@@ -362,7 +372,7 @@ func getReplicationControllerVersion(t *testing.T) int {
 	}
 
 	versionString := rcList.Items[0].Labels["version"]
-	version,_ := strconv.Atoi(versionString)
+	version, _ := strconv.Atoi(versionString)
 
 	return version
 }
@@ -389,9 +399,9 @@ func checkReplicationControllers(previousVersion int, t *testing.T) {
 	}
 
 	versionString := rcList.Items[0].Labels["version"]
-	version,_ := strconv.Atoi(versionString)
+	version, _ := strconv.Atoi(versionString)
 
-	if version != previousVersion +1 {
+	if version != previousVersion+1 {
 		t.Error("Invalid version for replication controller")
 	}
 }
@@ -408,7 +418,6 @@ func startDeploy(deployment *types.Deployment) (string, error) {
 
 	jsonInputReader := bytes.NewReader(buf)
 
-
 	resp, err := http.Post(*deployerUrl, "application/json", jsonInputReader)
 
 	if err != nil {
@@ -423,39 +432,45 @@ func startDeploy(deployment *types.Deployment) (string, error) {
 
 }
 
-func createDeployment(healthy bool, useHealthCheck bool, ignoreHealthCheck bool) *types.Deployment {
-	var tag string
-	if healthy {
-		tag = "healthy"
-	} else {
-		tag = "unhealthy"
+func createDeployment(healthcheckType string, healthy bool, useHealthCheck bool, ignoreHealthCheck bool) *types.Deployment {
+	var path string
+	if healthy && strings.EqualFold(healthcheckType, "probe") {
+		path = "healthy"
+	} else if !healthy && strings.EqualFold(healthcheckType, "probe") {
+		path = "unhealthy"
+	} else if healthy && strings.EqualFold(healthcheckType, "simple") {
+		path = "simple"
+	} else if !healthy && strings.EqualFold(healthcheckType, "simple") {
+		path = "error"
 	}
 
 	return &types.Deployment{
 		DeploymentType: "blue-green",
-		NewVersion: "#",
-		AppName: APPNAME,
-		Replicas: 2,
-		Frontend: "deployer-" + *namespace + ".cloudrti.com",
+		NewVersion:     "#",
+		AppName:        APPNAME,
+		Replicas:       2,
+		Frontend:       "deployer-" + *namespace + ".cloudrti.com",
 		PodSpec: v1.PodSpec{
 			Containers: []v1.Container{{
-				Name: "deployer-demo",
-				Image: "paulbakker/deployer-demo:" + tag,
+				Name:  "deployer-demo",
+				Image: "amdatu/amdatu-kubernetes-deployer-demo:alpha",
 				Ports: []v1.ContainerPort{{
 					ContainerPort: 9999,
 				}},
 			},
 			},
 		},
-		UseHealthCheck: useHealthCheck,
-		Namespace: *namespace,
+		UseHealthCheck:    useHealthCheck,
+		HealthCheckPath:   path,
+		HealthCheckType:   healthcheckType,
+		HealthCheckPort:   9999,
+		Namespace:         *namespace,
 		IgnoreHealthCheck: ignoreHealthCheck,
 	}
 }
 
 type frontend struct {
-	Hostname string
-	Type string
+	Hostname  string
+	Type      string
 	BackendId string
 }
-

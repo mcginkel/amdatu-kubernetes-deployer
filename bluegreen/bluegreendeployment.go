@@ -31,6 +31,8 @@ import (
 	"net/http"
 	"time"
 
+	"strings"
+
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
@@ -144,7 +146,7 @@ func (bluegreen *bluegreen) createReplicationController() error {
 func (bluegreen *bluegreen) waitForPods(name, version string) error {
 	healthChan := make(chan bool)
 
-	bluegreen.deployer.Logger.Printf("Waiting %v seconds for pods to start and to become healthy\n", bluegreen.deployer.HealthcheckTimeout)
+	bluegreen.deployer.Logger.Printf("Waiting up to %v seconds for pods to start and to become healthy\n", bluegreen.deployer.HealthcheckTimeout)
 
 	go bluegreen.checkPods(name, version, healthChan)
 
@@ -192,8 +194,10 @@ func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool
 
 					if healthy {
 						healthChan <- true
+						bluegreen.deployer.Logger.Println("Deployment healthy!")
 						return
 					} else {
+						bluegreen.deployer.Logger.Println("Deployment not healthy yet, retrying in 1 second")
 						time.Sleep(1 * time.Second)
 					}
 
@@ -211,29 +215,46 @@ func (bluegreen *bluegreen) checkPodHealth(pod *v1.Pod) bool {
 	var err error
 
 	port := cluster.FindHealthcheckPort(pod)
-
 	url := bluegreen.deployer.GetHealthcheckUrl(pod.Status.PodIP, port)
 
-	resp, err = http.Post(url, "application/json", nil)
-	if err != nil {
-		return false
+	//bluegreen.deployer.Logger.Printf("Checking pod health with healthcheck type %s on url %s",
+	//	bluegreen.deployer.Deployment.HealthCheckType, url);
+
+	if strings.EqualFold(bluegreen.deployer.Deployment.HealthCheckType, "simple") {
+		resp, err = http.Get(url)
+		if err != nil {
+			bluegreen.logHealth(pod, "{\"simplehealthcheck\": \"http get failed\"}")
+			return false
+		}
+		if resp.StatusCode != 200 {
+			bluegreen.logHealth(pod, "{\"simplehealthcheck\": \"http get statuscode != 200\"}")
+			return false
+		}
+		bluegreen.logHealth(pod, "{\"simplehealthcheck\": \"http get success\"}")
+		return true
+	} else {
+		// default to healthcheck type "probe"
+		resp, err = http.Post(url, "application/json", nil)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return false
+		}
+
+		bluegreen.logHealth(pod, string(body))
+
+		var dat = HealthCheckEvent{}
+		if err := json.Unmarshal(body, &dat); err != nil {
+			bluegreen.deployer.Logger.Println(err)
+			return false
+		}
+
+		return dat.Healthy
 	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return false
-	}
-
-	bluegreen.logHealth(pod, string(body))
-
-	var dat = HealthCheckEvent{}
-	if err := json.Unmarshal(body, &dat); err != nil {
-		bluegreen.deployer.Logger.Println(err)
-		return false
-	}
-
-	return dat.Healthy
 }
 
 func (bluegreen *bluegreen) logHealth(pod *v1.Pod, health string) {
