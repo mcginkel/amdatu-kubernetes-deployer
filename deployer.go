@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,13 +19,13 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/deploymentregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/environment"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/undeploy"
 	etcdclient "github.com/coreos/etcd/client"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/satori/go.uuid"
 	"golang.org/x/net/context"
-	"strings"
 )
 
 var kubernetesurl, etcdUrl, port, authurl, kubernetesUsername, kubernetesPassword, proxyRestUrl string
@@ -383,7 +384,7 @@ type DeploymentRequest struct {
 	Req            *http.Request
 }
 
-func deploy(deployment *cluster.Deployment, logger logger.Logger) error {
+func deploy(deployment *types.Deployment, logger logger.Logger) error {
 	if _, ok := namespaceMutexes[deployment.Namespace]; !ok {
 		namespaceMutexes[deployment.Namespace] = &sync.Mutex{}
 	}
@@ -484,7 +485,7 @@ func deploy(deployment *cluster.Deployment, logger logger.Logger) error {
 		deploymentLog = deploymentError.Error()
 	}
 
-	result := cluster.DeploymentResult{}
+	result := types.DeploymentResult{}
 	result.Date = deploymentTs
 	result.Status = deploymentLog
 	result.Deployment = *deployment
@@ -499,21 +500,21 @@ func deploy(deployment *cluster.Deployment, logger logger.Logger) error {
 	return nil
 }
 
-func createDeployment(jsonString []byte) (cluster.Deployment, error) {
-	deployment := cluster.Deployment{}
+func createDeployment(jsonString []byte) (types.Deployment, error) {
+	deployment := types.Deployment{}
 
 	if err := json.Unmarshal(jsonString, &deployment); err != nil {
-		return cluster.Deployment{}, err
+		return types.Deployment{}, err
 	}
 
 	return deployment, nil
 }
 
-func createUser(jsonString []byte) (cluster.User, error) {
-	user := cluster.User{}
+func createUser(jsonString []byte) (types.User, error) {
+	user := types.User{}
 
 	if err := json.Unmarshal(jsonString, &user); err != nil {
-		return cluster.User{}, err
+		return types.User{}, err
 	}
 
 	return user, nil

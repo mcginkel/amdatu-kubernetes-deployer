@@ -47,7 +47,7 @@ func NewBlueGreen(deployer *cluster.Deployer) *bluegreen {
 	return &bluegreen{deployer}
 }
 
-func (bluegreen *bluegreen) Deploy()  error {
+func (bluegreen *bluegreen) Deploy() error {
 
 	bluegreen.deployer.Logger.Println("Starting blue-green deployment")
 
@@ -88,7 +88,7 @@ func (bluegreen *bluegreen) Deploy()  error {
 		port := selectPort(service.Spec.Ports)
 		bluegreen.deployer.Logger.Printf("Adding backend for port %v\n", port)
 		bluegreen.deployer.ProxyConfigurator.AddBackendServer(backendId, service.Spec.ClusterIP, int32(port.Port),
-			bluegreen.deployer.Deployment.UseCompression)
+			bluegreen.deployer.Deployment.UseCompression, bluegreen.deployer.Deployment.AdditionHttpHeaders)
 	}
 
 	if bluegreen.deployer.Deployment.Frontend != "" {
