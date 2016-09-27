@@ -72,6 +72,7 @@ func main() {
 	r.HandleFunc("/deployments/history/{namespace}/{id}", deleteDeploymentHistory).Methods("DELETE")
 	r.HandleFunc("/deployments/{namespace}/{appname}", UndeploymentHandler).Methods("DELETE")
 	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
+	r.HandleFunc("/redeployment/{namespace}/{id}/{ts}", RedeploymentHandler).Methods("POST")
 
 	r.HandleFunc("/validate", ValidationHandler).Methods("POST")
 
@@ -270,8 +271,6 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		logger.Printf("Error reading body: %v", err)
 	}
 
-	environment.NewEnvironmentVarStore(nil, logger)
-
 	deployment, err := createDeployment(body)
 	if err != nil {
 		logger.Printf("Error parsing body: %v", err)
@@ -284,6 +283,40 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 		logger.Println("============================ Deployment Failed =======================")
 	} else {
 		logger.Println("============================ Completed deployment =======================")
+	}
+
+}
+
+func RedeploymentHandler(w http.ResponseWriter, r *http.Request) {
+
+	logger := logger.NewHttpLogger(w)
+	defer logger.Flush()
+
+	vars := mux.Vars(r)
+	namespace := vars["namespace"]
+	id := vars["id"]
+	timestamp := vars["ts"]
+
+	registry, err := createDeploymentRegistry(logger)
+	if err != nil {
+		w.WriteHeader(500)
+		return
+	}
+
+	deployment, err := registry.FindDeployment(namespace, id, timestamp)
+	if err != nil {
+		w.WriteHeader(500)
+		io.WriteString(w, "Error finding deployments: "+err.Error())
+		return
+	}
+
+	err = deploy(&deployment, logger)
+	if err != nil {
+		w.WriteHeader(500)
+		logger.Printf("Error during deployment: %v\n", err)
+		logger.Println("============================ Redeployment Failed =======================")
+	} else {
+		logger.Println("============================ Completed redeployment =======================")
 	}
 
 }
