@@ -160,6 +160,35 @@ func (registry *DeploymentRegistry) ListDeploymentsWithAppname(namespace string,
 	return result, nil
 }
 
+func (registry *DeploymentRegistry) FindDeployment(namespace string, id string, timestamp string) (types.Deployment, error) {
+	keyName := fmt.Sprintf("/deployment/%v", namespace)
+
+	resp, err := registry.etcdApi.Get(context.Background(), keyName, &client.GetOptions{Recursive: true})
+	if err != nil {
+		return types.Deployment{}, err
+	}
+
+	result := types.Deployment{}
+	for _, node := range resp.Node.Nodes {
+		deploymentHistory, err := ParseDeploymentHistory(node.Nodes)
+
+		if err != nil {
+			log.Println("Can't parse deployment descriptor: "+err.Error(), node.Value)
+		} else {
+			if deploymentHistory.Id == id {
+				for _, deploymentResult := range deploymentHistory.DeploymentResults {
+					if deploymentResult.Date == timestamp {
+						result = deploymentResult.Deployment
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
 func (registry *DeploymentRegistry) DeleteDeployment(namespace, id string) error {
 	keyName := fmt.Sprintf("/deployment/%v/%v", namespace, id)
 
