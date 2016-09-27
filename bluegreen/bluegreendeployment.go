@@ -144,7 +144,7 @@ func (bluegreen *bluegreen) createReplicationController() error {
 }
 
 func (bluegreen *bluegreen) waitForPods(name, version string) error {
-	healthChan := make(chan bool)
+	healthChan := make(chan bool, 1)
 
 	bluegreen.deployer.Logger.Printf("Waiting up to %v seconds for pods to start and to become healthy\n", bluegreen.deployer.HealthcheckTimeout)
 
