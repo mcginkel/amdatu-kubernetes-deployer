@@ -46,9 +46,10 @@ type BackendServer struct {
 }
 
 type Frontend struct {
-	Hostname  string
-	Type      string
-	BackendId string
+	Hostname          string
+	Type              string
+	BackendId         string
+	RedirectWwwPrefix bool
 }
 
 func NewProxyConfigurator(etcdClient client.Client, restUrl string, proxyReload int, logger logger.Logger) *ProxyConfigurator {
@@ -142,8 +143,13 @@ func (proxyConfigurator *ProxyConfigurator) CreateFrontEnd(frontend *Frontend) (
 	resp, _ := kAPI.Get(context.Background(), key, nil)
 
 	if resp != nil {
-		log.Printf("Frontend %v already exists, skipping creation\n", key)
-		return key, nil
+		// frontend exists, but there might be changed properties like redirectWww
+		log.Printf("Frontend %v already exists, updating it\n", key)
+		old := Frontend{}
+		if err := json.Unmarshal([]byte(resp.Node.Value), &old); err != nil {
+			return "", err
+		}
+		frontend.BackendId = old.BackendId
 	}
 
 	bytes, err := json.Marshal(frontend)
