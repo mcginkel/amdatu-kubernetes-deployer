@@ -57,9 +57,10 @@ func (bluegreen *bluegreen) Deploy() error {
 	bluegreen.deployer.Logger.Printf("Prepare proxy backend %v....\n", backendId)
 	if bluegreen.deployer.Deployment.Frontend != "" {
 		frontend := proxies.Frontend{
-			Type:      "http",
-			Hostname:  bluegreen.deployer.Deployment.Frontend,
-			BackendId: backendId,
+			Type:              "http",
+			Hostname:          bluegreen.deployer.Deployment.Frontend,
+			BackendId:         backendId,
+			RedirectWwwPrefix: bluegreen.deployer.Deployment.RedirectWww,
 		}
 
 		if _, err := bluegreen.deployer.ProxyConfigurator.CreateFrontEnd(&frontend); err != nil {

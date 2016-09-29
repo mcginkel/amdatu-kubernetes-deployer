@@ -39,6 +39,7 @@ type Deployment struct {
 	AppName                 string            `json:"appName,omitempty"`
 	Replicas                int               `json:"replicas,omitempty"`
 	Frontend                string            `json:"frontend,omitempty"`
+	RedirectWww             bool              `json:"redirectWww,omitempty"`
 	PodSpec                 v1.PodSpec        `json:"podspec,omitempty"`
 	Namespace               string            `json:"namespace,omitempty"`
 	Email                   string            `json:"email,omitempty"`
