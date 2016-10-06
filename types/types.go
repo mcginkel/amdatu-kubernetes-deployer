@@ -31,7 +31,6 @@ const DNS952LabelFmt string = "[a-z]([-a-z0-9]*[a-z0-9])?"
 var dns952LabelRegexp = regexp.MustCompile("^" + DNS952LabelFmt + "$")
 
 type Deployment struct {
-	Id                      string            `json:"id,omitempty"`
 	WebHooks                []WebHook         `json:"webhooks,omitempty"`
 	DeploymentType          string            `json:"deploymentType,omitempty"`
 	NewVersion              string            `json:"newVersion,omitempty"`
@@ -65,7 +64,6 @@ type DeploymentResult struct {
 }
 
 type DeploymentHistory struct {
-	Id                string             `json:"id,omitempty"`
 	Namespace         string             `json:"namespace,omitempty"`
 	AppName           string             `json:"appName,omitempty"`
 	DeploymentResults []DeploymentResult `json:"deploymentResults,omitempty"`

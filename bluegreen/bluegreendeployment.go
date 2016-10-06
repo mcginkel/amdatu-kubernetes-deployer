@@ -261,7 +261,7 @@ func (bluegreen *bluegreen) checkPodHealth(pod *v1.Pod) bool {
 func (bluegreen *bluegreen) logHealth(pod *v1.Pod, health string) {
 	etcdApi := etcdclient.NewKeysAPI(bluegreen.deployer.EtcdClient)
 
-	keyName := fmt.Sprintf("/deployment/healthlog/%v/%v/%v/%v", bluegreen.deployer.Deployment.Namespace, bluegreen.deployer.Deployment.Id, bluegreen.deployer.Deployment.DeploymentTs, pod.Name)
+	keyName := fmt.Sprintf("/deployment/healthlog/%v/%v/%v/%v", bluegreen.deployer.Deployment.Namespace, bluegreen.deployer.Deployment.AppName, bluegreen.deployer.Deployment.DeploymentTs, pod.Name)
 
 	bluegreen.deployer.Logger.Printf("Writing pod health to %v\n", keyName)
 

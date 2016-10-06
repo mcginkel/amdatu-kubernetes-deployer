@@ -127,8 +127,8 @@ func (undeployer *undeployer) deleteDeploymentHistories() error {
 		return err
 	}
 	for _, history := range histories {
-		undeployer.logger.Printf("Deleting deployment history with id %v\n", history.Id)
-		err = undeployer.registry.DeleteDeployment(undeployer.namespace, history.Id)
+		undeployer.logger.Printf("Deleting deployment history of app %v\n", history.AppName)
+		err = undeployer.registry.DeleteDeployment(undeployer.namespace, history.AppName)
 		if err != nil {
 			return err
 		}

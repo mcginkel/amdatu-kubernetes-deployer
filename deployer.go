@@ -19,12 +19,12 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/deploymentregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/environment"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/migration"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/undeploy"
 	etcdclient "github.com/coreos/etcd/client"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/satori/go.uuid"
 	"golang.org/x/net/context"
 )
 
@@ -36,7 +36,6 @@ var namespaceMutexes = map[string]*sync.Mutex{}
 
 type deploymentStatus struct {
 	Success   bool   `json:"success"`
-	Id        string `json:"id,omitempty"`
 	Ts        string `json:"ts,omitempty"`
 	Podstatus string `json:"podstatus,omitempty"`
 }
@@ -67,25 +66,29 @@ func init() {
 
 func main() {
 
+	if err := migration.Migrate(etcdUrl); err != nil {
+		log.Fatal(err)
+	}
+
 	r := mux.NewRouter()
 	r.HandleFunc("/deployments/{namespace}", listDeployments).Methods("GET")
-	r.HandleFunc("/deployments/history/{namespace}/{id}", deleteDeploymentHistory).Methods("DELETE")
-	r.HandleFunc("/deployments/{namespace}/{appname}", UndeploymentHandler).Methods("DELETE")
-	r.HandleFunc("/deployment", DeploymentHandler).Methods("POST")
-	r.HandleFunc("/redeployment/{namespace}/{id}/{ts}", RedeploymentHandler).Methods("POST")
+	r.HandleFunc("/deployments/history/{namespace}/{appname}", deleteDeploymentHistoryHandler).Methods("DELETE")
+	r.HandleFunc("/deployments/{namespace}/{appname}", undeploymentHandler).Methods("DELETE")
+	r.HandleFunc("/deployment", deploymentHandler).Methods("POST")
+	r.HandleFunc("/redeployment/{namespace}/{appname}/{ts}", redeploymentHandler).Methods("POST")
 
-	r.HandleFunc("/validate", ValidationHandler).Methods("POST")
-
-	fmt.Printf("Deployer started and listening on port %v\n", port)
+	r.HandleFunc("/validate", validationHandler).Methods("POST")
 
 	r.HandleFunc("/deployment/stream", deployWebsocketHandler)
 	r.HandleFunc("/undeployment/stream/{namespace}/{appname}", undeployWebsocketHandler)
 
 	r.HandleFunc("/healthcheckdata", healthcheckDataHandler)
 
+	fmt.Printf("Deployer starting and listening on port %v\n", port)
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
 	}
+
 }
 
 func healthcheckDataHandler(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +158,7 @@ func listDeployments(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonStr)
 }
 
-func deleteDeploymentHistory(w http.ResponseWriter, r *http.Request) {
+func deleteDeploymentHistoryHandler(w http.ResponseWriter, r *http.Request) {
 
 	logger := logger.NewHttpLogger(w)
 	defer logger.Flush()
@@ -168,11 +171,11 @@ func deleteDeploymentHistory(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 
-	err = registry.DeleteDeployment(vars["namespace"], vars["id"])
+	err = registry.DeleteDeployment(vars["namespace"], vars["appname"])
 
 	if err != nil {
 		w.WriteHeader(500)
-		io.WriteString(w, "Error storing deployment: "+err.Error())
+		io.WriteString(w, "Error deleting deployment history: "+err.Error())
 		return
 	}
 }
@@ -233,12 +236,11 @@ func deployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = deploy(&deployment, logger)
-	keyName := fmt.Sprintf("/deployment/healthlog/%v/%v/%v", deployment.Namespace, deployment.Id, deployment.DeploymentTs)
+	keyName := fmt.Sprintf("/deployment/healthlog/%v/%v/%v", deployment.Namespace, deployment.AppName, deployment.DeploymentTs)
 
 	status := &deploymentStatus{}
 	if err == nil {
 		status.Success = true
-		status.Id = deployment.Id
 		status.Ts = deployment.DeploymentTs
 	} else {
 		status.Success = false
@@ -259,7 +261,7 @@ func deployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 	conn.WriteMessage(websocket.CloseMessage, []byte{})
 }
 
-func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
+func deploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 
 	logger := logger.NewHttpLogger(responseWriter)
 	defer logger.Flush()
@@ -287,14 +289,14 @@ func DeploymentHandler(responseWriter http.ResponseWriter, req *http.Request) {
 
 }
 
-func RedeploymentHandler(w http.ResponseWriter, r *http.Request) {
+func redeploymentHandler(w http.ResponseWriter, r *http.Request) {
 
 	logger := logger.NewHttpLogger(w)
 	defer logger.Flush()
 
 	vars := mux.Vars(r)
 	namespace := vars["namespace"]
-	id := vars["id"]
+	appname := vars["appname"]
 	timestamp := vars["ts"]
 
 	registry, err := createDeploymentRegistry(logger)
@@ -303,7 +305,7 @@ func RedeploymentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deployment, err := registry.FindDeployment(namespace, id, timestamp)
+	deployment, err := registry.FindDeployment(namespace, appname, timestamp)
 	if err != nil {
 		w.WriteHeader(500)
 		io.WriteString(w, "Error finding deployments: "+err.Error())
@@ -321,7 +323,7 @@ func RedeploymentHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func ValidationHandler(responseWriter http.ResponseWriter, req *http.Request) {
+func validationHandler(responseWriter http.ResponseWriter, req *http.Request) {
 
 	logger := logger.NewHttpLogger(responseWriter)
 	defer logger.Flush()
@@ -386,7 +388,7 @@ func undeployWebsocketHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func UndeploymentHandler(w http.ResponseWriter, req *http.Request) {
+func undeploymentHandler(w http.ResponseWriter, req *http.Request) {
 
 	logger := logger.NewHttpLogger(w)
 	defer logger.Flush()
@@ -455,11 +457,6 @@ func deploy(deployment *types.Deployment, logger logger.Logger) error {
 	}
 
 	registry := deploymentregistry.NewDeploymentRegistry(etcdClient)
-
-	if deployment.Id == "" {
-		id := uuid.NewV1().String()
-		deployment.Id = deployment.AppName + "-" + string(id)
-	}
 
 	deployer := cluster.NewDeployer(kubernetesurl, kubernetesUsername, kubernetesPassword, etcdClient, deployment, logger, healthTimeout, proxyRestUrl, proxyReloadSleep)
 	if deployment.DeployedVersion == "000" {
