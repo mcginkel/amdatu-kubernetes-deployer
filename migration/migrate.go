@@ -58,41 +58,66 @@ func migrateIds() error {
 		return errors.New("could not read deployments: " + err.Error())
 	}
 
-	for _, namespace := range deployments.Node.Nodes {
-		fmt.Println("migrating: " + namespace.Key)
+	for _, item := range deployments.Node.Nodes {
+		fmt.Println("migrating: " + item.Key)
 
-		if strings.HasSuffix(namespace.Key, "healthlog") {
+		if strings.HasSuffix(item.Key, "healthlog") {
 			fmt.Println("  handling healthlogs")
-			for _, ns := range namespace.Nodes {
-				fmt.Println("    ns: " + ns.Key)
-				for _, app := range ns.Nodes {
-					fmt.Println("      app: " + app.Key)
-					for _, ts := range app.Nodes {
-						fmt.Println("        ts: " + ts.Key)
-						for _, pod := range ts.Nodes {
-							fmt.Println("          migrating pod: " + pod.Key)
-							d := parseHealthKey(pod.Key)
-							// save with appname in key, delete old with id in key
-							etcdApi.Set(context.Background(), "/deployment/healthlog/"+d.Ns+"/"+d.App+"/"+d.Ts+"/"+d.Pod, pod.Value, nil)
-							etcdApi.Delete(context.Background(), "/deployment/healthlog/"+d.Ns+"/"+d.Id, &etcdclient.DeleteOptions{Recursive: true, Dir: true})
+			if item.Dir {
+				for _, namespace := range item.Nodes {
+					fmt.Println("    ns: " + namespace.Key)
+					if namespace.Dir {
+						for _, app := range namespace.Nodes {
+							fmt.Println("      app: " + app.Key)
+							d := parseHealthKey(app.Key)
+							ns := d.Ns
+							id := d.Id
+							if app.Dir {
+								for _, ts := range app.Nodes {
+									fmt.Println("        ts: " + ts.Key)
+									if ts.Dir {
+										for _, pod := range ts.Nodes {
+											fmt.Println("          migrating pod: " + pod.Key)
+											d := parseHealthKey(pod.Key)
+											// save with appname in key, delete old with id in key
+											_, err = etcdApi.Set(context.Background(), "/deployment/healthlog/"+d.Ns+"/"+d.App+"/"+d.Ts+"/"+d.Pod, pod.Value, nil)
+											if err != nil {
+												fmt.Println("SET ERROR: " + err.Error())
+											}
+										}
+									}
+								}
+							}
+							_, err = etcdApi.Delete(context.Background(), "/deployment/healthlog/"+ns+"/"+id, &etcdclient.DeleteOptions{Recursive: true, Dir: true})
+							if err != nil {
+								fmt.Println("DELETE ERROR: " + err.Error())
+							}
 						}
 					}
 				}
 			}
 		} else {
-			var ns string
-			for _, app := range namespace.Nodes {
-				fmt.Println("      app: " + app.Key)
-				for _, ts := range app.Nodes {
-					fmt.Println("        migrating ts: " + ts.Key)
-					d := parseDeploymentKey(ts.Key)
-					ns = d.Ns
-					// save with appname in key, delete old with id in key
-					etcdApi.Set(context.Background(), "/deployment/descriptors/"+d.Ns+"/"+d.App+"/"+d.Ts, ts.Value, nil)
-					etcdApi.Delete(context.Background(), "/deployment/"+d.Ns+"/"+d.Id, &etcdclient.DeleteOptions{Recursive: true, Dir: true})
+			ns := parseDeploymentKey(item.Key).Ns
+			if item.Dir {
+				for _, app := range item.Nodes {
+					fmt.Println("      app: " + app.Key)
+					if app.Dir {
+						for _, ts := range app.Nodes {
+							fmt.Println("        migrating ts: " + ts.Key)
+							d := parseDeploymentKey(ts.Key)
+							// save with appname in key, delete old with id in key
+							_, err = etcdApi.Set(context.Background(), "/deployment/descriptors/"+d.Ns+"/"+d.App+"/"+d.Ts, ts.Value, nil)
+							if err != nil {
+								fmt.Println("SET ERROR: " + err.Error())
+							}
+						}
+					}
 				}
 			}
-			etcdApi.Delete(context.Background(), "/deployment/"+ns, &etcdclient.DeleteOptions{Recursive: true, Dir: true})
+			_, err = etcdApi.Delete(context.Background(), "/deployment/"+ns, &etcdclient.DeleteOptions{Recursive: true, Dir: true})
+			if err != nil {
+				fmt.Println("DELETE ERROR: " + err.Error())
+			}
 		}
 
 	}
@@ -104,6 +129,9 @@ func migrateIds() error {
 func parseHealthKey(key string) deployment {
 	// "/deployment/healthlog/namespace/id/date/pod"
 	parts := strings.Split(key, "/")
+	if len(parts) == 5 {
+		return deployment{parts[3], parts[4], "", "", ""}
+	}
 	appname := extractAppnameFromId(parts[4])
 	deployment := deployment{parts[3], parts[4], appname, parts[5], parts[6]}
 	json, _ := json.Marshal(deployment)
@@ -114,6 +142,9 @@ func parseHealthKey(key string) deployment {
 func parseDeploymentKey(key string) deployment {
 	// "/deployment/namespace/id/date"
 	parts := strings.Split(key, "/")
+	if len(parts) == 3 {
+		return deployment{parts[2], "", "", "", ""}
+	}
 	appname := extractAppnameFromId(parts[3])
 	deployment := deployment{parts[2], parts[3], appname, parts[4], ""}
 	json, _ := json.Marshal(deployment)
