@@ -37,7 +37,7 @@ func NewDeploymentRegistry(etcdClient client.Client) DeploymentRegistry {
 }
 
 func (registry *DeploymentRegistry) StoreDeployment(deploymentResult types.DeploymentResult) error {
-	keyName := fmt.Sprintf("/deployment/%v/%v/%v", deploymentResult.Deployment.Namespace, deploymentResult.Deployment.Id, deploymentResult.Date)
+	keyName := fmt.Sprintf("/deployment/descriptors/%v/%v/%v", deploymentResult.Deployment.Namespace, deploymentResult.Deployment.AppName, deploymentResult.Date)
 
 	bytes, err := json.MarshalIndent(deploymentResult, "", "  ")
 	if err != nil {
@@ -51,8 +51,8 @@ func (registry *DeploymentRegistry) StoreDeployment(deploymentResult types.Deplo
 	return nil
 }
 
-func (registry *DeploymentRegistry) GetDeployment(namespace string, id string) (types.DeploymentHistory, error) {
-	keyName := fmt.Sprintf("/deployment/%v/%v", namespace, id)
+func (registry *DeploymentRegistry) GetDeployment(namespace string, appname string) (types.DeploymentHistory, error) {
+	keyName := fmt.Sprintf("/deployment/descriptors/%v/%v", namespace, appname)
 
 	resp, err := registry.etcdApi.Get(context.Background(), keyName, &client.GetOptions{Recursive: true})
 	if err != nil {
@@ -75,7 +75,6 @@ func ParseDeploymentHistory(nodes client.Nodes) (types.DeploymentHistory, error)
 		}
 
 		if i == 0 {
-			deploymentHistory.Id = deploymentResult.Deployment.Id
 			deploymentHistory.Namespace = deploymentResult.Deployment.Namespace
 			deploymentHistory.AppName = deploymentResult.Deployment.AppName
 		}
@@ -115,7 +114,7 @@ func ParseDeploymentHistory(nodes client.Nodes) (types.DeploymentHistory, error)
 }
 
 func (registry *DeploymentRegistry) ListDeployments(namespace string) ([]types.DeploymentHistory, error) {
-	keyName := fmt.Sprintf("/deployment/%v", namespace)
+	keyName := fmt.Sprintf("/deployment/descriptors/%v", namespace)
 
 	resp, err := registry.etcdApi.Get(context.Background(), keyName, &client.GetOptions{Recursive: true})
 	if err != nil {
@@ -137,7 +136,7 @@ func (registry *DeploymentRegistry) ListDeployments(namespace string) ([]types.D
 }
 
 func (registry *DeploymentRegistry) ListDeploymentsWithAppname(namespace string, appname string) ([]types.DeploymentHistory, error) {
-	keyName := fmt.Sprintf("/deployment/%v", namespace)
+	keyName := fmt.Sprintf("/deployment/descriptors/%v", namespace)
 
 	resp, err := registry.etcdApi.Get(context.Background(), keyName, &client.GetOptions{Recursive: true})
 	if err != nil {
@@ -160,8 +159,8 @@ func (registry *DeploymentRegistry) ListDeploymentsWithAppname(namespace string,
 	return result, nil
 }
 
-func (registry *DeploymentRegistry) FindDeployment(namespace string, id string, timestamp string) (types.Deployment, error) {
-	keyName := fmt.Sprintf("/deployment/%v", namespace)
+func (registry *DeploymentRegistry) FindDeployment(namespace string, appname string, timestamp string) (types.Deployment, error) {
+	keyName := fmt.Sprintf("/deployment/descriptors/%v", namespace)
 
 	resp, err := registry.etcdApi.Get(context.Background(), keyName, &client.GetOptions{Recursive: true})
 	if err != nil {
@@ -175,7 +174,7 @@ func (registry *DeploymentRegistry) FindDeployment(namespace string, id string, 
 		if err != nil {
 			log.Println("Can't parse deployment descriptor: "+err.Error(), node.Value)
 		} else {
-			if deploymentHistory.Id == id {
+			if deploymentHistory.AppName == appname {
 				for _, deploymentResult := range deploymentHistory.DeploymentResults {
 					if deploymentResult.Date == timestamp {
 						result = deploymentResult.Deployment
@@ -189,8 +188,8 @@ func (registry *DeploymentRegistry) FindDeployment(namespace string, id string, 
 	return result, nil
 }
 
-func (registry *DeploymentRegistry) DeleteDeployment(namespace, id string) error {
-	keyName := fmt.Sprintf("/deployment/%v/%v", namespace, id)
+func (registry *DeploymentRegistry) DeleteDeployment(namespace, appname string) error {
+	keyName := fmt.Sprintf("/deployment/descriptors/%v/%v", namespace, appname)
 
 	_, err := registry.etcdApi.Delete(context.Background(), keyName, &client.DeleteOptions{Recursive: true})
 	return err

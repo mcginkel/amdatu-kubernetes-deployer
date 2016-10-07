@@ -74,7 +74,6 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 	ctrl.Labels = labels
 
 	annotations := make(map[string]string)
-	annotations["id"] = deployer.Deployment.Id
 	annotations["deploymentTs"] = deployer.Deployment.DeploymentTs
 	annotations["appName"] = deployer.Deployment.AppName
 	annotations["version"] = deployer.Deployment.DeployedVersion
