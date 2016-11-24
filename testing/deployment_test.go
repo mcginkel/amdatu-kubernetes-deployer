@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -13,6 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"errors"
+
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/client"
@@ -58,8 +60,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestProxyAfterFirstFailedDeployment(t *testing.T) {
-	deployment := createDeployment("probe", false, true, false)
-	result, err := startDeploy(deployment)
+	descriptor := createDescriptor("probe", false, true, false)
+	result, err := startDeploy(descriptor, t)
 
 	if err != nil {
 		t.Fatal(err)
@@ -68,6 +70,9 @@ func TestProxyAfterFirstFailedDeployment(t *testing.T) {
 	if isDeploymentSuccessfull(result) {
 		t.Error("Health check failed, but deployment was successful")
 	}
+
+	// wait a bit, cleanup is done after deployment status is set to failure
+	time.Sleep(5 * time.Second)
 
 	_, err = etcd.Get(context.Background(), "/proxy/frontends/deployer-"+*namespace+".cloudrti.com", &etcdclient.GetOptions{})
 	if err == nil {
@@ -78,20 +83,20 @@ func TestProxyAfterFirstFailedDeployment(t *testing.T) {
 }
 
 func deploySuccessful(t *testing.T, healthcheckType string) {
-	deployment := createDeployment(healthcheckType, true, true, false)
-	result, err := startDeploy(deployment)
+	descriptor := createDescriptor(healthcheckType, true, true, false)
+	result, err := startDeploy(descriptor, t)
 
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if !isDeploymentSuccessfull(result) {
-		t.Error("Failed deployment")
+		t.Fatal("Failed deployment")
 	}
 
 	nrOfPods := countPodsForApp(t)
 	if nrOfPods != 2 {
-		t.Errorf("Incorrect number of pods found: %v", nrOfPods)
+		t.Errorf("Incorrect number of pods found, expected 2, found %v", nrOfPods)
 	}
 
 	checkProxyConfig(t, "")
@@ -108,8 +113,8 @@ func TestConsecutiveDeployments(t *testing.T) {
 }
 
 func TestFailedProbeHealthCheck(t *testing.T) {
-	deployment := createDeployment("probe", false, true, false)
-	result, err := startDeploy(deployment)
+	descriptor := createDescriptor("probe", false, true, false)
+	result, err := startDeploy(descriptor, t)
 
 	if err != nil {
 		t.Fatal(err)
@@ -121,8 +126,8 @@ func TestFailedProbeHealthCheck(t *testing.T) {
 }
 
 func TestFailedSimpleHealthCheck(t *testing.T) {
-	deployment := createDeployment("simple", false, true, false)
-	result, err := startDeploy(deployment)
+	descriptor := createDescriptor("simple", false, true, false)
+	result, err := startDeploy(descriptor, t)
 
 	if err != nil {
 		t.Fatal(err)
@@ -134,8 +139,8 @@ func TestFailedSimpleHealthCheck(t *testing.T) {
 }
 
 func TestIgnoreFailedHealthCheck(t *testing.T) {
-	deployment := createDeployment("probe", false, true, true)
-	result, err := startDeploy(deployment)
+	descriptor := createDescriptor("probe", false, true, true)
+	result, err := startDeploy(descriptor, t)
 
 	if err != nil {
 		t.Fatal(err)
@@ -147,13 +152,13 @@ func TestIgnoreFailedHealthCheck(t *testing.T) {
 }
 
 func TestConcurrentDeploy(t *testing.T) {
-	deployment := createDeployment("probe", true, false, false)
+	descriptor := createDescriptor("probe", true, false, false)
 
 	results := make(chan bool)
 
 	for i := 0; i < *nrOfConcurrentRuns; i++ {
 		fmt.Printf("Spinning up deployment: %v\n", i)
-		go backgroundDeploy(deployment, results)
+		go backgroundDeploy(descriptor, results, t)
 	}
 
 	for i := 0; i < *nrOfConcurrentRuns; i++ {
@@ -172,17 +177,17 @@ func TestConcurrentDeploy(t *testing.T) {
 }
 
 func TestDeployWithoutHealthCheck(t *testing.T) {
-	deployment := &types.Deployment{
+	descriptor := &types.Descriptor{
 		DeploymentType: "blue-green",
 		NewVersion:     "#",
-		AppName:        "nginx",
+		AppName:        APPNAME,
 		Replicas:       2,
 		PodSpec: v1.PodSpec{
 			Containers: []v1.Container{{
-				Name:  "nginx",
-				Image: "nginx",
+				Name:  "deployer-demo",
+				Image: "amdatu/amdatu-kubernetes-deployer-demo:alpha",
 				Ports: []v1.ContainerPort{{
-					ContainerPort: 80,
+					ContainerPort: 9999,
 				}},
 			},
 			},
@@ -191,7 +196,7 @@ func TestDeployWithoutHealthCheck(t *testing.T) {
 		Namespace:      *namespace,
 	}
 
-	result, err := startDeploy(deployment)
+	result, err := startDeploy(descriptor, t)
 
 	if err != nil {
 		t.Fatal(err)
@@ -200,6 +205,9 @@ func TestDeployWithoutHealthCheck(t *testing.T) {
 	if !isDeploymentSuccessfull(result) {
 		t.Error("Failed deployment")
 	}
+
+	// wait a bit, containers might still be starting up
+	time.Sleep(10 * time.Second)
 
 	nrOfPods := countPodsForApp(t)
 	if nrOfPods != 2 {
@@ -210,7 +218,7 @@ func TestDeployWithoutHealthCheck(t *testing.T) {
 func TestRedeployShouldFail(t *testing.T) {
 
 	labels := make(map[string]string)
-	labels["app"] = "nginx"
+	labels["app"] = APPNAME
 	rcList, err := kubernetes.ListReplicationControllersWithLabel(*namespace, labels)
 
 	if err != nil {
@@ -227,17 +235,17 @@ func TestRedeployShouldFail(t *testing.T) {
 
 	version := rcList.Items[0].Labels["version"]
 
-	deployment := &types.Deployment{
+	descriptor := &types.Descriptor{
 		DeploymentType: "blue-green",
 		NewVersion:     version,
-		AppName:        "nginx",
+		AppName:        APPNAME,
 		Replicas:       2,
 		PodSpec: v1.PodSpec{
 			Containers: []v1.Container{{
-				Name:  "nginx",
-				Image: "nginx",
+				Name:  "deployer-demo",
+				Image: "amdatu/amdatu-kubernetes-deployer-demo:alpha",
 				Ports: []v1.ContainerPort{{
-					ContainerPort: 80,
+					ContainerPort: 9999,
 				}},
 			},
 			},
@@ -246,7 +254,7 @@ func TestRedeployShouldFail(t *testing.T) {
 		Namespace:      *namespace,
 	}
 
-	result, err := startDeploy(deployment)
+	result, err := startDeploy(descriptor, t)
 
 	if err != nil {
 		t.Fatal(err)
@@ -264,19 +272,12 @@ func resetEnvironment() {
 		kubernetes.Patch(*namespace, "replicationcontrollers", rc.Name, `{"spec": {"replicas": 0}}`)
 	}
 
-	err := kubernetes.DeleteNamespace(*namespace)
-
-	if err != nil {
-		log.Println("Namespace not deleted")
-	}
+	kubernetes.DeleteNamespace(*namespace)
 
 	for {
 		foundTestNamespace := false
 
-		namespaces, err := kubernetes.ListNamespaces()
-		if err != nil {
-			log.Fatal("Error listing namespaces", err)
-		}
+		namespaces, _ := kubernetes.ListNamespaces()
 
 		for _, ns := range namespaces.Items {
 			if ns.Name == *namespace {
@@ -291,12 +292,23 @@ func resetEnvironment() {
 		}
 	}
 
-	_, err = kubernetes.CreateNamespace(*namespace)
-	if err != nil {
-		log.Fatal("Error creating namespace: %v", err)
-	}
+	kubernetes.CreateNamespace(*namespace)
 
 	etcd.Delete(context.Background(), "/proxy/frontends/deployer-"+*namespace+".cloudrti.com", &etcdclient.DeleteOptions{})
+
+	registry := etcdregistry.NewEtcdRegistry(etcd)
+	deployments, err := registry.GetDeployments(*namespace)
+	if err == nil {
+		for _, deployment := range deployments {
+			registry.DeleteDeployment(*namespace, deployment.Id)
+		}
+	}
+	descriptors, err := registry.GetDescriptors(*namespace)
+	if err == nil {
+		for _, descriptor := range descriptors {
+			registry.DeleteDescriptor(*namespace, descriptor.Id)
+		}
+	}
 }
 
 func checkProxyConfig(t *testing.T, version string) {
@@ -338,8 +350,8 @@ func countPodsForApp(t *testing.T) int {
 
 	nrOfRunning := 0
 	for _, pod := range pods.Items {
+		t.Logf("podstatus of %v is %v", pod.Name, pod.Status.Phase)
 		if pod.Status.Phase == "Running" {
-			println(pod.Name)
 			nrOfRunning++
 		}
 	}
@@ -347,8 +359,8 @@ func countPodsForApp(t *testing.T) int {
 	return nrOfRunning
 }
 
-func backgroundDeploy(deployment *types.Deployment, resultChan chan bool) {
-	result, err := startDeploy(deployment)
+func backgroundDeploy(descriptor *types.Descriptor, resultChan chan bool, t *testing.T) {
+	result, err := startDeploy(descriptor, t)
 	if err != nil {
 		resultChan <- false
 		return
@@ -384,7 +396,7 @@ func checkNoReclicationController(t *testing.T) {
 	}
 
 	if len(rcList.Items) != 0 {
-		t.Error("Invalid number of replication controllers")
+		t.Fatal("Invalid number of replication controllers, expected 0, got " + strconv.Itoa(len(rcList.Items)))
 	}
 }
 
@@ -395,44 +407,87 @@ func checkReplicationControllers(previousVersion int, t *testing.T) {
 	}
 
 	if len(rcList.Items) != 1 {
-		t.Error("Invalid number of replication controllers")
+		t.Fatal("Invalid number of replication controllers, expected 1, got " + strconv.Itoa(len(rcList.Items)))
 	}
 
 	versionString := rcList.Items[0].Labels["version"]
 	version, _ := strconv.Atoi(versionString)
 
 	if version != previousVersion+1 {
-		t.Error("Invalid version for replication controller")
+		t.Error("Invalid version for replication controller, expected " + strconv.Itoa(previousVersion+1) + ", got " + strconv.Itoa(version))
 	}
 }
 
-func isDeploymentSuccessfull(log string) bool {
-	return strings.Contains(log, "Completed deployment")
+func isDeploymentSuccessfull(status string) bool {
+	return status == types.DEPLOYMENTSTATUS_DEPLOYED
 }
 
-func startDeploy(deployment *types.Deployment) (string, error) {
-	buf, err := json.Marshal(deployment)
+func startDeploy(descriptor *types.Descriptor, t *testing.T) (string, error) {
+	buf, err := json.Marshal(descriptor)
 	if err != nil {
 		return "", err
 	}
 
 	jsonInputReader := bytes.NewReader(buf)
 
-	resp, err := http.Post(*deployerUrl, "application/json", jsonInputReader)
-
+	resp, err := http.Post(*deployerUrl+"descriptors", "application/json", jsonInputReader)
 	if err != nil {
 		return "", err
 	}
 
-	defer resp.Body.Close()
+	if resp.StatusCode != 201 {
+		return "", errors.New("creating descriptor didn't return 201")
+	}
+	descLocation := resp.Header.Get("Location")
+	lastSep := strings.LastIndex(descLocation, "/")
+	descId := descLocation[lastSep+1:]
+	lastSep = strings.Index(descId, "?")
+	descId = descId[:lastSep]
 
-	bodyBuf := new(bytes.Buffer)
-	bodyBuf.ReadFrom(resp.Body)
-	return bodyBuf.String(), nil
+	t.Log("descriptor id: " + descId)
 
+	resp, err = http.Post(fmt.Sprintf("%vdeployments?namespace=%v&descriptorId=%v", *deployerUrl, *namespace, descId), "application/json", strings.NewReader(""))
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != 202 {
+		return "", errors.New("creating deployment didn't return 202")
+	}
+
+	deplLocation := resp.Header.Get("Location")
+	lastSep = strings.LastIndex(deplLocation, "/")
+	deplId := deplLocation[lastSep+1:]
+	lastSep = strings.Index(deplId, "?")
+	deplId = deplId[:lastSep]
+
+	t.Log("deployment id: " + deplId)
+
+	deploying := true
+	deployment := &types.Deployment{}
+	for deploying {
+		resp, err = http.Get(*deployerUrl + deplLocation)
+		defer resp.Body.Close()
+		bodyBuf := new(bytes.Buffer)
+		bodyBuf.ReadFrom(resp.Body)
+		err = json.Unmarshal(bodyBuf.Bytes(), deployment)
+		if err != nil {
+			return "", errors.New("error parsing deployment: " + err.Error())
+		}
+		if deployment.Status == types.DEPLOYMENTSTATUS_DEPLOYING {
+			time.Sleep(2 * time.Second)
+		} else {
+			deploying = false
+		}
+
+	}
+
+	t.Log("deployment version: " + deployment.Version)
+
+	return deployment.Status, nil
 }
 
-func createDeployment(healthcheckType string, healthy bool, useHealthCheck bool, ignoreHealthCheck bool) *types.Deployment {
+func createDescriptor(healthcheckType string, healthy bool, useHealthCheck bool, ignoreHealthCheck bool) *types.Descriptor {
 	var path string
 	if healthy && strings.EqualFold(healthcheckType, "probe") {
 		path = "healthy"
@@ -444,7 +499,7 @@ func createDeployment(healthcheckType string, healthy bool, useHealthCheck bool,
 		path = "error"
 	}
 
-	return &types.Deployment{
+	return &types.Descriptor{
 		DeploymentType: "blue-green",
 		NewVersion:     "#",
 		AppName:        APPNAME,

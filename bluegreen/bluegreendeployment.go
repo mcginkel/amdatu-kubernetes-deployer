@@ -37,8 +37,6 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
-	etcdclient "github.com/coreos/etcd/client"
-	"golang.org/x/net/context"
 )
 
 type bluegreen struct {
@@ -51,19 +49,21 @@ func NewBlueGreen(deployer *cluster.Deployer) *bluegreen {
 
 func (bluegreen *bluegreen) Deploy() error {
 
+	descriptor := bluegreen.deployer.Deployment.Descriptor
+
 	bluegreen.deployer.Logger.Println("Starting blue-green deployment")
 
-	backendId := bluegreen.deployer.Deployment.Namespace + "-" + bluegreen.deployer.CreateRcName()
+	backendId := descriptor.Namespace + "-" + bluegreen.deployer.CreateRcName()
 	bluegreen.deployer.Logger.Printf("Prepare proxy backend %v....\n", backendId)
-	if bluegreen.deployer.Deployment.Frontend != "" {
+	if descriptor.Frontend != "" {
 		frontend := proxies.Frontend{
 			Type:              "http",
-			Hostname:          bluegreen.deployer.Deployment.Frontend,
+			Hostname:          descriptor.Frontend,
 			BackendId:         backendId,
-			RedirectWwwPrefix: bluegreen.deployer.Deployment.RedirectWww,
+			RedirectWwwPrefix: descriptor.RedirectWww,
 		}
 
-		if _, err := bluegreen.deployer.ProxyConfigurator.CreateFrontEnd(&frontend); err != nil {
+		if _, err := bluegreen.deployer.Config.ProxyConfigurator.CreateFrontEnd(&frontend); err != nil {
 			return err
 		}
 	} else {
@@ -90,19 +90,19 @@ func (bluegreen *bluegreen) Deploy() error {
 	if len(service.Spec.Ports) > 0 {
 		port := selectPort(service.Spec.Ports)
 		bluegreen.deployer.Logger.Printf("Adding backend for port %v\n", port)
-		bluegreen.deployer.ProxyConfigurator.AddBackendServer(backendId, service.Spec.ClusterIP, int32(port.Port),
-			bluegreen.deployer.Deployment.UseCompression, bluegreen.deployer.Deployment.AdditionHttpHeaders)
+		bluegreen.deployer.Config.ProxyConfigurator.AddBackendServer(backendId, service.Spec.ClusterIP, int32(port.Port),
+			descriptor.UseCompression, descriptor.AdditionHttpHeaders)
 	}
 
-	if bluegreen.deployer.Deployment.Frontend != "" {
-		if err := bluegreen.deployer.ProxyConfigurator.WaitForBackend(backendId); err != nil {
+	if descriptor.Frontend != "" {
+		if err := bluegreen.deployer.Config.ProxyConfigurator.WaitForBackend(backendId, bluegreen.deployer.Logger); err != nil {
 			bluegreen.deployer.Logger.Println(err)
 			return err
 		}
 
 		bluegreen.deployer.Logger.Println("Switch proxy backends....")
 
-		if err := bluegreen.deployer.ProxyConfigurator.SwitchBackend(bluegreen.deployer.Deployment.Frontend, backendId); err != nil {
+		if err := bluegreen.deployer.Config.ProxyConfigurator.SwitchBackend(descriptor.Frontend, backendId); err != nil {
 			bluegreen.deployer.Logger.Printf("%v", err)
 			return err
 		}
@@ -128,17 +128,19 @@ func selectPort(ports []v1.ServicePort) v1.ServicePort {
 
 func (bluegreen *bluegreen) createReplicationController() error {
 
+	descriptor := bluegreen.deployer.Deployment.Descriptor
+
 	_, err := bluegreen.deployer.CreateReplicationController()
 	if err != nil {
 		return err
 	}
 
-	if bluegreen.deployer.Deployment.Replicas == 0 {
+	if descriptor.Replicas == 0 {
 		return nil
 	}
 
-	if bluegreen.deployer.Deployment.UseHealthCheck && !bluegreen.deployer.Deployment.IgnoreHealthCheck {
-		return bluegreen.waitForPods(bluegreen.deployer.CreateRcName(), bluegreen.deployer.Deployment.DeployedVersion)
+	if descriptor.UseHealthCheck && !descriptor.IgnoreHealthCheck {
+		return bluegreen.waitForPods(bluegreen.deployer.CreateRcName(), bluegreen.deployer.Deployment.Version)
 	} else {
 		return nil
 	}
@@ -147,7 +149,7 @@ func (bluegreen *bluegreen) createReplicationController() error {
 func (bluegreen *bluegreen) waitForPods(name, version string) error {
 	healthChan := make(chan bool, 1)
 
-	bluegreen.deployer.Logger.Printf("Waiting up to %v seconds for pods to start and to become healthy\n", bluegreen.deployer.HealthcheckTimeout)
+	bluegreen.deployer.Logger.Printf("Waiting up to %v seconds for pods to start and to become healthy\n", bluegreen.deployer.Config.HealthTimeout)
 
 	go bluegreen.checkPods(name, version, healthChan)
 
@@ -158,7 +160,7 @@ func (bluegreen *bluegreen) waitForPods(name, version string) error {
 		} else {
 			return errors.New("Error while waiting for pods to become healthy")
 		}
-	case <-time.After(time.Duration(bluegreen.deployer.HealthcheckTimeout) * time.Second):
+	case <-time.After(time.Duration(bluegreen.deployer.Config.HealthTimeout) * time.Second):
 		healthChan <- false
 		return errors.New("Timeout waiting for pods to become healthy")
 	}
@@ -166,16 +168,19 @@ func (bluegreen *bluegreen) waitForPods(name, version string) error {
 }
 
 func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool) {
+
+	descriptor := bluegreen.deployer.Deployment.Descriptor
+
 	for {
 		select {
 		case <-healthChan:
 			return
 		default:
 			{
-				podSelector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.DeployedVersion}
-				pods, listErr := bluegreen.deployer.K8client.ListPodsWithLabel(bluegreen.deployer.Deployment.Namespace, podSelector)
+				podSelector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.Version}
+				pods, listErr := bluegreen.deployer.K8client.ListPodsWithLabel(descriptor.Namespace, podSelector)
 				if listErr != nil {
-					bluegreen.deployer.Logger.Printf(fmt.Sprintf("Error listing pods for new deployment: %\n", listErr))
+					bluegreen.deployer.Logger.Printf(fmt.Sprintf("Error listing pods for new deployment: %v\n", listErr))
 					healthChan <- false
 
 					return
@@ -183,7 +188,7 @@ func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool
 
 				nrOfPods := helper.CountRunningPods(pods.Items)
 
-				if nrOfPods == bluegreen.deployer.Deployment.Replicas {
+				if nrOfPods == descriptor.Replicas {
 					healthy := true
 
 					for _, pod := range pods.Items {
@@ -212,6 +217,9 @@ func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool
 }
 
 func (bluegreen *bluegreen) checkPodHealth(pod *v1.Pod) bool {
+
+	descriptor := bluegreen.deployer.Deployment.Descriptor
+
 	var resp *http.Response
 	var err error
 
@@ -219,9 +227,9 @@ func (bluegreen *bluegreen) checkPodHealth(pod *v1.Pod) bool {
 	url := bluegreen.deployer.GetHealthcheckUrl(pod.Status.PodIP, port)
 
 	//bluegreen.deployer.Logger.Printf("Checking pod health with healthcheck type %s on url %s",
-	//	bluegreen.deployer.Deployment.HealthCheckType, url);
+	//	descriptor.HealthCheckType, url);
 
-	if strings.EqualFold(bluegreen.deployer.Deployment.HealthCheckType, "simple") {
+	if strings.EqualFold(descriptor.HealthCheckType, "simple") {
 		resp, err = http.Get(url)
 		if err != nil {
 			bluegreen.logHealth(pod, "{\"simplehealthcheck\": \"http get failed\"}")
@@ -237,12 +245,14 @@ func (bluegreen *bluegreen) checkPodHealth(pod *v1.Pod) bool {
 		// default to healthcheck type "probe"
 		resp, err = http.Post(url, "application/json", nil)
 		if err != nil {
+			bluegreen.logHealth(pod, "{\"probehealthcheck\": \"failed: "+err.Error()+"\"}")
 			return false
 		}
 		defer resp.Body.Close()
 
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
+			bluegreen.logHealth(pod, "{\"probehealthcheck\": \"failed: "+err.Error()+"\"}")
 			return false
 		}
 
@@ -250,7 +260,7 @@ func (bluegreen *bluegreen) checkPodHealth(pod *v1.Pod) bool {
 
 		var dat = HealthCheckEvent{}
 		if err := json.Unmarshal(body, &dat); err != nil {
-			bluegreen.deployer.Logger.Println(err)
+			bluegreen.deployer.Logger.Println("Error parsing healthcheck: " + err.Error())
 			return false
 		}
 
@@ -259,13 +269,8 @@ func (bluegreen *bluegreen) checkPodHealth(pod *v1.Pod) bool {
 }
 
 func (bluegreen *bluegreen) logHealth(pod *v1.Pod, health string) {
-	etcdApi := etcdclient.NewKeysAPI(bluegreen.deployer.EtcdClient)
-
-	keyName := fmt.Sprintf("/deployment/healthlog/%v/%v/%v/%v", bluegreen.deployer.Deployment.Namespace, bluegreen.deployer.Deployment.AppName, bluegreen.deployer.Deployment.DeploymentTs, pod.Name)
-
-	bluegreen.deployer.Logger.Printf("Writing pod health to %v\n", keyName)
-
-	etcdApi.Set(context.Background(), keyName, health, nil)
+	descriptor := bluegreen.deployer.Deployment.Descriptor
+	bluegreen.deployer.Config.EtcdRegistry.StoreHealth(descriptor.Namespace, bluegreen.deployer.Deployment.Id, pod.Name, health)
 }
 
 type HealthCheckEvent struct {

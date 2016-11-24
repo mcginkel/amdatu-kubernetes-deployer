@@ -33,8 +33,7 @@ import (
 var kAPI client.KeysAPI
 
 func TestMain(m *testing.M) {
-	c := createEtcdClient()
-	kAPI = client.NewKeysAPI(c)
+	kAPI = createEtcdApi()
 
 	_, err := kAPI.Delete(context.Background(), "/proxy", &client.DeleteOptions{Recursive: true, Dir: true})
 
@@ -46,8 +45,8 @@ func TestMain(m *testing.M) {
 }
 
 func createProxyConfigurator(restUrl string) *ProxyConfigurator {
-	c := createEtcdClient()
-	return NewProxyConfigurator(c, restUrl, 2, logger.NewConsoleLogger())
+	kAPI := createEtcdApi()
+	return NewProxyConfigurator(kAPI, restUrl, 2)
 
 }
 
@@ -60,7 +59,7 @@ func TestCreateProxyConfigurator(t *testing.T) {
 func TestAddBackendServer_newBackend(t *testing.T) {
 	pc := createProxyConfigurator("")
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, logger.NewConsoleLogger()); err != nil {
 		t.Error(err)
 	}
 
@@ -91,11 +90,11 @@ func TestAddBackendServer_newBackend(t *testing.T) {
 func TestAddBackendServer_existingBackend(t *testing.T) {
 	pc := createProxyConfigurator("")
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, logger.NewConsoleLogger()); err != nil {
 		t.Error(err)
 	}
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.2", 8181, false); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.2", 8181, false, logger.NewConsoleLogger()); err != nil {
 		t.Error(err)
 	}
 
@@ -111,11 +110,11 @@ func TestAddBackendServer_existingBackend(t *testing.T) {
 
 func TestDeleteDeployment(t *testing.T) {
 	pc := createProxyConfigurator("")
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, logger.NewConsoleLogger()); err != nil {
 		t.Error(err)
 	}
 
-	pc.DeleteDeployment("testbackend")
+	pc.DeleteDeployment("testbackend", logger.NewConsoleLogger())
 
 	resp, _ := kAPI.Get(context.Background(), "/proxy/backends/testbackend", nil)
 
@@ -127,7 +126,7 @@ func TestDeleteDeployment(t *testing.T) {
 func TestDeleteDeployment_NotExistingShouldntFail(t *testing.T) {
 	pc := createProxyConfigurator("")
 
-	pc.DeleteDeployment("testbackend")
+	pc.DeleteDeployment("testbackend", logger.NewConsoleLogger())
 }
 
 func TestCreateFrontend(t *testing.T) {
@@ -213,11 +212,11 @@ func TestSwitchBackend(t *testing.T) {
 func TestBackendServer(t *testing.T) {
 	pc := createProxyConfigurator("")
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, logger.NewConsoleLogger()); err != nil {
 		t.Error(err)
 	}
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.2", 8181, false); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.2", 8181, false, logger.NewConsoleLogger()); err != nil {
 		t.Error(err)
 	}
 
@@ -240,7 +239,7 @@ func TestBackendServer(t *testing.T) {
 func TestFrontendExistsForBackend_NotExisting(t *testing.T) {
 	pc := createProxyConfigurator("")
 
-	exists := pc.FrontendExistsForDeployment("somebackend")
+	exists := pc.FrontendExistsForDeployment("somebackend", logger.NewConsoleLogger())
 
 	if exists {
 		t.Fail()
@@ -259,7 +258,7 @@ func TestFrontendExistsForBackend_Existing(t *testing.T) {
 
 	pc.CreateFrontEnd(&frontend)
 
-	exists := pc.FrontendExistsForDeployment("testbackend")
+	exists := pc.FrontendExistsForDeployment("testbackend", logger.NewConsoleLogger())
 
 	if !exists {
 		t.Fail()
@@ -319,13 +318,13 @@ func TestWaitForBackend_UP(t *testing.T) {
 }
 
 func runWaitForBackend(pc *ProxyConfigurator, successChan chan bool) {
-	r := pc.WaitForBackend("mybackend")
+	r := pc.WaitForBackend("mybackend", logger.NewConsoleLogger())
 
 	successChan <- r
 	return
 }
 
-func createEtcdClient() client.Client {
+func createEtcdApi() client.Client {
 	cfg := client.Config{
 		Endpoints: []string{"http://192.168.64.3:2379"},
 	}
@@ -335,5 +334,5 @@ func createEtcdClient() client.Client {
 		log.Fatal("Couldn't connect to etcd")
 	}
 
-	return c
+	return client.NewKeysAPI(c)
 }
