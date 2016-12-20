@@ -24,6 +24,7 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 )
 
 type Deployer struct {
@@ -56,11 +57,26 @@ func (d *Deployer) deploy(deployment *types.Deployment, logger logger.Logger) {
 		rc, err := deployer.FindCurrentRc()
 		if err != nil || len(rc) == 0 {
 			deployer.Deployment.Version = "1"
-		} else if len(rc) > 1 {
-			d.handleError(logger, deployment, "Could not determine next deployment version, more than a singe Replication Controller found")
-			return
 		} else {
+
+			// sometimes we have orphaned RCs, sort them out
+			var activeRcs = []v1.ReplicationController{}
 			for _, ctrl := range rc {
+				if ctrl.DeletionTimestamp == nil {
+					activeRcs = append(activeRcs, ctrl)
+				} else {
+					logger.Printf("Note: found orphaned replication controller %v, will try to finally delete it...\n", ctrl.Name)
+					deployer.K8client.DeleteReplicationController(ctrl.Namespace, ctrl.Name)
+				}
+			}
+
+			if len(activeRcs) == 0 {
+				deployer.Deployment.Version = "1"
+			} else if len(activeRcs) > 1 {
+				d.handleError(logger, deployment, "Could not determine next deployment version, more than a singe Replication Controller found")
+				return
+			} else {
+				var ctrl = activeRcs[0]
 				logger.Println(ctrl.Name)
 				versionString := ctrl.Labels["version"]
 				newVersion, err := cluster.DetermineNewVersion(versionString)
