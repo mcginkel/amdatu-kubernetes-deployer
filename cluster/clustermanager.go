@@ -200,21 +200,7 @@ func (deployer *Deployer) CreatePersistentService() (*v1.Service, error) {
 
 		srv.Labels = labels
 
-		ports := []v1.ServicePort{}
-		for _, container := range descriptor.PodSpec.Containers {
-			for _, port := range container.Ports {
-
-				servicePort := v1.ServicePort{Port: port.ContainerPort}
-				if port.Name != "" {
-					servicePort.Name = port.Name
-					servicePort.TargetPort = intstr.IntOrString{Type: intstr.String, StrVal: port.Name}
-				} else {
-					servicePort.TargetPort = intstr.IntOrString{Type: intstr.Int, IntVal: port.ContainerPort}
-				}
-				servicePort.Protocol = v1.ProtocolTCP
-				ports = append(ports, servicePort)
-			}
-		}
+		ports := getPorts(descriptor.PodSpec.Containers)
 
 		selector := make(map[string]string)
 		selector["app"] = descriptor.AppName
@@ -235,8 +221,63 @@ func (deployer *Deployer) CreatePersistentService() (*v1.Service, error) {
 
 	} else {
 		deployer.Logger.Printf("Persistent service %v already exists on IP %v\n", existing.Name, existing.Spec.ClusterIP)
+
+		// check if ports changed
+		newPorts := getPorts(descriptor.PodSpec.Containers)
+		existingPorts := existing.Spec.Ports
+
+		//deployer.Logger.Printf("new: %v\n", newPorts)
+		//deployer.Logger.Printf("existing: %v\n", existingPorts)
+
+		if servicePortEquals(newPorts, existingPorts) {
+			deployer.Logger.Println("No update on persistent service needed.")
+		} else {
+			deployer.Logger.Println("Updating persistent service, ports changed!")
+			existing.Spec.Ports = newPorts
+			_, err := deployer.K8client.UpdateService(existing.Namespace, existing)
+			if err != nil {
+				deployer.Logger.Println("Error updating persistent service: " + err.Error())
+				return existing, err
+			}
+		}
+
 		return existing, nil
 	}
+}
+
+func getPorts(containers []v1.Container) []v1.ServicePort {
+	ports := []v1.ServicePort{}
+	for _, container := range containers {
+		for _, port := range container.Ports {
+
+			servicePort := v1.ServicePort{Port: port.ContainerPort}
+			if port.Name != "" {
+				servicePort.Name = port.Name
+				servicePort.TargetPort = intstr.IntOrString{Type: intstr.String, StrVal: port.Name}
+			} else {
+				servicePort.TargetPort = intstr.IntOrString{Type: intstr.Int, IntVal: port.ContainerPort}
+			}
+			servicePort.Protocol = v1.ProtocolTCP
+			ports = append(ports, servicePort)
+		}
+	}
+	return ports
+}
+
+func servicePortEquals(a, b []v1.ServicePort) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, port := range a {
+		otherPort := b[i]
+		if port.Port != otherPort.Port ||
+			port.TargetPort != otherPort.TargetPort ||
+			port.Protocol != otherPort.Protocol {
+
+			return false
+		}
+	}
+	return true
 }
 
 func (deployer *Deployer) FindCurrentRc() ([]v1.ReplicationController, error) {

@@ -1,29 +1,30 @@
 {
 	"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-deployer",
 	"GoVersion": "go1.6",
+	"GodepVersion": "v75",
 	"Packages": [
 		"./..."
 	],
 	"Deps": [
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/resource",
-			"Rev": "1a3cfdb7f4895a23fc4aa0e5be1ca33aa5c6c52e"
+			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
 		},
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/unversioned",
-			"Rev": "1a3cfdb7f4895a23fc4aa0e5be1ca33aa5c6c52e"
+			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
 		},
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/util",
-			"Rev": "1a3cfdb7f4895a23fc4aa0e5be1ca33aa5c6c52e"
+			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
 		},
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1",
-			"Rev": "1a3cfdb7f4895a23fc4aa0e5be1ca33aa5c6c52e"
+			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
 		},
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/client",
-			"Rev": "1a3cfdb7f4895a23fc4aa0e5be1ca33aa5c6c52e"
+			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
 		},
 		{
 			"ImportPath": "github.com/coreos/etcd/Godeps/_workspace/src/github.com/ugorji/go/codec",
@@ -85,6 +86,22 @@
 		{
 			"ImportPath": "speter.net/go/exp/math/dec/inf",
 			"Rev": "42ca6cd68aa922bc3f32f1e056e61b65945d9ad7"
+		},
+		{
+			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/vendor/github.com/spf13/pflag",
+			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
+		},
+		{
+			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/vendor/speter.net/go/exp/math/dec/inf",
+			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
+		},
+		{
+			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/vendor/github.com/google/gofuzz",
+			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
+		},
+		{
+			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/vendor/golang.org/x/net/websocket",
+			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
 		}
 	]
 }

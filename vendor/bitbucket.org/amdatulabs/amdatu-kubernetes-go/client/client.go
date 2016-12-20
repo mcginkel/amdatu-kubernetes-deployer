@@ -452,6 +452,20 @@ func (c *Client) CreateService(namespace string, service *v1.Service) (*v1.Servi
 	return &result, err
 }
 
+// UpdateService updates a service within the namespace.
+// Note that this method updates uses a PUT, so the existing object is overwritten.
+func (c *Client) UpdateService(namespace string, service *v1.Service) (*v1.Service, error) {
+	result := v1.Service{}
+	url := c.Url + "/api/v1/namespaces/" + namespace + "/services/" + service.Name
+	err := c.put(url, &service, &result)
+
+	if err != nil {
+		return &v1.Service{}, err
+	}
+
+	return &result, nil
+}
+
 func (c *Client) DeleteService(namespace, service string) error {
 	url := c.Url + "/api/v1/namespaces/" + namespace + "/services/" + service
 	return c.delete(url)
@@ -460,7 +474,7 @@ func (c *Client) DeleteService(namespace, service string) error {
 func (c *Client) Patch(namespace, resourceType, objectName, jsonPatch string) error {
 	jsonBytes := []byte(jsonPatch)
 
-	url := c.Url + "/api/v1/namespaces/" + namespace + "/" + resourceType +"/" + objectName
+	url := c.Url + "/api/v1/namespaces/" + namespace + "/" + resourceType + "/" + objectName
 	log.Printf("Requesting patch on %v\n", url)
 
 	req, err := http.NewRequest("PATCH", url, bytes.NewBuffer(jsonBytes))
@@ -474,8 +488,6 @@ func (c *Client) Patch(namespace, resourceType, objectName, jsonPatch string) er
 	_, err = c.HttpClient.Do(req)
 	return err
 }
-
-
 
 func (c *Client) createRequest(method, url string, body io.Reader) (*http.Request, error) {
 	request, err := http.NewRequest(method, url, body)
