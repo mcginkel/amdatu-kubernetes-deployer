@@ -97,6 +97,10 @@ func (proxyConfigurator *ProxyConfigurator) AddBackendServer(deploymentName stri
 		return err
 	}
 
+	if additionHttpHeaders != nil {
+		prefixSpacesInHeaderValues(additionHttpHeaders)
+	}
+
 	value := BackendServer{
 		IPAddress:           ip,
 		Port:                port,
@@ -272,4 +276,14 @@ func (proxyConfigurator *ProxyConfigurator) prepareBaseConfig() error {
 	}
 
 	return nil
+}
+
+func prefixSpacesInHeaderValues(headers []types.HttpHeader) {
+	for i, header := range headers {
+		value := header.Value
+		// prefix spaces with \, but only if that wasn't done before
+		value = strings.Replace(value, " ", "\\ ", -1)
+		value = strings.Replace(value, "\\\\ ", "\\ ", -1)
+		headers[i].Value = value
+	}
 }
