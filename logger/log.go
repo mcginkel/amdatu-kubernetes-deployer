@@ -17,81 +17,18 @@ package logger
 
 import (
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 
-	"github.com/gorilla/websocket"
+	"strings"
+	"time"
+
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 )
 
 type Logger interface {
 	Println(v ...interface{})
 	Printf(format string, v ...interface{})
-	Flush()
-}
-
-type HttpLogger struct {
-	RespWriter http.ResponseWriter
-	buffer     []string
-}
-
-func NewHttpLogger(responseWriter http.ResponseWriter) *HttpLogger {
-	return &HttpLogger{responseWriter, []string{}}
-}
-
-func (logger *HttpLogger) Println(v ...interface{}) {
-	msg := fmt.Sprintln(v...)
-	log.Println(msg)
-	logger.buffer = append(logger.buffer, msg)
-}
-
-func (logger *HttpLogger) Printf(format string, v ...interface{}) {
-	msg := fmt.Sprintf(format, v...)
-	log.Printf(msg)
-	logger.buffer = append(logger.buffer, msg)
-}
-
-func (logger *HttpLogger) Flush() {
-	for _, msg := range logger.buffer {
-		io.WriteString(logger.RespWriter, msg)
-	}
-}
-
-type WebsocketLogger struct {
-	Conn *websocket.Conn
-}
-
-func NewWebsocketLogger(conn *websocket.Conn) *WebsocketLogger {
-	return &WebsocketLogger{conn}
-}
-
-func (logger *WebsocketLogger) Println(v ...interface{}) {
-	msg := fmt.Sprintln(v...)
-	log.Println(msg)
-	w, err := logger.Conn.NextWriter(websocket.TextMessage)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	w.Write([]byte(msg))
-	w.Close()
-}
-
-func (logger *WebsocketLogger) Printf(format string, v ...interface{}) {
-	msg := fmt.Sprintf(format, v...)
-	log.Printf(msg)
-	w, err := logger.Conn.NextWriter(websocket.TextMessage)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	w.Write([]byte(msg))
-	w.Close()
-}
-
-func (logger *WebsocketLogger) Flush() {
 }
 
 type ConsoleLogger struct{}
@@ -107,8 +44,40 @@ func (logger *ConsoleLogger) Println(v ...interface{}) {
 
 func (logger *ConsoleLogger) Printf(format string, v ...interface{}) {
 	msg := fmt.Sprintf(format, v...)
-	log.Printf(msg)
+	log.Println(msg)
 }
 
-func (logger *ConsoleLogger) Flush() {
+type DeploymentLogger struct {
+	deployment *types.Deployment
+	registry   *etcdregistry.EtcdRegistry
+	baseLogger Logger
+}
+
+func NewDeploymentLogger(deployment *types.Deployment, registry *etcdregistry.EtcdRegistry, baseLogger Logger) *DeploymentLogger {
+	return &DeploymentLogger{deployment, registry, baseLogger}
+}
+
+func (logger *DeploymentLogger) Println(v ...interface{}) {
+	logger.baseLogger.Println(v)
+	msg := fmt.Sprintln(v...)
+	logger.addToDeployment(msg)
+}
+
+func (logger *DeploymentLogger) Printf(format string, v ...interface{}) {
+	logger.baseLogger.Printf(format, v)
+	msg := fmt.Sprintf(format, v...)
+	logger.addToDeployment(msg)
+}
+
+func (logger *DeploymentLogger) addToDeployment(msg string) {
+	logger.registry.StoreLogLine(logger.deployment.Descriptor.Namespace, logger.deployment.Id, addTimeAndNewLine(msg))
+}
+
+func addTimeAndNewLine(msg string) string {
+	if !strings.HasSuffix(msg, "\n") {
+		msg += "\n"
+	}
+	ts := time.Now().Format(time.RFC3339)
+	msg = ts + " " + msg
+	return msg
 }

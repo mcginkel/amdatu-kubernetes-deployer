@@ -16,15 +16,17 @@ limitations under the License.
 package cluster
 
 import (
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	"strings"
 	"testing"
+
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 )
 
 func TestGetHealthUrl_WithSlash(t *testing.T) {
 
-	depl := Deployment{
-		HealthCheckUrl: "/myhealth",
+	depl := types.Descriptor{
+		HealthCheckPath: "/myhealth",
 	}
 
 	deployer := Deployer{
@@ -40,8 +42,8 @@ func TestGetHealthUrl_WithSlash(t *testing.T) {
 
 func TestGetHealthUrl_WithoutSlash(t *testing.T) {
 
-	depl := Deployment{
-		HealthCheckUrl: "myhealth",
+	depl := types.Descriptor{
+		HealthCheckPath: "myhealth",
 	}
 
 	deployer := Deployer{
@@ -57,8 +59,8 @@ func TestGetHealthUrl_WithoutSlash(t *testing.T) {
 
 func TestGetHealthUrl_Default(t *testing.T) {
 
-	depl := Deployment{
-		HealthCheckUrl: "",
+	depl := types.Descriptor{
+		HealthCheckPath: "",
 	}
 
 	deployer := Deployer{
@@ -73,18 +75,18 @@ func TestGetHealthUrl_Default(t *testing.T) {
 }
 
 func TestSetDeploymentDefaults(t *testing.T) {
-	deployment := Deployment{}
+	deployment := types.Deployment{}
 	deployment.SetDefaults()
 
-	if deployment.Namespace != "default" {
+	if deployment.Descriptor.Namespace != "default" {
 		t.Error("Defaul namespace not set")
 	}
 
 }
 
 func TestValidateDeployment(t *testing.T) {
-	deployment := Deployment{}
-	err := deployment.Validate()
+	deployment := types.Deployment{}
+	err := deployment.Descriptor.Validate()
 
 	if err == nil {
 		t.Error("Validate should fail on an empty Deployment")

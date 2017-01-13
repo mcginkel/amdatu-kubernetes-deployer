@@ -32,10 +32,9 @@ import (
 )
 
 type ProxyConfigurator struct {
-	etcdClient  client.Client
+	etcdApi     client.KeysAPI
 	RestUrl     string
 	ProxyReload int
-	logger      logger.Logger
 }
 
 type BackendServer struct {
@@ -52,34 +51,32 @@ type Frontend struct {
 	RedirectWwwPrefix bool
 }
 
-func NewProxyConfigurator(etcdClient client.Client, restUrl string, proxyReload int, logger logger.Logger) *ProxyConfigurator {
-	return &ProxyConfigurator{etcdClient, restUrl, proxyReload, logger}
+func NewProxyConfigurator(etcdApi client.KeysAPI, restUrl string, proxyReload int) *ProxyConfigurator {
+	return &ProxyConfigurator{etcdApi, restUrl, proxyReload}
 }
 
-func (proxyConfigurator *ProxyConfigurator) FrontendExistsForDeployment(deploymentName string) bool {
-	frontendKeys := proxyConfigurator.getFrontendKeysForDeployment(deploymentName)
+func (proxyConfigurator *ProxyConfigurator) FrontendExistsForDeployment(deploymentName string, logger logger.Logger) bool {
+	frontendKeys := proxyConfigurator.getFrontendKeysForDeployment(deploymentName, logger)
 	return len(frontendKeys) > 0
 }
 
-func (proxyConfigurator *ProxyConfigurator) DeleteFrontendForDeployment(deploymentName string) {
+func (proxyConfigurator *ProxyConfigurator) DeleteFrontendForDeployment(deploymentName string, logger logger.Logger) {
 
-	frontendKeys := proxyConfigurator.getFrontendKeysForDeployment(deploymentName)
+	frontendKeys := proxyConfigurator.getFrontendKeysForDeployment(deploymentName, logger)
 
-	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
 	for _, key := range frontendKeys {
-		if _, err := kAPI.Delete(context.Background(), key, nil); err != nil {
-			proxyConfigurator.logger.Printf("Error deleting frontend %v", key)
+		if _, err := proxyConfigurator.etcdApi.Delete(context.Background(), key, nil); err != nil {
+			logger.Printf("Error deleting frontend %v", key)
 		}
 	}
 }
 
-func (proxyConfigurator *ProxyConfigurator) getFrontendKeysForDeployment(deploymentName string) []string {
+func (proxyConfigurator *ProxyConfigurator) getFrontendKeysForDeployment(deploymentName string, logger logger.Logger) []string {
 	keys := []string{}
 
-	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
-	result, err := kAPI.Get(context.Background(), "/proxy/frontends", &client.GetOptions{})
+	result, err := proxyConfigurator.etcdApi.Get(context.Background(), "/proxy/frontends", &client.GetOptions{})
 	if err != nil {
-		proxyConfigurator.logger.Println("Error listing frontends, now assuming no frontend exists")
+		logger.Println("Error listing frontends, now assuming no frontend exists")
 		return keys
 	}
 
@@ -96,8 +93,7 @@ func (proxyConfigurator *ProxyConfigurator) getFrontendKeysForDeployment(deploym
 
 func (proxyConfigurator *ProxyConfigurator) AddBackendServer(deploymentName string, ip string, port int32,
 	useCompression bool, additionHttpHeaders []types.HttpHeader) error {
-	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
-	if err := prepareBaseConfig(kAPI); err != nil {
+	if err := proxyConfigurator.prepareBaseConfig(); err != nil {
 		return err
 	}
 
@@ -115,32 +111,30 @@ func (proxyConfigurator *ProxyConfigurator) AddBackendServer(deploymentName stri
 
 	etcdKey := fmt.Sprintf("/proxy/backends/%v/%v", deploymentName, ip)
 	log.Printf("Registering backend %v for server %v:%v\n", etcdKey, ip, port)
-	if _, err := kAPI.Set(context.Background(), etcdKey, string(bytes), nil); err != nil {
+	if _, err := proxyConfigurator.etcdApi.Set(context.Background(), etcdKey, string(bytes), nil); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (proxyConfigurator *ProxyConfigurator) DeleteDeployment(deploymentName string) {
+func (proxyConfigurator *ProxyConfigurator) DeleteDeployment(deploymentName string, logger logger.Logger) {
 
-	proxyConfigurator.DeleteFrontendForDeployment(deploymentName)
+	proxyConfigurator.DeleteFrontendForDeployment(deploymentName, logger)
 
-	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
 	keyName := fmt.Sprintf("/proxy/backends/%v", deploymentName)
-	if _, err := kAPI.Delete(context.Background(), keyName, &client.DeleteOptions{Recursive: true}); err != nil {
-		log.Printf("Key %v not found, nothing deleted", keyName)
+	if _, err := proxyConfigurator.etcdApi.Delete(context.Background(), keyName, &client.DeleteOptions{Recursive: true}); err != nil {
+		logger.Printf("Key %v not found, nothing deleted\n", keyName)
 	}
 }
 
 func (proxyConfigurator *ProxyConfigurator) CreateFrontEnd(frontend *Frontend) (string, error) {
-	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
-	if err := prepareBaseConfig(kAPI); err != nil {
+	if err := proxyConfigurator.prepareBaseConfig(); err != nil {
 		return "", err
 	}
 
 	key := fmt.Sprintf("/proxy/frontends/%v", frontend.Hostname)
-	resp, _ := kAPI.Get(context.Background(), key, nil)
+	resp, _ := proxyConfigurator.etcdApi.Get(context.Background(), key, nil)
 
 	if resp != nil {
 		// frontend exists, but there might be changed properties like redirectWww
@@ -157,7 +151,7 @@ func (proxyConfigurator *ProxyConfigurator) CreateFrontEnd(frontend *Frontend) (
 		return "", err
 	}
 
-	if _, err := kAPI.Set(context.Background(), key, string(bytes), nil); err != nil {
+	if _, err := proxyConfigurator.etcdApi.Set(context.Background(), key, string(bytes), nil); err != nil {
 		log.Println("Error creating proxy frontend ", err)
 		return "", err
 	}
@@ -169,12 +163,10 @@ func (proxyConfigurator *ProxyConfigurator) CreateFrontEnd(frontend *Frontend) (
 
 func (proxyConfigurator *ProxyConfigurator) SwitchBackend(frontendName string, newBackendName string) error {
 
-	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
-
 	key := fmt.Sprintf("/proxy/frontends/%v", frontendName)
 
 	value := Frontend{}
-	resp, _ := kAPI.Get(context.Background(), key, nil)
+	resp, _ := proxyConfigurator.etcdApi.Get(context.Background(), key, nil)
 	if err := json.Unmarshal([]byte(resp.Node.Value), &value); err != nil {
 		return err
 	}
@@ -185,7 +177,7 @@ func (proxyConfigurator *ProxyConfigurator) SwitchBackend(frontendName string, n
 		return err
 	}
 
-	if _, err := kAPI.Set(context.Background(), key, string(bytes), nil); err != nil {
+	if _, err := proxyConfigurator.etcdApi.Set(context.Background(), key, string(bytes), nil); err != nil {
 		return err
 	}
 
@@ -193,24 +185,23 @@ func (proxyConfigurator *ProxyConfigurator) SwitchBackend(frontendName string, n
 }
 
 func (proxyConfigurator *ProxyConfigurator) DeleteBackendServer(deploymentName string, ip string) {
-	kAPI := client.NewKeysAPI(proxyConfigurator.etcdClient)
 	keyName := fmt.Sprintf("/proxy/backends/%v/%v", deploymentName, ip)
-	if _, err := kAPI.Delete(context.Background(), keyName, nil); err != nil {
+	if _, err := proxyConfigurator.etcdApi.Delete(context.Background(), keyName, nil); err != nil {
 		log.Printf("Key %v not found, nothing deleted", keyName)
 	}
 }
 
-func (proxyConfigurator *ProxyConfigurator) WaitForBackend(newBackendName string) error {
+func (proxyConfigurator *ProxyConfigurator) WaitForBackend(newBackendName string, logger logger.Logger) error {
 	if proxyConfigurator.RestUrl == "" {
-		proxyConfigurator.logger.Printf("Sleeping for %v seconds for proxy to reload...\n", proxyConfigurator.ProxyReload)
+		logger.Printf("Sleeping for %v seconds for proxy to reload...\n", proxyConfigurator.ProxyReload)
 		time.Sleep(time.Second * time.Duration(proxyConfigurator.ProxyReload))
 	} else {
-		proxyConfigurator.logger.Println("Waiting for proxy to reload...")
+		logger.Println("Waiting for proxy to reload...")
 
 		successChan := make(chan bool)
 		timeoutChan := make(chan bool, 2) // don't block if we timeout, but monitorBackend still waits for connection
 
-		go proxyConfigurator.monitorBackend(newBackendName, successChan, timeoutChan)
+		go proxyConfigurator.monitorBackend(newBackendName, successChan, timeoutChan, logger)
 
 		select {
 		case success := <-successChan:
@@ -228,7 +219,7 @@ func (proxyConfigurator *ProxyConfigurator) WaitForBackend(newBackendName string
 	return nil
 }
 
-func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string, successChan chan bool, timeoutChan chan bool) {
+func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string, successChan chan bool, timeoutChan chan bool, logger logger.Logger) {
 	url := fmt.Sprintf("%s/stats/backend/%s/status", proxyConfigurator.RestUrl, newBackendName)
 
 	for {
@@ -238,14 +229,14 @@ func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string
 		default:
 			resp, err := http.Get(url)
 			if err != nil {
-				proxyConfigurator.logger.Printf("Error checking proxy backend: %v\n", err)
+				logger.Printf("Error checking proxy backend: %v\n", err)
 				successChan <- false
 				return
 			}
 
 			bytes, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
-				proxyConfigurator.logger.Printf("Error checking proxy backend: %v\n", err)
+				logger.Printf("Error checking proxy backend: %v\n", err)
 				successChan <- false
 				resp.Body.Close()
 				return
@@ -258,7 +249,7 @@ func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string
 				successChan <- true
 				return
 			} else {
-				proxyConfigurator.logger.Printf("Invalid status for proxy backend: %v\n", strings.TrimSpace(body))
+				logger.Printf("Invalid status for proxy backend: %v\n", strings.TrimSpace(body))
 			}
 
 			time.Sleep(time.Second * 1)
@@ -267,13 +258,13 @@ func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string
 	}
 }
 
-func prepareBaseConfig(kAPI client.KeysAPI) error {
-	_, err := kAPI.Get(context.Background(), "/proxy", nil)
+func (proxyConfigurator *ProxyConfigurator) prepareBaseConfig() error {
+	_, err := proxyConfigurator.etcdApi.Get(context.Background(), "/proxy", nil)
 
 	if err != nil {
 		log.Println("/proxy doesn't exists, creating")
 
-		if _, err = kAPI.Set(context.Background(), "/proxy", "", &client.SetOptions{Dir: true}); err != nil {
+		if _, err = proxyConfigurator.etcdApi.Set(context.Background(), "/proxy", "", &client.SetOptions{Dir: true}); err != nil {
 			log.Printf("Error creating proxy base config: %v", err)
 			return err
 		}
