@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	"github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
 )
@@ -59,7 +60,7 @@ func TestCreateProxyConfigurator(t *testing.T) {
 func TestAddBackendServer_newBackend(t *testing.T) {
 	pc := createProxyConfigurator("")
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, logger.NewConsoleLogger()); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, nil); err != nil {
 		t.Error(err)
 	}
 
@@ -90,11 +91,11 @@ func TestAddBackendServer_newBackend(t *testing.T) {
 func TestAddBackendServer_existingBackend(t *testing.T) {
 	pc := createProxyConfigurator("")
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, logger.NewConsoleLogger()); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, nil); err != nil {
 		t.Error(err)
 	}
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.2", 8181, false, logger.NewConsoleLogger()); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.2", 8181, false, nil); err != nil {
 		t.Error(err)
 	}
 
@@ -110,7 +111,7 @@ func TestAddBackendServer_existingBackend(t *testing.T) {
 
 func TestDeleteDeployment(t *testing.T) {
 	pc := createProxyConfigurator("")
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, logger.NewConsoleLogger()); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, nil); err != nil {
 		t.Error(err)
 	}
 
@@ -212,11 +213,11 @@ func TestSwitchBackend(t *testing.T) {
 func TestBackendServer(t *testing.T) {
 	pc := createProxyConfigurator("")
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, logger.NewConsoleLogger()); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, nil); err != nil {
 		t.Error(err)
 	}
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.2", 8181, false, logger.NewConsoleLogger()); err != nil {
+	if err := pc.AddBackendServer("testbackend", "127.0.0.2", 8181, false, nil); err != nil {
 		t.Error(err)
 	}
 
@@ -317,16 +318,27 @@ func TestWaitForBackend_UP(t *testing.T) {
 
 }
 
-func runWaitForBackend(pc *ProxyConfigurator, successChan chan bool) {
-	r := pc.WaitForBackend("mybackend", logger.NewConsoleLogger())
-
-	successChan <- r
-	return
+func TestPrefixHeaderValues(t *testing.T) {
+	headers := []types.HttpHeader{{Header: "test", Value: "some string\\ with  spaces"}}
+	prefixSpacesInHeaderValues(headers)
+	if !(headers[0].Value == "some\\ string\\ with\\ \\ spaces") {
+		t.Error("prefixSpacesInHeaderValues failed: " + headers[0].Value)
+	}
 }
 
-func createEtcdApi() client.Client {
+func runWaitForBackend(pc *ProxyConfigurator, successChan chan bool) {
+	err := pc.WaitForBackend("mybackend", logger.NewConsoleLogger())
+
+	if err != nil {
+		successChan <- false
+	} else {
+		successChan <- true
+	}
+}
+
+func createEtcdApi() client.KeysAPI {
 	cfg := client.Config{
-		Endpoints: []string{"http://192.168.64.3:2379"},
+		Endpoints: []string{"http://localhost:2379"},
 	}
 
 	c, err := client.New(cfg)
