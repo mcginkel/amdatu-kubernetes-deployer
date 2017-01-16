@@ -105,12 +105,12 @@ func (d *DescriptorHandlers) DoValidationHandler(writer http.ResponseWriter, req
 	} else {
 		descriptor, err := CreateDescriptor(body)
 		if err != nil {
-			helper.HandleError(writer, logger, 400, "Error parsing body: %v", err)
+			helper.HandleError(writer, logger, 200, "Error: could not parse descriptor: %v", err)
 			return
 		} else {
 			err = descriptor.SetDefaults().Validate()
 			if err != nil {
-				helper.HandleError(writer, logger, 400, "Invalid deployment descriptor: %v", err)
+				helper.HandleError(writer, logger, 200, "Error: invalid descriptor: %v", err)
 				return
 			}
 		}

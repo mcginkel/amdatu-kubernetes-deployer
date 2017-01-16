@@ -39,7 +39,7 @@ var dns952LabelRegexp = regexp.MustCompile("^" + DNS952LabelFmt + "$")
 type Descriptor struct {
 	Id                         string            `json:"id,omitempty"`
 	Created                    string            `json:"created,omitempty"`
-	LastModified               string            `json:"lastmodified,omitempty"`
+	LastModified               string            `json:"lastModified,omitempty"`
 	WebHooks                   []WebHook         `json:"webhooks,omitempty"`
 	DeploymentType             string            `json:"deploymentType,omitempty"`
 	NewVersion                 string            `json:"newVersion,omitempty"`
@@ -173,7 +173,7 @@ func (descriptor *Descriptor) String() string {
 type Deployment struct {
 	Id           string      `json:"id,omitempty"`
 	Created      string      `json:"created,omitempty"`
-	LastModified string      `json:"lastmodified,omitempty"`
+	LastModified string      `json:"lastModified,omitempty"`
 	Version      string      `json:"version,omitempty"`
 	Status       string      `json:"status,omitempty"`
 	Descriptor   *Descriptor `json:"descriptor,omitempty"`

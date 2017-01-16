@@ -92,18 +92,18 @@ func main() {
 
 	r.HandleFunc("/descriptors/", descriptorHandlers.CreateDescriptorHandler).Methods("POST")
 	r.HandleFunc("/descriptors/", descriptorHandlers.ListDescriptorsHandler).Methods("GET")
-	r.HandleFunc("/descriptors/{id}", descriptorHandlers.GetDescriptorHandler).Methods("GET")
-	r.HandleFunc("/descriptors/{id}", descriptorHandlers.UpdateDescriptorHandler).Methods("PUT")
-	r.HandleFunc("/descriptors/{id}", descriptorHandlers.DeleteDescriptorHandler).Methods("DELETE")
+	r.HandleFunc("/descriptors/{id}/", descriptorHandlers.GetDescriptorHandler).Methods("GET")
+	r.HandleFunc("/descriptors/{id}/", descriptorHandlers.UpdateDescriptorHandler).Methods("PUT")
+	r.HandleFunc("/descriptors/{id}/", descriptorHandlers.DeleteDescriptorHandler).Methods("DELETE")
 	r.HandleFunc("/descriptors/validate", descriptorHandlers.DoValidationHandler).Methods("POST")
 
 	r.HandleFunc("/deployments/", deploymentHandlers.CreateDeploymentHandler).Methods("POST")
 	r.HandleFunc("/deployments/", deploymentHandlers.ListDeploymentsHandler).Methods("GET")
-	r.HandleFunc("/deployments/{id}", deploymentHandlers.GetDeploymentHandler).Methods("GET")
+	r.HandleFunc("/deployments/{id}/", deploymentHandlers.GetDeploymentHandler).Methods("GET")
 	r.HandleFunc("/deployments/{id}/healthcheckdata", deploymentHandlers.GetHealthcheckDataHandler).Methods("GET")
 	r.HandleFunc("/deployments/{id}/logs", deploymentHandlers.GetLogsHandler).Methods("GET")
-	r.HandleFunc("/deployments/{id}", deploymentHandlers.UpdateDeploymentHandler).Methods("PUT")
-	r.HandleFunc("/deployments/{id}", deploymentHandlers.DeleteDeploymentHandler).Methods("DELETE")
+	r.HandleFunc("/deployments/{id}/", deploymentHandlers.UpdateDeploymentHandler).Methods("PUT")
+	r.HandleFunc("/deployments/{id}/", deploymentHandlers.DeleteDeploymentHandler).Methods("DELETE")
 
 	r.HandleFunc("/stream/deployments/{id}/logs", deploymentHandlers.StreamLogsHandler)
 
