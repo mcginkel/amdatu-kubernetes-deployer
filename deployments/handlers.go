@@ -21,6 +21,8 @@ import (
 
 	"fmt"
 
+	"time"
+
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/descriptors"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
@@ -214,41 +216,50 @@ func (d *DeploymentHandlers) StreamLogsHandler(writer http.ResponseWriter, req *
 	defer conn.Close()
 	defer conn.WriteMessage(websocket.CloseMessage, []byte{})
 
-	w, err := conn.NextWriter(websocket.TextMessage)
+	logs, index, err := d.registry.GetLogs(namespace, id)
 	if err != nil {
-		logger.Printf("Error getting text writer: %v\n", err.Error())
+		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("!!error Error getting logs: %v", err.Error())))
 		return
 	}
-	defer w.Close()
+	conn.WriteMessage(websocket.TextMessage, []byte(logs))
 
 	isBusy, err := d.isBusy(namespace, id, logger)
 	if err != nil {
-		w.Write([]byte(fmt.Sprintf("!!error Error getting deployment status: %v", err.Error())))
+		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("!!error Error getting deployment status: %v", err.Error())))
 		return
 	}
-
-	logs, index, err := d.registry.GetLogs(namespace, id)
-	if err != nil {
-		w.Write([]byte(fmt.Sprintf("!!error Error getting logs: %v", err.Error())))
-		return
-	}
-	w.Write([]byte(logs))
-
 	for isBusy {
-		isBusy, err = d.isBusy(namespace, id, logger)
 		if err != nil {
-			w.Write([]byte(fmt.Sprintf("!!error Error getting deployment status: %v", err.Error())))
+			conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("!!error Error getting deployment status: %v", err.Error())))
 			return
 		}
 
 		var newLogs string
 		newLogs, index, err = d.registry.NextLogs(namespace, id, index)
+		if err != nil {
+			logger.Printf("error getting logs, ignoring...:" + err.Error())
+			//conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("!!error Error getting logs: %v", err.Error())))
+			//return
+		}
 
 		// only write new part of logs
-		if newLogs != "" {
-			w.Write([]byte(newLogs[len(logs):]))
+		if len(newLogs) > len(logs) {
+
+			conn.WriteMessage(websocket.TextMessage, []byte(newLogs[len(logs):]))
 			logs = newLogs
+
+			time.Sleep(500 * time.Millisecond)
+
 		}
+
+		isBusy, err = d.isBusy(namespace, id, logger)
+		if err != nil {
+			logger.Printf("error getting deployment status, ignoring...:" + err.Error())
+			//conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("!!error Error getting deployment status: %v", err.Error())))
+			//return
+		}
+
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
