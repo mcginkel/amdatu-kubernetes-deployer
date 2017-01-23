@@ -85,6 +85,10 @@ func (undeployer *Undeployer) Undeploy(deployment *types.Deployment, logger logg
 	}
 
 	if success {
+
+		deployment.Status = types.DEPLOYMENTSTATUS_UNDEPLOYED
+		undeployer.registry.UpdateDeployment(deployment)
+
 		logger.Printf("Deployment %v undeployed.", deployment.Id)
 		if deleteDeployment {
 			undeployer.deleteDeployment(deployment, logger)
