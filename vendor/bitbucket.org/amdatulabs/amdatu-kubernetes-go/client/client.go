@@ -474,7 +474,7 @@ func (c *Client) DeleteService(namespace, service string) error {
 func (c *Client) Patch(namespace, resourceType, objectName, jsonPatch string) error {
 	jsonBytes := []byte(jsonPatch)
 
-	url := c.Url + "/api/v1/namespaces/" + namespace + "/" + resourceType + "/" + objectName
+	url := c.Url + "/api/v1/namespaces/" + namespace + "/" + resourceType +"/" + objectName
 	log.Printf("Requesting patch on %v\n", url)
 
 	req, err := http.NewRequest("PATCH", url, bytes.NewBuffer(jsonBytes))
@@ -488,6 +488,8 @@ func (c *Client) Patch(namespace, resourceType, objectName, jsonPatch string) er
 	_, err = c.HttpClient.Do(req)
 	return err
 }
+
+
 
 func (c *Client) createRequest(method, url string, body io.Reader) (*http.Request, error) {
 	request, err := http.NewRequest(method, url, body)

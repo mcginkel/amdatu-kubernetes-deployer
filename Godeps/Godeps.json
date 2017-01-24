@@ -1,107 +1,92 @@
 {
 	"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-deployer",
-	"GoVersion": "go1.6",
+	"GoVersion": "go1.7",
 	"GodepVersion": "v75",
-	"Packages": [
-		"./..."
-	],
 	"Deps": [
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/resource",
-			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
+			"Rev": "d139e7118e8b351b8506b277b134cfe27b3cc9cc"
 		},
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/unversioned",
-			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
+			"Rev": "d139e7118e8b351b8506b277b134cfe27b3cc9cc"
 		},
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/util",
-			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
+			"Rev": "d139e7118e8b351b8506b277b134cfe27b3cc9cc"
 		},
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1",
-			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
+			"Rev": "d139e7118e8b351b8506b277b134cfe27b3cc9cc"
 		},
 		{
 			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/client",
-			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
-		},
-		{
-			"ImportPath": "github.com/coreos/etcd/Godeps/_workspace/src/github.com/ugorji/go/codec",
-			"Comment": "v2.3.0-alpha.0-54-g08dc70c",
-			"Rev": "08dc70cc0f636987f364b322b8fd57cdd029c873"
-		},
-		{
-			"ImportPath": "github.com/coreos/etcd/Godeps/_workspace/src/golang.org/x/net/context",
-			"Comment": "v2.3.0-alpha.0-54-g08dc70c",
-			"Rev": "08dc70cc0f636987f364b322b8fd57cdd029c873"
+			"Rev": "d139e7118e8b351b8506b277b134cfe27b3cc9cc"
 		},
 		{
 			"ImportPath": "github.com/coreos/etcd/client",
-			"Comment": "v2.3.0-alpha.0-54-g08dc70c",
-			"Rev": "08dc70cc0f636987f364b322b8fd57cdd029c873"
+			"Comment": "v3.1.0-rc.1-379-gb9bbfda8",
+			"Rev": "b9bbfda874f0add91c300042078c1b1bb904e9c5"
 		},
 		{
 			"ImportPath": "github.com/coreos/etcd/pkg/pathutil",
-			"Comment": "v2.3.0-alpha.0-54-g08dc70c",
-			"Rev": "08dc70cc0f636987f364b322b8fd57cdd029c873"
+			"Comment": "v3.1.0-rc.1-379-gb9bbfda8",
+			"Rev": "b9bbfda874f0add91c300042078c1b1bb904e9c5"
 		},
 		{
 			"ImportPath": "github.com/coreos/etcd/pkg/types",
-			"Comment": "v2.3.0-alpha.0-54-g08dc70c",
-			"Rev": "08dc70cc0f636987f364b322b8fd57cdd029c873"
+			"Comment": "v3.1.0-rc.1-379-gb9bbfda8",
+			"Rev": "b9bbfda874f0add91c300042078c1b1bb904e9c5"
+		},
+		{
+			"ImportPath": "github.com/coreos/etcd/version",
+			"Comment": "v3.1.0-rc.1-379-gb9bbfda8",
+			"Rev": "b9bbfda874f0add91c300042078c1b1bb904e9c5"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-semver/semver",
+			"Comment": "v0.2.0-2-g9474efc",
+			"Rev": "9474efc580562cce8f761659fbce31b6feb8ce88"
 		},
 		{
 			"ImportPath": "github.com/google/gofuzz",
 			"Rev": "fd52762d25a41827db7ef64c43756fd4b9f7e382"
 		},
 		{
-			"ImportPath": "github.com/gorilla/context",
-			"Rev": "215affda49addc4c8ef7e2534915df2c8c35c6cd"
-		},
-		{
 			"ImportPath": "github.com/gorilla/mux",
-			"Rev": "8096f47503459bcc74d1f4c487b7e6e42e5746b5"
+			"Comment": "v1.3.0",
+			"Rev": "392c28fe23e1c45ddba891b0320b3b5df220beea"
 		},
 		{
 			"ImportPath": "github.com/gorilla/websocket",
-			"Rev": "ecff5aabe41f13b4cdf897e3c0c9bbccbe552a29"
+			"Comment": "v1.1.0-14-g0674c7c",
+			"Rev": "0674c7c7968d9fac5f0f678325161ec31df406af"
 		},
 		{
 			"ImportPath": "github.com/satori/go.uuid",
-			"Rev": "e673fdd4dea8a7334adbbe7f57b7e4b00bdc5502"
+			"Comment": "v1.1.0-6-gb061729",
+			"Rev": "b061729afc07e77a8aa4fad0a2fd840958f1942a"
 		},
 		{
 			"ImportPath": "github.com/spf13/pflag",
 			"Rev": "7f60f83a2c81bc3c3c0d5297f61ddfa68da9d3b7"
 		},
 		{
+			"ImportPath": "github.com/ugorji/go/codec",
+			"Rev": "d23841a297e5489e787e72fceffabf9d2994b52a"
+		},
+		{
 			"ImportPath": "golang.org/x/net/context",
-			"Rev": "cbbbe2bc0f2efdd2afb318d93f1eadb19350e4a3"
+			"Rev": "f2499483f923065a842d38eb4c7f1927e6fc6e6d"
 		},
 		{
 			"ImportPath": "golang.org/x/net/websocket",
-			"Rev": "cbbbe2bc0f2efdd2afb318d93f1eadb19350e4a3"
+			"Rev": "f2499483f923065a842d38eb4c7f1927e6fc6e6d"
 		},
 		{
-			"ImportPath": "speter.net/go/exp/math/dec/inf",
-			"Rev": "42ca6cd68aa922bc3f32f1e056e61b65945d9ad7"
-		},
-		{
-			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/vendor/github.com/spf13/pflag",
-			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
-		},
-		{
-			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/vendor/speter.net/go/exp/math/dec/inf",
-			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
-		},
-		{
-			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/vendor/github.com/google/gofuzz",
-			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
-		},
-		{
-			"ImportPath": "bitbucket.org/amdatulabs/amdatu-kubernetes-go/vendor/golang.org/x/net/websocket",
-			"Rev": "39f23417c31194ad88f1ef7d5c0343571d839b97"
+			"ImportPath": "gopkg.in/inf.v0",
+			"Comment": "v0.9.0",
+			"Rev": "3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4"
 		}
 	]
 }

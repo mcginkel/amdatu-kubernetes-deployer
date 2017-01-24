@@ -9,9 +9,9 @@ import (
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
-	"github.com/coreos/etcd/Godeps/_workspace/src/golang.org/x/net/context"
 	etcdclient "github.com/coreos/etcd/client"
 	"github.com/satori/go.uuid"
+	"golang.org/x/net/context"
 )
 
 type deploymentResult struct {
