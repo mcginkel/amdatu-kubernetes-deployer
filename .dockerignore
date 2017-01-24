@@ -1,0 +1,5 @@
+*.iml
+.git
+.gitignore
+bitbucket-pipelines.yml
+deployer
