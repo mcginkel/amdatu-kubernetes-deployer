@@ -75,6 +75,10 @@ func (descriptor *Descriptor) SetDefaults() *Descriptor {
 		descriptor.DeploymentType = "blue-green"
 	}
 
+	if descriptor.Replicas <= 0 {
+		descriptor.Replicas = 1
+	}
+
 	if len(descriptor.PodSpec.RestartPolicy) == 0 {
 		descriptor.PodSpec.RestartPolicy = v1.RestartPolicyAlways
 	}
