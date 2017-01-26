@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# this should be called within the golang docker container during build OR from the bitbucket pipeline
+# this should be called within an alpine docker container during manual build OR from the bitbucket pipeline
 
 # fail immedialtely
 set -e
@@ -13,11 +13,14 @@ GOLANG_VERSION=1.7.4
 # save where we are coming from, that's where our sources are
 SRCDIR=`pwd`
 
-# install glibc, needed by go
+# install some common needed packages
 apk --no-cache add curl wget ca-certificates
+
+# install glibc, needed by go
 wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://raw.githubusercontent.com/sgerrand/alpine-pkg-glibc/master/sgerrand.rsa.pub
-wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-${GLIBC_VERSION}.apk
-apk add glibc-2.23-r3.apk
+wget -q -O /tmp/glibc.apk https://github.com/sgerrand/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-${GLIBC_VERSION}.apk
+apk add /tmp/glibc.apk
+rm  /tmp/glibc.apk
 
 # install golang
 GOLANG_URL=https://storage.googleapis.com/golang/go$GOLANG_VERSION.linux-amd64.tar.gz
@@ -39,9 +42,24 @@ mkdir -p "${PACKAGE_PATH}"
 cd "${SRCDIR}"
 tar -cO --exclude .git . | tar -xv -C "${PACKAGE_PATH}"
 
-# build and install binary
+# build and install binary for running in the resulting docker image
 cd "${PACKAGE_PATH}"
 go install -v
+
+if [ -n "$BB_AUTH_STRING" ] && [ "$BITBUCKET_BRANCH"=="master" ]; then
+
+    # build binaries for export
+    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o amdatu-kubernetes-deployer_linux_amd64 .
+    CGO_ENABLED=0 GOOS=darwin go build -a -installsuffix cgo -o amdatu-kubernetes-deployer_macos_amd64 .
+    CGO_ENABLED=0 GOOS=windows go build -a -installsuffix cgo -o amdatu-kubernetes-deployer_windows_amd64.exe .
+
+    # post binaries to download section of bitbucket
+
+    curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"amdatu-kubernetes-deployer_linux_amd64"
+    curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"amdatu-kubernetes-deployer_macos_amd64"
+    curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"amdatu-kubernetes-deployer_windows_amd64.exe"
+
+fi
 
 # remove sources and tmp files
 cd "${GOPATH}"
