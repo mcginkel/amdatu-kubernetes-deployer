@@ -48,16 +48,27 @@ go install -v
 
 if [ -n "$BB_AUTH_STRING" ] && [ "$BITBUCKET_BRANCH"=="master" ]; then
 
+    VERSION="alpha"
+
+    if [ -n "$BITBUCKET_TAG" ]; then
+        VERSION=$BITBUCKET_TAG
+    fi
+
+    BASENAME="amdatu-kubernetes-deployer"
+    LINUX_NAME="$BASENAME-linux_amd64-$VERSION"
+    MACOS_NAME="$BASENAME-macos_amd64-$VERSION"
+    WIN_NAME="$BASENAME-windows_amd64-$VERSION.exe"
+
     # build binaries for export
-    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o amdatu-kubernetes-deployer_linux_amd64 .
-    CGO_ENABLED=0 GOOS=darwin go build -a -installsuffix cgo -o amdatu-kubernetes-deployer_macos_amd64 .
-    CGO_ENABLED=0 GOOS=windows go build -a -installsuffix cgo -o amdatu-kubernetes-deployer_windows_amd64.exe .
+    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o "$LINUX_NAME" .
+    CGO_ENABLED=0 GOOS=darwin go build -a -installsuffix cgo -o "$MACOS_NAME" .
+    CGO_ENABLED=0 GOOS=windows go build -a -installsuffix cgo -o "$WIN_NAME" .
 
     # post binaries to download section of bitbucket
 
-    curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"amdatu-kubernetes-deployer_linux_amd64"
-    curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"amdatu-kubernetes-deployer_macos_amd64"
-    curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"amdatu-kubernetes-deployer_windows_amd64.exe"
+    curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$LINUX_NAME"
+    curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$MACOS_NAME"
+    curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$WIN_NAME"
 
 fi
 

@@ -1,7 +1,14 @@
 image: frolvlad/alpine-bash
 
 pipelines:
+
   default:
     - step:
         script:
           - chmod +x build.sh && ./build.sh
+
+  tags:
+    "**":
+      - step:
+          script:
+            - chmod +x build.sh && ./build.sh
