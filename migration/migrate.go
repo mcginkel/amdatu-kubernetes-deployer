@@ -84,7 +84,7 @@ func migrateIds() error {
 					descriptor.LastModified = latestDeploymentResult.Date
 
 					deployment := &types.Deployment{}
-					deployment.Id = uuid.NewV3(uuid.NamespaceURL, descriptor.Namespace+"-"+descriptor.AppName+"-"+latestDeploymentResult.Date).String()
+					deployment.Id = uuid.NewV3(uuid.NamespaceURL, descriptor.Namespace+"-"+descriptor.AppName).String()
 					deployment.Version = descriptor.Deprecated_DeployedVersion
 					deployment.Created = latestDeploymentResult.Date
 					deployment.LastModified = latestDeploymentResult.Date
