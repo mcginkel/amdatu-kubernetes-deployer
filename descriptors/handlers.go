@@ -121,7 +121,6 @@ func (d *DescriptorHandlers) DoValidationHandler(writer http.ResponseWriter, req
 func (d *DescriptorHandlers) ListDescriptorsHandler(writer http.ResponseWriter, req *http.Request) {
 
 	logger := logger.NewConsoleLogger()
-	logger.Println("Listing descriptors")
 
 	//TODO check namespaces of user
 	namespace := req.URL.Query().Get("namespace")
@@ -130,8 +129,10 @@ func (d *DescriptorHandlers) ListDescriptorsHandler(writer http.ResponseWriter, 
 		return
 	}
 
+	logger.Printf("Listing descriptors for namespace %v", namespace)
+
 	descriptors, err := d.registry.GetDescriptors(namespace)
-	if err != nil && err == etcdregistry.ErrDescriptorNotFound {
+	if (err != nil && err == etcdregistry.ErrDescriptorNotFound) || len(descriptors) == 0 {
 		helper.HandleNotFound(writer, logger, "No descriptors found for namespace %v\n", namespace)
 		return
 	} else if err != nil {

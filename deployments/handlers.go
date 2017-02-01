@@ -81,7 +81,6 @@ func (d *DeploymentHandlers) CreateDeploymentHandler(writer http.ResponseWriter,
 func (d *DeploymentHandlers) ListDeploymentsHandler(writer http.ResponseWriter, req *http.Request) {
 
 	logger := logger.NewConsoleLogger()
-	logger.Println("Listing deployments")
 
 	//TODO check namespaces of user
 	namespace := req.URL.Query().Get("namespace")
@@ -90,8 +89,10 @@ func (d *DeploymentHandlers) ListDeploymentsHandler(writer http.ResponseWriter, 
 		return
 	}
 
+	logger.Printf("Listing deployments for namespace %v", namespace)
+
 	deployments, err := d.registry.GetDeployments(namespace)
-	if err != nil && err == etcdregistry.ErrDeploymentNotFound {
+	if (err != nil && err == etcdregistry.ErrDeploymentNotFound) || len(deployments) == 0 {
 		helper.HandleNotFound(writer, logger, "No deployments found for namespace %v\n", namespace)
 		return
 	} else if err != nil {
