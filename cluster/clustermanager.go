@@ -357,7 +357,7 @@ func (deployer *Deployer) CleaupOldDeployments() {
 	controllers, err := deployer.FindCurrentRc()
 
 	if err != nil {
-		deployer.Logger.Println("Did not find a old Replication Controller to remove")
+		deployer.Logger.Println("Did not find a old replication controller to remove")
 		return
 	}
 
@@ -385,7 +385,7 @@ func (deployer *Deployer) CleaupOldDeployments() {
 	services, err := deployer.FindCurrentService()
 
 	if err != nil {
-		deployer.Logger.Println("Did not find a old Replication Controller to remove")
+		deployer.Logger.Println("Did not find an old service to remove")
 		return
 	}
 
