@@ -286,7 +286,7 @@ func (c *Client) UpdateReplicationController(namespace string, rc *v1.Replicatio
 // DeleteReplicationController deletes a replication controller by name within a namespace.
 func (c *Client) DeleteReplicationController(namespace, replicationController string) error {
 
-	url := c.Url + "/api/v1/namespaces/" + namespace + "/replicationcontrollers/" + replicationController
+	url := c.Url + "/api/v1/namespaces/" + namespace + "/replicationcontrollers/" + replicationController + "?orphanDependents=false"
 
 	return c.delete(url)
 }
