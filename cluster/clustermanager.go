@@ -287,20 +287,19 @@ func (deployer *Deployer) FindCurrentRc() ([]v1.ReplicationController, error) {
 	result := []v1.ReplicationController{}
 
 	labels := map[string]string{"app": descriptor.AppName}
-	replicationControllers, _ := deployer.K8client.ListReplicationControllersWithLabel(descriptor.Namespace, labels)
+	replicationControllers, err := deployer.K8client.ListReplicationControllersWithLabel(descriptor.Namespace, labels)
+
+	if err != nil {
+		return nil, err;
+	}
 
 	for _, rc := range replicationControllers.Items {
 		if rc.Labels["version"] != deployer.Deployment.Version {
-
 			result = append(result, rc)
 		}
 	}
 
-	if len(result) == 0 {
-		return result, errors.New("No active Replica Controller found")
-	} else {
-		return result, nil
-	}
+	return result, nil
 }
 
 func (deployer *Deployer) FindCurrentPods(allowSameVersion bool) ([]v1.Pod, error) {
@@ -356,7 +355,11 @@ func (deployer *Deployer) FindCurrentService() ([]v1.Service, error) {
 func (deployer *Deployer) CleaupOldDeployments() {
 	controllers, err := deployer.FindCurrentRc()
 
-	if err != nil {
+	if err != nil  {
+		deployer.Logger.Printf("Error getting replication controllers: %v\n", err.Error())
+		return
+	}
+	if len(controllers) == 0 {
 		deployer.Logger.Println("Did not find a old replication controller to remove")
 		return
 	}
