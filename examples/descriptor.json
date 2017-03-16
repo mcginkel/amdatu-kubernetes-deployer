@@ -1,0 +1,26 @@
+{
+  "namespace": "default",
+  "appName": "nginx-demo",
+  "newVersion": "#",
+  "replicas": 1,
+  "frontend": "demo.example.com",
+  "useHealthCheck": true,
+  "healthCheckPort": 80,
+  "healthCheckPath": "/",
+  "healthCheckType": "simple",
+  "ignoreHealthCheck": false,
+  "podspec": {
+    "containers": [
+      {
+        "name": "nginx-demo",
+        "image": "nginx",
+        "ports": [
+          {
+            "name": "http",
+            "containerPort": 80
+          }
+        ]
+      }
+    ]
+  }
+}

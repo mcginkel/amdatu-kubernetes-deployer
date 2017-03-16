@@ -56,7 +56,7 @@ func (d *Deployer) deploy(deployment *types.Deployment, logger logger.Logger) {
 	if deployment.Version == "000" {
 		rc, err := deployer.FindCurrentRc()
 		if err != nil {
-			d.handleError(logger, deployment, "Error getting replication controllers for determing next version: %v", err.Error())
+			d.handleError(logger, deployment, "Error getting replication controllers for determining next version: %v", err.Error())
 			return
 		} else if len(rc) == 0 {
 			deployer.Deployment.Version = "1"
