@@ -90,7 +90,7 @@ func (d *DescriptorHandlers) CreateDescriptorHandler(writer http.ResponseWriter,
 		return
 	}
 
-	helper.HandleCreated(writer, logger, "/descriptors/"+descriptor.Id+"?namespace="+descriptor.Namespace, "Descriptor created: %v", descriptor.Id)
+	helper.HandleCreated(writer, logger, "/descriptors/"+descriptor.Id+"/?namespace="+descriptor.Namespace, "Descriptor created: %v", descriptor.Id)
 }
 
 func (d *DescriptorHandlers) DoValidationHandler(writer http.ResponseWriter, req *http.Request) {

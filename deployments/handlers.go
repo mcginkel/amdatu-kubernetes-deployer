@@ -367,7 +367,7 @@ func (d *DeploymentHandlers) deploy(writer http.ResponseWriter, req *http.Reques
 	// start deployment async
 	go deployer.deploy(deployment, myLogger)
 
-	helper.HandleStarted(writer, myLogger, "/deployments/"+deployment.Id+"?namespace="+descriptor.Namespace, "Deployment started: %v", deployment.Id)
+	helper.HandleStarted(writer, myLogger, "/deployments/"+deployment.Id+"/?namespace="+descriptor.Namespace, "Deployment started: %v", deployment.Id)
 }
 
 func (d *DeploymentHandlers) undeploy(writer http.ResponseWriter, req *http.Request, deployment *types.Deployment, myLogger logger.Logger) {
