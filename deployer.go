@@ -7,6 +7,11 @@ import (
 	"net/http"
 	"sync"
 
+	"crypto/tls"
+
+	"net"
+	"time"
+
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/deployments"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/descriptors"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
@@ -20,6 +25,7 @@ import (
 var kubernetesurl, etcdUrl, port, kubernetesUsername, kubernetesPassword, proxyRestUrl string
 var healthTimeout int64
 var proxyReloadSleep int
+var skipServerCertValidation bool
 var registry *etcdregistry.EtcdRegistry
 var descriptorHandlers *descriptors.DescriptorHandlers
 var deploymentHandlers *deployments.DeploymentHandlers
@@ -39,6 +45,7 @@ func init() {
 	flag.Int64Var(&healthTimeout, "timeout", 60, "Timeout in seconds for health checks")
 	flag.IntVar(&proxyReloadSleep, "proxysleep", 20, "Seconds to wait for proxy to reload config")
 	flag.StringVar(&proxyRestUrl, "proxyrest", "", "Proxy REST url")
+	flag.BoolVar(&skipServerCertValidation, "skipServerCertValidation", false, "Skip server certificate validation")
 
 	exampleUsage := "Missing required argument %v. Example usage: ./deployer_linux_amd64 -kubernetes http://[kubernetes-api-url]:8080 -etcd http://[etcd-url]:2379 -deployport 8000"
 
@@ -54,6 +61,25 @@ func init() {
 
 	etcdCfg := etcd.Config{
 		Endpoints: []string{etcdUrl},
+	}
+
+	if skipServerCertValidation {
+		var tlsConfig *tls.Config = &tls.Config{
+			InsecureSkipVerify: true,
+		}
+
+		// copied from etcd client, only added tls config
+		var transport etcd.CancelableTransport = &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			Dial: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).Dial,
+			TLSHandshakeTimeout: 10 * time.Second,
+			TLSClientConfig:     tlsConfig,
+		}
+
+		etcdCfg.Transport = transport
 	}
 
 	etcdClient, err := etcd.New(etcdCfg)
