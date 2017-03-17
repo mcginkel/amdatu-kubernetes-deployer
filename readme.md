@@ -119,9 +119,9 @@ The deployer offers a REST API for creating, updating and deleting desciptors:
 |---|---|---|---|
 |/descriptors/?namespace={namespace}|POST|Create new deployment descriptor, JSON formatted descriptor in the POST body<br>no deployment is triggered|201 with Location header pointing to new descriptor<br>401 not authenticated<br>403 no access to namespace<br>400 bad request (malformed deployment descriptor)
 |/descriptors/?namespace={namespace}[&appname={appname}]|GET|Get all descriptors<br>optionally provide additional appname filter|200 with list of descriptors, can be empty<br>401 not authenticated<br>403 no access to namespace
-|/descriptors/{id}?namespace={namespace}|GET|Get descriptor with given id|200 with descriptor<br>401 not authenticated<br>403 no access to namespace<br>404 descriptor not found|  
-|/descriptors/{id}?namespace={namespace}|PUT|Update descriptor, JSON formatted descriptor in the POST body<br>no (re-)deployment is triggered|204 success no content<br>401 not authenticated<br>403 no access to namespace<br>404 descriptor not found
-|/descriptors/{id}?namespace={namespace}|DELETE|Delete descriptor<br>no undeployment is triggered|200 success no content<br>401 not authenticated<br>403 no access to namespace<br>404 descriptor not found
+|/descriptors/{id}/?namespace={namespace}|GET|Get descriptor with given id|200 with descriptor<br>401 not authenticated<br>403 no access to namespace<br>404 descriptor not found|  
+|/descriptors/{id}/?namespace={namespace}|PUT|Update descriptor, JSON formatted descriptor in the POST body<br>no (re-)deployment is triggered|204 success no content<br>401 not authenticated<br>403 no access to namespace<br>404 descriptor not found
+|/descriptors/{id}/?namespace={namespace}|DELETE|Delete descriptor<br>no undeployment is triggered|200 success no content<br>401 not authenticated<br>403 no access to namespace<br>404 descriptor not found
 
 ## Deployments
 
@@ -150,11 +150,11 @@ The deployer offers a REST API for deploying apps based on the deployment descri
 |---|---|---|---|
 |/deployments/?namespace={namespace}<br>&descriptorId={descriptorId}|POST|Trigger a deployment<br>will create a deployment resource<br>you can poll the created deployment resource for the current status, logs and healthcheck data|202 deployment started, with Location header pointing to deployment<br>401 not authenticated<br>403 no access to namespace<br>404 descriptor not found
 |/deployments/?namespace={namespace}<br>[&appname={appname}]|GET|Get all deployments<br>optionally provide appname filter|200 with list of descriptors, can be empty<br>401 not authenticated<br>403 no access to namespace (with filter only)
-|/deployments/{id}?namespace={namespace}|GET|Get deployment|200 deployment resource found (check deployment status if (un-)deployment is running / was successfull)<br>401 not authenticated<br>403 no access to namespace<br>404 deployment not found
+|/deployments/{id}/?namespace={namespace}|GET|Get deployment|200 deployment resource found (check deployment status if (un-)deployment is running / was successfull)<br>401 not authenticated<br>403 no access to namespace<br>404 deployment not found
 |/deployments/{id}/logs?namespace={namespace}|GET|Get deployment logs<br>logs are updated constantly during (un)deployments|200 deployment logs found<br>401 not authenticated<br>403 no access to namespace<br>404 deployment not found
 |/deployments/{id}/healthcheckdata?namespace={namespace}|GET|Get deployment healthcheckdata<br>healthcheckdata is updated at the end of a deployment|200 deployment healthcheckdata found<br>401 not authenticated<br>403 no access to namespace<br>404 deployment not found
-|/deployments/{id}?namespace={namespace}|PUT|Redeploy this deployment<br>empty body|202 redeployment started, with Location header pointing to new deployment<br>401 not authenticated<br>403 no access to namespace<br>404 deployment not found
-|/deployments/{id}?namespace={namespace}<br>[&deleteDeployment={true&#124;false}]|DELETE|Trigger a undeployment and / or deletion of the deployment resource<br>if the deployment is deployed, it will be undeployed.<br>Poll deployment for status until it returns a UNDEPLOYED<br>if deleteDeployment is true, also the deployment resource itself will be deleted, and polling it will result in a 404 when undeployment and deletion is done|202 undeployment started<br>401 not authenticated<br>403 no access to namespace<br>404 deployment not found
+|/deployments/{id}/?namespace={namespace}|PUT|Redeploy this deployment<br>empty body|202 redeployment started, with Location header pointing to new deployment<br>401 not authenticated<br>403 no access to namespace<br>404 deployment not found
+|/deployments/{id}/?namespace={namespace}<br>[&deleteDeployment={true&#124;false}]|DELETE|Trigger a undeployment and / or deletion of the deployment resource<br>if the deployment is deployed, it will be undeployed.<br>Poll deployment for status until it returns a UNDEPLOYED<br>if deleteDeployment is true, also the deployment resource itself will be deleted, and polling it will result in a 404 when undeployment and deletion is done|202 undeployment started<br>401 not authenticated<br>403 no access to namespace<br>404 deployment not found
 
 ### Used K8s resources
 
