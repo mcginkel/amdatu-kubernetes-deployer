@@ -1,9 +1,8 @@
-FROM frolvlad/alpine-bash
+FROM alpine:3.5
 
-COPY ./ /tmp/src
-RUN cd /tmp/src && chmod +x build.sh && ./build.sh
+COPY ./amdatu-kubernetes-deployer /go/bin/amdatu-kubernetes-deployer
 
 ENV PATH="/go/bin:$PATH"
-WORKDIR /go
+WORKDIR /go/bin
 
 ENTRYPOINT ["amdatu-kubernetes-deployer"]

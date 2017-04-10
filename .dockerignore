@@ -1,5 +1,2 @@
-*.iml
-.git
-.gitignore
-bitbucket-pipelines.yml
-deployer
+**/*
+!amdatu-kubernetes-deployer

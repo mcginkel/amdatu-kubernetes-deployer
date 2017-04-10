@@ -1,84 +1,148 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# this should be called within an alpine docker container during manual build OR from the bitbucket pipeline
-
-# fail immedialtely
+# fail immediately
 set -e
 set -o pipefail
 
-# version number of glibc and go
-GLIBC_VERSION=2.23-r3
-GOLANG_VERSION=1.7.4
+echo "Branch: $BITBUCKET_BRANCH"
+echo "Tag: $BITBUCKET_TAG"
+echo "Commit: $BITBUCKET_COMMIT"
 
-# save where we are coming from, that's where our sources are
-SRCDIR=`pwd`
+APPNAME="amdatu-kubernetes-deployer"
 
-# install some common needed packages
-apk --no-cache add curl wget ca-certificates
+ALPHA_LINUX_NAME="$APPNAME-linux_amd64-alpha"
+ALPHA_MACOS_NAME="$APPNAME-macos_amd64-alpha"
+ALPHA_WIN_NAME="$APPNAME-windows_amd64-alpha.exe"
+HASHED_LINUX_NAME="$APPNAME-linux_amd64-${BITBUCKET_COMMIT}"
+HASHED_MACOS_NAME="$APPNAME-macos_amd64-${BITBUCKET_COMMIT}"
+HASHED_WIN_NAME="$APPNAME-windows_amd64-${BITBUCKET_COMMIT}.exe"
 
-# install glibc, needed by go
-wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://raw.githubusercontent.com/sgerrand/alpine-pkg-glibc/master/sgerrand.rsa.pub
-wget -q -O /tmp/glibc.apk https://github.com/sgerrand/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-${GLIBC_VERSION}.apk
-apk add /tmp/glibc.apk
-rm  /tmp/glibc.apk
+ALPHA_IMAGE="amdatu/${APPNAME}:alpha"
+HASHED_IMAGE="amdatu/${APPNAME}:${BITBUCKET_COMMIT}"
 
-# install golang
-GOLANG_URL=https://storage.googleapis.com/golang/go$GOLANG_VERSION.linux-amd64.tar.gz
-wget -q "${GOLANG_URL}" -O /tmp/golang.tar.gz
-mkdir -p /usr/local
-tar -C /usr/local -xzf /tmp/golang.tar.gz
-rm /tmp/golang.tar.gz
+if [ -z "$BITBUCKET_TAG" ]; then
 
-# configure go basics
-export GOPATH="/go"
-mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH/bin"
-export PATH="$GOPATH/bin:/usr/local/go/bin:$PATH"
+    # build for every branch, but not on tags
 
-# create correct golang dir structure for this project
-PACKAGE_PATH="${GOPATH}/src/bitbucket.org/amdatulabs/amdatu-kubernetes-deployer"
-mkdir -p "${PACKAGE_PATH}"
+    # save where we are coming from, that's where our sources are
+    SRCDIR=`pwd`
 
-# copy sources to new directory
-cd "${SRCDIR}"
-tar -cO --exclude .git . | tar -xv -C "${PACKAGE_PATH}"
+    # create correct golang dir structure for this project
+    echo "Creating directory structure"
+    PACKAGE_PATH="${GOPATH}/src/bitbucket.org/amdatulabs/${APPNAME}"
+    mkdir -p "${PACKAGE_PATH}"
 
-# build and install binary for running in the resulting docker image
-cd "${PACKAGE_PATH}"
-go install -v
+    # copy sources to new directory
+    echo "Copying sources"
+    cd "${SRCDIR}"
+    tar -cO --exclude .git . | tar -xv -C "${PACKAGE_PATH}"
 
-if [ -n "$BB_AUTH_STRING" ] && [ "$BITBUCKET_BRANCH"=="master" ]; then
+    # build binaries
+    echo "Building binaries"
+    cd "${PACKAGE_PATH}"
 
-    VERSION="alpha"
+    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o "$ALPHA_LINUX_NAME" .
+    CGO_ENABLED=0 GOOS=darwin go build -a -installsuffix cgo -o "$ALPHA_MACOS_NAME" .
+    CGO_ENABLED=0 GOOS=windows go build -a -installsuffix cgo -o "$ALPHA_WIN_NAME" .
 
-    if [ -n "$BITBUCKET_TAG" ]; then
-        VERSION=$BITBUCKET_TAG
-    fi
-
-    BASENAME="amdatu-kubernetes-deployer"
-    LINUX_NAME="$BASENAME-linux_amd64-$VERSION"
-    MACOS_NAME="$BASENAME-macos_amd64-$VERSION"
-    WIN_NAME="$BASENAME-windows_amd64-$VERSION.exe"
-
-    # build binaries for export
-    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o "$LINUX_NAME" .
-    CGO_ENABLED=0 GOOS=darwin go build -a -installsuffix cgo -o "$MACOS_NAME" .
-    CGO_ENABLED=0 GOOS=windows go build -a -installsuffix cgo -o "$WIN_NAME" .
-
-    # post binaries to download section of bitbucket
-
-    curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$LINUX_NAME"
-    curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$MACOS_NAME"
-    curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$WIN_NAME"
+    echo "Build successful"
 
 fi
 
-# remove sources and tmp files
-cd "${GOPATH}"
-rm -r src
-rm -r pkg
+if [ -z "$BITBUCKET_TAG" ] && [ "$BITBUCKET_BRANCH" == "master" ]; then
 
-# remove go, it's huge and not needed anymore
-rm -rf /usr/local/go
+    # publish alpha versions for master branch
 
-# remove apk cache
-rm -rf /var/cache/apk/*
+    if [ -n "$BB_AUTH_STRING" ]; then
+
+        # upload binaries to download section of bitbucket
+
+        echo "Uploading binaries"
+        cp "$ALPHA_LINUX_NAME" "$HASHED_LINUX_NAME"
+        cp "$ALPHA_MACOS_NAME" "$HASHED_MACOS_NAME"
+        cp "$ALPHA_WIN_NAME" "$HASHED_WIN_NAME"
+
+        curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$ALPHA_LINUX_NAME"
+        curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$ALPHA_MACOS_NAME"
+        curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$ALPHA_WIN_NAME"
+        curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$HASHED_LINUX_NAME"
+        curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$HASHED_MACOS_NAME"
+        curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$HASHED_WIN_NAME"
+    else
+        echo "No bitbucket auth token set, skipping upload"
+    fi
+
+    if [ -n "$DOCKER_USER" ] && [ -n "$DOCKER_PASSWORD" ]; then
+
+        # build docker image for alpha version
+
+        echo "Building alpha docker image"
+        cp "$LINUX_NAME" "$APPNAME"
+        docker build -t "$ALPHA_IMAGE" .
+        echo "Tagging hashed docker image"
+        docker tag "$ALPHA_IMAGE" "$HASHED_IMAGE"
+        echo "Pushing docker images"
+        docker login --username="$DOCKER_USER" --password="$DOCKER_PASSWORD"
+        docker push "$ALPHA_IMAGE"
+        docker push "$HASHED_IMAGE"
+    else
+        echo "No docker user/password set, skipping image build and push"
+    fi
+
+elif [ -n "$BITBUCKET_TAG" ]; then
+
+    # create binaries and images versioned with given git tag
+    # use existing hashed versions, do not rebuild!
+
+    if [ -n "$BB_AUTH_STRING" ]; then
+
+        # download old hashed version, rename, upload
+
+        echo "Downloading old binaries"
+        curl -sL "https://bitbucket.org/amdatulabs/${APPNAME}/downloads/${HASHED_LINUX_NAME}" -o "$HASHED_LINUX_NAME"
+        curl -sL "https://bitbucket.org/amdatulabs/${APPNAME}/downloads/${HASHED_LINUX_NAME}" -o "$HASHED_LINUX_NAME"
+        curl -sL "https://bitbucket.org/amdatulabs/${APPNAME}/downloads/${HASHED_LINUX_NAME}" -o "$HASHED_LINUX_NAME"
+
+        TAGGED_LINUX_NAME="$APPNAME-linux_amd64-${BITBUCKET_TAG}"
+        TAGGED_MACOS_NAME="$APPNAME-macos_amd64-${BITBUCKET_TAG}"
+        TAGGED_WIN_NAME="$APPNAME-windows_amd64-${BITBUCKET_TAG}.exe"
+
+        cp "$HASHED_LINUX_NAME" "$TAGGED_LINUX_NAME"
+        cp "$HASHED_MACOS_NAME" "$TAGGED_MACOS_NAME"
+        cp "$HASHED_WIN_NAME" "$TAGGED_WIN_NAME"
+
+        echo "Uploading renamed binaries"
+        curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$TAGGED_LINUX_NAME"
+        curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$TAGGED_MACOS_NAME"
+        curl -X POST "https://${BB_AUTH_STRING}@api.bitbucket.org/2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"$TAGGED_WIN_NAME"
+    else
+        echo "No bitbucket auth token set, skipping upload"
+    fi
+
+    if [ -n "$DOCKER_USER" ] && [ -n "$DOCKER_PASSWORD" ]; then
+
+        # promoting alpha to version defined by tag name
+
+        echo "Tagging docker image with $BITBUCKET_TAG"
+        docker pull "$HASHED_IMAGE"
+        TAGGED_IMAGE="amdatu/${APPNAME}:${BITBUCKET_TAG}"
+        docker tag "$HASHED_IMAGE" "$TAGGED_IMAGE"
+        echo "Pushing docker image"
+        docker login --username="$DOCKER_USER" --password="$DOCKER_PASSWORD"
+        docker push "$TAGGED_IMAGE"
+
+        if [ "$BITBUCKET_TAG" == "production" ]; then
+            echo "Also tagging and pushing latest"
+            LATEST_IMAGE="amdatu/${APPNAME}:latest"
+            docker tag "$HASHED_IMAGE" "$LATEST_IMAGE"
+            docker push "$LATEST_IMAGE"
+        fi
+    else
+        echo "No docker user/password set, skipping image tag and push"
+    fi
+
+else
+    echo "Not on master branch, and not triggered by tag: skipping publishing"
+fi
+
+echo "Done"
