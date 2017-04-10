@@ -189,16 +189,16 @@ Authentication and authorization for the REST API is not implemented yet, but wi
 
 
 [Bug reports and feature requests](https://amdatu.atlassian.net/projects/AKD) and of course pull requests are greatly appreciated!  
-The deployer is built using Bitbucket Pipelines (see `bitbucket-pipelines.yml` and `build.sh`), which result in executables
-which can be downloaded on the [Bitbucket Download Section](https://bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/downloads/).  
-Additionally a Docker Hub Automated Build is configured for providing docker images containing the deployer, see [Docker Hub.](https://hub.docker.com/r/amdatu/amdatu-kubernetes-deployer)
+The deployer is built using Bitbucket Pipelines (see `bitbucket-pipelines.yml` and `build.sh`), which results in executables
+which can be downloaded on the [Bitbucket Download Section](https://bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/downloads/),  
+and in Docker images, see [Docker Hub](https://hub.docker.com/r/amdatu/amdatu-kubernetes-deployer).
 
 # Versioning
 
 The binaries are named and the docker images are tagged using a alpha/beta/production scheme:
 
-- Every push to master result in `alpha` versions.
-- Every git tag results in a version with the same name. We use `beta` and `production`, which will be moved for every new beta/production version.
+- Every push to master result in a `alpha` version and a version with the current git hash.
+- Every git tag results in a version with the same name, reusing the already build git hash based artifacts from the `alpha` step.
+We use `beta` and `production` tags, which will be moved for every new beta/production version.
 - For the `production` tag there will also be an additional tag, which represents a version number, following semantic versioning scheme, which will not be moved.
 - On docker hub the `production` tag will also result in the `latest` tag
-
