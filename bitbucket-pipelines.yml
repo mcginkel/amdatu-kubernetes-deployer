@@ -1,14 +1,22 @@
-image: frolvlad/alpine-bash
+image: golang:1.7.5-alpine3.5
+
+clone:
+  depth: 1
+
+options:
+  docker: true
 
 pipelines:
 
   default:
     - step:
         script:
+          - apk add --no-cache bash curl
           - chmod +x build.sh && ./build.sh
 
   tags:
     "**":
       - step:
           script:
+            - apk add --no-cache bash curl
             - chmod +x build.sh && ./build.sh
