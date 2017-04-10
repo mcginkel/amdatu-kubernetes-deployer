@@ -72,17 +72,17 @@ if [ -z "$BITBUCKET_TAG" ] && [ "$BITBUCKET_BRANCH" == "master" ]; then
         echo "No bitbucket auth token set, skipping upload"
     fi
 
-    if [ -n "$DOCKER_USER" ] && [ -n "$DOCKER_PASSWORD" ]; then
+    if [ -n "$DOCKER_USER" ] && [ -n "$DOCKER_MAIL" ] && [ -n "$DOCKER_PASSWORD" ]; then
 
         # build docker image for alpha version
 
         echo "Building alpha docker image"
-        cp "$LINUX_NAME" "$APPNAME"
+        cp "$ALPHA_LINUX_NAME" "$APPNAME"
         docker build -t "$ALPHA_IMAGE" .
         echo "Tagging hashed docker image"
         docker tag "$ALPHA_IMAGE" "$HASHED_IMAGE"
         echo "Pushing docker images"
-        docker login --username="$DOCKER_USER" --password="$DOCKER_PASSWORD"
+        docker login --username="$DOCKER_USER" --email="$DOCKER_MAIL" --password="$DOCKER_PASSWORD"
         docker push "$ALPHA_IMAGE"
         docker push "$HASHED_IMAGE"
     else
@@ -100,8 +100,8 @@ elif [ -n "$BITBUCKET_TAG" ]; then
 
         echo "Downloading old binaries"
         curl -sL "https://bitbucket.org/amdatulabs/${APPNAME}/downloads/${HASHED_LINUX_NAME}" -o "$HASHED_LINUX_NAME"
-        curl -sL "https://bitbucket.org/amdatulabs/${APPNAME}/downloads/${HASHED_LINUX_NAME}" -o "$HASHED_LINUX_NAME"
-        curl -sL "https://bitbucket.org/amdatulabs/${APPNAME}/downloads/${HASHED_LINUX_NAME}" -o "$HASHED_LINUX_NAME"
+        curl -sL "https://bitbucket.org/amdatulabs/${APPNAME}/downloads/${HASHED_MACOS_NAME}" -o "$HASHED_MACOS_NAME"
+        curl -sL "https://bitbucket.org/amdatulabs/${APPNAME}/downloads/${HASHED_WIN_NAME}" -o "$HASHED_WIN_NAME"
 
         TAGGED_LINUX_NAME="$APPNAME-linux_amd64-${BITBUCKET_TAG}"
         TAGGED_MACOS_NAME="$APPNAME-macos_amd64-${BITBUCKET_TAG}"
