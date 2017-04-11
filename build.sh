@@ -119,7 +119,7 @@ elif [ -n "$BITBUCKET_TAG" ]; then
         echo "No bitbucket auth token set, skipping upload"
     fi
 
-    if [ -n "$DOCKER_USER" ] && [ -n "$DOCKER_PASSWORD" ]; then
+    if [ -n "$DOCKER_USER" ] && [ -n "$DOCKER_MAIL" ] && [ -n "$DOCKER_PASSWORD" ]; then
 
         # promoting alpha to version defined by tag name
 
@@ -128,7 +128,7 @@ elif [ -n "$BITBUCKET_TAG" ]; then
         TAGGED_IMAGE="amdatu/${APPNAME}:${BITBUCKET_TAG}"
         docker tag "$HASHED_IMAGE" "$TAGGED_IMAGE"
         echo "Pushing docker image"
-        docker login --username="$DOCKER_USER" --password="$DOCKER_PASSWORD"
+        docker login --username="$DOCKER_USER" --email="$DOCKER_MAIL" --password="$DOCKER_PASSWORD"
         docker push "$TAGGED_IMAGE"
 
         if [ "$BITBUCKET_TAG" == "production" ]; then
