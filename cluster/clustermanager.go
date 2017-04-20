@@ -176,7 +176,7 @@ func (deployer *Deployer) CreateService() (*v1.Service, error) {
 		Selector:        selector,
 		Ports:           ports,
 		Type:            v1.ServiceTypeNodePort,
-		SessionAffinity: "ClientIP",
+		SessionAffinity: "None",
 	}
 
 	deployer.Logger.Println("Creating Service")
@@ -209,7 +209,7 @@ func (deployer *Deployer) CreatePersistentService() (*v1.Service, error) {
 			Selector:        selector,
 			Ports:           ports,
 			Type:            v1.ServiceTypeNodePort,
-			SessionAffinity: "ClientIP",
+			SessionAffinity: "None",
 		}
 
 		created, err := deployer.K8client.CreateService(descriptor.Namespace, srv)
