@@ -184,9 +184,10 @@ func (deployer *Deployer) CreateService() (*v1.Service, error) {
 	return deployer.K8client.CreateService(descriptor.Namespace, srv)
 }
 
-func (deployer *Deployer) CreatePersistentService() (*v1.Service, error) {
+func (deployer *Deployer) CreateOrUpdatePersistentService() (*v1.Service, error) {
 
-	descriptor := deployer.Deployment.Descriptor
+	deployment := deployer.Deployment
+	descriptor := deployment.Descriptor
 
 	existing, _ := deployer.K8client.GetService(descriptor.Namespace, descriptor.AppName)
 	if existing.Name == "" {
@@ -204,6 +205,7 @@ func (deployer *Deployer) CreatePersistentService() (*v1.Service, error) {
 
 		selector := make(map[string]string)
 		selector["app"] = descriptor.AppName
+		selector["version"] = deployment.Version
 
 		srv.Spec = v1.ServiceSpec{
 			Selector:        selector,
@@ -225,20 +227,21 @@ func (deployer *Deployer) CreatePersistentService() (*v1.Service, error) {
 		// check if ports changed
 		newPorts := getPorts(descriptor.PodSpec.Containers)
 		existingPorts := existing.Spec.Ports
-
-		//deployer.Logger.Printf("new: %v\n", newPorts)
-		//deployer.Logger.Printf("existing: %v\n", existingPorts)
-
-		if servicePortEquals(newPorts, existingPorts) {
-			deployer.Logger.Println("No update on persistent service needed.")
-		} else {
-			deployer.Logger.Println("Updating persistent service, ports changed!")
+		if !servicePortEquals(newPorts, existingPorts) {
+			deployer.Logger.Println("Updating persistent service ports")
 			existing.Spec.Ports = newPorts
-			_, err := deployer.K8client.UpdateService(existing.Namespace, existing)
-			if err != nil {
-				deployer.Logger.Println("Error updating persistent service: " + err.Error())
-				return existing, err
-			}
+		}
+
+		deployer.Logger.Println("Updating persistent service version selector")
+		existing.Spec.Selector["version"] = deployment.Version
+
+		// update session affinity
+		existing.Spec.SessionAffinity = "None"
+
+		_, err := deployer.K8client.UpdateService(existing.Namespace, existing)
+		if err != nil {
+			deployer.Logger.Println("Error updating persistent service: " + err.Error())
+			return existing, err
 		}
 
 		return existing, nil
@@ -290,7 +293,7 @@ func (deployer *Deployer) FindCurrentRc() ([]v1.ReplicationController, error) {
 	replicationControllers, err := deployer.K8client.ListReplicationControllersWithLabel(descriptor.Namespace, labels)
 
 	if err != nil {
-		return nil, err;
+		return nil, err
 	}
 
 	for _, rc := range replicationControllers.Items {
@@ -355,7 +358,7 @@ func (deployer *Deployer) FindCurrentService() ([]v1.Service, error) {
 func (deployer *Deployer) CleaupOldDeployments() {
 	controllers, err := deployer.FindCurrentRc()
 
-	if err != nil  {
+	if err != nil {
 		deployer.Logger.Printf("Error getting replication controllers: %v\n", err.Error())
 		return
 	}
