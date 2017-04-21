@@ -76,12 +76,6 @@ func (bluegreen *bluegreen) Deploy() error {
 		return err
 	}
 
-	_, err = bluegreen.deployer.CreatePersistentService()
-	if err != nil {
-		bluegreen.deployer.Logger.Println(err)
-		return err
-	}
-
 	if err := bluegreen.createReplicationController(); err != nil {
 		bluegreen.deployer.Logger.Println(err)
 		return err
@@ -106,6 +100,12 @@ func (bluegreen *bluegreen) Deploy() error {
 			bluegreen.deployer.Logger.Printf("%v", err)
 			return err
 		}
+	}
+
+	_, err = bluegreen.deployer.CreateOrUpdatePersistentService()
+	if err != nil {
+		bluegreen.deployer.Logger.Println(err)
+		return err
 	}
 
 	bluegreen.deployer.Logger.Println("Cleaning up old deployments....")
