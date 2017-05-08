@@ -16,37 +16,25 @@ limitations under the License.
 package deployments
 
 import (
+	"fmt"
+
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/k8s"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
-	"fmt"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 type Undeployer struct {
 	registry  *etcdregistry.EtcdRegistry
 	config    helper.DeployerConfig
-	k8sclient *kubernetes.Clientset
+	k8sclient k8s.K8sClient
 }
 
-func NewUndeployer(config helper.DeployerConfig) *Undeployer {
+func NewUndeployer(config helper.DeployerConfig, logger logger.Logger) *Undeployer {
 
-	k8sconfig, err := clientcmd.BuildConfigFromFlags(config.K8sUrl, "")
-	if err != nil {
-		panic(err.Error())
-	}
-	// creates the clientset
-	k8sclient, err := kubernetes.NewForConfig(k8sconfig)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	return &Undeployer{config.EtcdRegistry, config, k8sclient}
+	return &Undeployer{config.EtcdRegistry, config, k8s.New(config.K8sUrl, logger)}
 
 }
 
@@ -89,7 +77,7 @@ func (undeployer *Undeployer) Undeploy(deployment *types.Deployment, logger logg
 	}
 
 	for _, controller := range controllers {
-		if helper.ShutdownReplicationController(&controller, undeployer.k8sclient, logger); err != nil {
+		if undeployer.k8sclient.ShutdownReplicationController(&controller); err != nil {
 			undeployer.handleError(logger, deployment, "Error deleting controller: %v\n", err.Error())
 			success = false
 		}
@@ -120,11 +108,7 @@ func (undeployer *Undeployer) getReplicationControllers(deployment *types.Deploy
 	logger.Printf("Getting replication controllers\n")
 
 	selector := map[string]string{"app": deployment.Descriptor.AppName}
-	rcList, err := undeployer.k8sclient.
-		ReplicationControllers(deployment.Descriptor.Namespace).
-		List(meta.ListOptions{
-			LabelSelector: labels.SelectorFromSet(selector).String(),
-		})
+	rcList, err := undeployer.k8sclient.ListReplicationControllersWithSelector(deployment.Descriptor.Namespace, selector)
 	if err != nil {
 		return []v1.ReplicationController{}, err
 	}
@@ -142,20 +126,14 @@ func (undeployer *Undeployer) deleteProxy(backend string, logger logger.Logger) 
 func (undeployer *Undeployer) deleteServices(deployment *types.Deployment, logger logger.Logger) error {
 
 	selector := map[string]string{"app": deployment.Descriptor.AppName}
-	servicelist, err := undeployer.k8sclient.
-		Services(deployment.Descriptor.Namespace).
-		List(meta.ListOptions{
-			LabelSelector: labels.SelectorFromSet(selector).String(),
-		})
+	servicelist, err := undeployer.k8sclient.ListServicesWithSelector(deployment.Descriptor.Namespace, selector)
 	if err != nil {
 		return err
 	}
 
 	for _, service := range servicelist.Items {
 		logger.Printf("Deleting service %v\n", service.ObjectMeta.Name)
-		err := undeployer.k8sclient.
-			Services(deployment.Descriptor.Namespace).
-			Delete(service.ObjectMeta.Name, &meta.DeleteOptions{})
+		err := undeployer.k8sclient.DeleteService(deployment.Descriptor.Namespace, service.Name)
 		if err != nil {
 			return err
 		}

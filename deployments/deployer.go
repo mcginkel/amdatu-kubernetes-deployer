@@ -24,7 +24,6 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/api/v1"
 )
 
@@ -70,7 +69,7 @@ func (d *Deployer) deploy(deployment *types.Deployment, logger logger.Logger) {
 					activeRcs = append(activeRcs, ctrl)
 				} else {
 					logger.Printf("Note: found orphaned replication controller %v, will try to finally delete it...\n", ctrl.Name)
-					deployer.K8client.ReplicationControllers(ctrl.Namespace).Delete(ctrl.Name, &meta.DeleteOptions{})
+					deployer.K8client.DeleteReplicationController(ctrl.Namespace, ctrl.Name)
 				}
 			}
 
@@ -108,7 +107,7 @@ func (d *Deployer) deploy(deployment *types.Deployment, logger logger.Logger) {
 	*/
 
 	logger.Println("Checking for existing service...")
-	_, err = deployer.K8client.Services(deployment.Descriptor.Namespace).Get(deployer.CreateRcName(), meta.GetOptions{})
+	_, err = deployer.K8client.GetService(deployment.Descriptor.Namespace, deployer.CreateRcName())
 
 	if err != nil {
 		logger.Println("No existing service found, starting deployment")

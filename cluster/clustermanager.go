@@ -25,14 +25,12 @@ import (
 	"strings"
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/k8s"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 const DNS952LabelFmt string = "[a-z]([-a-z0-9]*[a-z0-9])?"
@@ -42,24 +40,14 @@ var dns952LabelRegexp = regexp.MustCompile("^" + DNS952LabelFmt + "$")
 type Deployer struct {
 	Config     *helper.DeployerConfig
 	Deployment *types.Deployment
-	K8client   *kubernetes.Clientset
+	K8client   k8s.K8sClient
 	Logger     logger.Logger
 }
 
 func NewDeployer(config helper.DeployerConfig, deployment *types.Deployment, logger logger.Logger) *Deployer {
 
-	k8sconfig, err := clientcmd.BuildConfigFromFlags(config.K8sUrl, "")
-	if err != nil {
-		panic(err.Error())
-	}
-	// creates the clientset
-	k8sclient, err := kubernetes.NewForConfig(k8sconfig)
-	if err != nil {
-		panic(err.Error())
-	}
-	logger.Printf("Connected to Kubernetes API server on %v\n", config.K8sUrl)
+	return &Deployer{&config, deployment, k8s.New(config.K8sUrl, logger), logger}
 
-	return &Deployer{&config, deployment, k8sclient, logger}
 }
 
 func (deployer *Deployer) CreateRcName() string {
@@ -140,7 +128,7 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 	}
 
 	deployer.Logger.Println("Creating Replication Controller")
-	result, err := deployer.K8client.ReplicationControllers(descriptor.Namespace).Create(ctrl)
+	result, err := deployer.K8client.CreateReplicationController(descriptor.Namespace, ctrl)
 	if err != nil {
 		deployer.Logger.Println("Error while creating replication controller")
 		return result, err
@@ -190,7 +178,7 @@ func (deployer *Deployer) CreateService() (*v1.Service, error) {
 
 	deployer.Logger.Println("Creating Service")
 
-	return deployer.K8client.Services(descriptor.Namespace).Create(srv)
+	return deployer.K8client.CreateService(descriptor.Namespace, srv)
 }
 
 func (deployer *Deployer) CreateOrUpdatePersistentService() (*v1.Service, error) {
@@ -198,7 +186,7 @@ func (deployer *Deployer) CreateOrUpdatePersistentService() (*v1.Service, error)
 	deployment := deployer.Deployment
 	descriptor := deployment.Descriptor
 
-	existing, _ := deployer.K8client.Services(descriptor.Namespace).Get(descriptor.AppName, meta.GetOptions{})
+	existing, _ := deployer.K8client.GetService(descriptor.Namespace, descriptor.AppName)
 	if existing.Name == "" {
 		srv := new(v1.Service)
 		srv.Name = descriptor.AppName
@@ -223,7 +211,7 @@ func (deployer *Deployer) CreateOrUpdatePersistentService() (*v1.Service, error)
 			SessionAffinity: "None",
 		}
 
-		created, err := deployer.K8client.Services(descriptor.Namespace).Create(srv)
+		created, err := deployer.K8client.CreateService(descriptor.Namespace, srv)
 
 		if err == nil {
 			deployer.Logger.Printf("Creating persistent service %v. Listening on IP %v\n", srv.Name, created.Spec.ClusterIP)
@@ -247,7 +235,7 @@ func (deployer *Deployer) CreateOrUpdatePersistentService() (*v1.Service, error)
 		// update session affinity
 		existing.Spec.SessionAffinity = "None"
 
-		_, err := deployer.K8client.Services(descriptor.Namespace).Update(existing)
+		_, err := deployer.K8client.UpdateService(descriptor.Namespace, existing)
 		if err != nil {
 			deployer.Logger.Println("Error updating persistent service: " + err.Error())
 			return existing, err
@@ -299,11 +287,7 @@ func (deployer *Deployer) FindCurrentRc() ([]v1.ReplicationController, error) {
 	result := []v1.ReplicationController{}
 
 	selector := map[string]string{"app": descriptor.AppName}
-	replicationControllers, err := deployer.K8client.
-		ReplicationControllers(descriptor.Namespace).
-		List(meta.ListOptions{
-			LabelSelector: labels.SelectorFromSet(selector).String(),
-		})
+	replicationControllers, err := deployer.K8client.ListReplicationControllersWithSelector(descriptor.Namespace, selector)
 	if err != nil {
 		return nil, err
 	}
@@ -324,11 +308,7 @@ func (deployer *Deployer) FindCurrentPods(allowSameVersion bool) ([]v1.Pod, erro
 	result := make([]v1.Pod, 0, 10)
 
 	selector := map[string]string{"app": descriptor.AppName}
-	pods, err := deployer.K8client.
-		Pods(descriptor.Namespace).
-		List(meta.ListOptions{
-			LabelSelector: labels.SelectorFromSet(selector).String(),
-		})
+	pods, err := deployer.K8client.ListPodsWithSelector(descriptor.Namespace, selector)
 	if err != nil {
 		return result, err
 	}
@@ -353,11 +333,7 @@ func (deployer *Deployer) FindCurrentService() ([]v1.Service, error) {
 	result := make([]v1.Service, 1, 10)
 
 	selector := map[string]string{"app": descriptor.AppName}
-	services, err := deployer.K8client.
-		Services(descriptor.Namespace).
-		List(meta.ListOptions{
-			LabelSelector: labels.SelectorFromSet(selector).String(),
-		})
+	services, err := deployer.K8client.ListServicesWithSelector(descriptor.Namespace, selector)
 	if err != nil {
 		return result, errors.New("No active Service found")
 	}
@@ -390,7 +366,7 @@ func (deployer *Deployer) CleaupOldDeployments() {
 
 	for _, rc := range controllers {
 		if rc.Name != "" {
-			helper.ShutdownReplicationController(&rc, deployer.K8client, deployer.Logger)
+			deployer.K8client.ShutdownReplicationController(&rc)
 			deployer.Config.ProxyConfigurator.DeleteDeployment(rc.Namespace+"-"+rc.Name, deployer.Logger)
 		}
 	}
@@ -429,13 +405,13 @@ func (deployer *Deployer) DeletePod(pod v1.Pod) {
 
 	deployer.Logger.Printf("Deleting Pod %v", pod.Name)
 
-	deployer.K8client.Pods(descriptor.Namespace).Delete(pod.Name, &meta.DeleteOptions{})
+	deployer.K8client.DeletePod(descriptor.Namespace, pod.Name)
 }
 
 func (deployer *Deployer) deleteService(service v1.Service) {
 	descriptor := deployer.Deployment.Descriptor
 	deployer.Logger.Printf("Deleting Service %v", service.Name)
-	deployer.K8client.Services(descriptor.Namespace).Delete(service.Name, &meta.DeleteOptions{})
+	deployer.K8client.DeleteService(descriptor.Namespace, service.Name)
 }
 
 func FindHealthcheckPort(pod *v1.Pod) int32 {
@@ -481,22 +457,18 @@ func (deployer *Deployer) GetHealthcheckUrl(host string, port int32) string {
 
 func (deployer *Deployer) findRcForDeployment() (*v1.ReplicationController, error) {
 	descriptor := deployer.Deployment.Descriptor
-	return deployer.K8client.ReplicationControllers(descriptor.Namespace).Get(deployer.CreateRcName(), meta.GetOptions{})
+	return deployer.K8client.GetReplicationController(descriptor.Namespace, deployer.CreateRcName())
 }
 
 func (deployer *Deployer) findServiceForDeployment() (*v1.Service, error) {
 	descriptor := deployer.Deployment.Descriptor
-	return deployer.K8client.Services(descriptor.Namespace).Get(deployer.CreateRcName(), meta.GetOptions{})
+	return deployer.K8client.GetService(descriptor.Namespace, deployer.CreateRcName())
 }
 
 func (deployer *Deployer) findPodsForDeployment() (*v1.PodList, error) {
 	descriptor := deployer.Deployment.Descriptor
 	selector := map[string]string{"app": descriptor.AppName, "version": deployer.Deployment.Version}
-	return deployer.K8client.
-		Pods(descriptor.Namespace).
-		List(meta.ListOptions{
-			LabelSelector: labels.SelectorFromSet(selector).String(),
-		})
+	return deployer.K8client.ListPodsWithSelector(descriptor.Namespace, selector)
 }
 
 func (deployer *Deployer) CleanupFailedDeployment() {
@@ -506,7 +478,7 @@ func (deployer *Deployer) CleanupFailedDeployment() {
 
 	if err == nil {
 		deployer.Logger.Printf("Deleting ReplicationController %v\n", rc.Name)
-		helper.ShutdownReplicationController(rc, deployer.K8client, deployer.Logger)
+		deployer.K8client.ShutdownReplicationController(rc)
 	}
 
 	pods, err := deployer.findPodsForDeployment()
