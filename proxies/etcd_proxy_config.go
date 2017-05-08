@@ -55,11 +55,6 @@ func NewProxyConfigurator(etcdApi client.KeysAPI, restUrl string, proxyReload in
 	return &ProxyConfigurator{etcdApi, restUrl, proxyReload}
 }
 
-func (proxyConfigurator *ProxyConfigurator) FrontendExistsForDeployment(deploymentName string, logger logger.Logger) bool {
-	frontendKeys := proxyConfigurator.getFrontendKeysForDeployment(deploymentName, logger)
-	return len(frontendKeys) > 0
-}
-
 func (proxyConfigurator *ProxyConfigurator) DeleteFrontendForDeployment(deploymentName string, logger logger.Logger) {
 
 	frontendKeys := proxyConfigurator.getFrontendKeysForDeployment(deploymentName, logger)
@@ -186,13 +181,6 @@ func (proxyConfigurator *ProxyConfigurator) SwitchBackend(frontendName string, n
 	}
 
 	return nil
-}
-
-func (proxyConfigurator *ProxyConfigurator) DeleteBackendServer(deploymentName string, ip string) {
-	keyName := fmt.Sprintf("/proxy/backends/%v/%v", deploymentName, ip)
-	if _, err := proxyConfigurator.etcdApi.Delete(context.Background(), keyName, nil); err != nil {
-		log.Printf("Key %v not found, nothing deleted", keyName)
-	}
 }
 
 func (proxyConfigurator *ProxyConfigurator) WaitForBackend(newBackendName string, logger logger.Logger) error {

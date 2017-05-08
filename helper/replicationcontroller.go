@@ -16,17 +16,20 @@ limitations under the License.
 package helper
 
 import (
-	"time"
-
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
-	k8sClient "bitbucket.org/amdatulabs/amdatu-kubernetes-go/client"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api/v1"
+	"time"
 )
 
-func ShutdownReplicationController(rc *v1.ReplicationController, k8sclient *k8sClient.Client, logger logger.Logger) error {
+func ShutdownReplicationController(rc *v1.ReplicationController, k8sclient *kubernetes.Clientset, logger logger.Logger) error {
 	logger.Printf("Scaling down replication controller: %v\n", rc.Name)
 
-	err := k8sclient.Patch(rc.Namespace, "replicationcontrollers", rc.Name, `{"spec": {"replicas": 0}}`)
+	replicas := int32(0)
+	rc.Spec.Replicas = &replicas
+	_, err := k8sclient.ReplicationControllers(rc.Namespace).Update(rc)
 	if err != nil {
 		logger.Printf("Error scaling down replication controller: %v\n", err.Error())
 	}
@@ -43,18 +46,22 @@ func ShutdownReplicationController(rc *v1.ReplicationController, k8sclient *k8sC
 		successChan <- false
 	}
 
-	return k8sclient.DeleteReplicationController(rc.Namespace, rc.Name)
+	return k8sclient.ReplicationControllers(rc.Namespace).Delete(rc.Name, &meta.DeleteOptions{})
 }
 
-func waitForScaleDown(rc *v1.ReplicationController, k8sclient *k8sClient.Client, successChan chan bool) {
+func waitForScaleDown(rc *v1.ReplicationController, k8sclient *kubernetes.Clientset, successChan chan bool) {
 	for {
 		select {
 		case <-successChan:
 			return
 		default:
 
-			labels := map[string]string{"app": rc.Labels["app"], "version": rc.Labels["version"]}
-			pods, _ := k8sclient.ListPodsWithLabel(rc.Namespace, labels)
+			selector := map[string]string{"app": rc.Labels["app"], "version": rc.Labels["version"]}
+			pods, _ := k8sclient.
+				Pods(rc.Namespace).
+				List(meta.ListOptions{
+					LabelSelector: labels.SelectorFromSet(selector).String(),
+				})
 
 			if CountRunningPods(pods.Items) > 0 {
 				time.Sleep(1 * time.Second)

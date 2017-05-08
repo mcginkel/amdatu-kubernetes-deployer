@@ -227,43 +227,6 @@ func TestBackendServer(t *testing.T) {
 		t.Error("Incorrect number of backend servers registered")
 	}
 
-	pc.DeleteBackendServer("testbackend", "127.0.0.1")
-
-	resp, _ = kAPI.Get(context.Background(), "/proxy/backends/testbackend", nil)
-
-	if resp.Node.Nodes.Len() != 1 {
-		t.Error("Backend not deleted")
-	}
-
-}
-
-func TestFrontendExistsForBackend_NotExisting(t *testing.T) {
-	pc := createProxyConfigurator("")
-
-	exists := pc.FrontendExistsForDeployment("somebackend", logger.NewConsoleLogger())
-
-	if exists {
-		t.Fail()
-	}
-}
-
-func TestFrontendExistsForBackend_Existing(t *testing.T) {
-	pc := createProxyConfigurator("")
-
-	kAPI.Delete(context.Background(), "/proxy", &client.DeleteOptions{Recursive: true, Dir: true})
-	frontend := Frontend{
-		Hostname:  "myhostname.com",
-		Type:      "http",
-		BackendId: "testbackend",
-	}
-
-	pc.CreateFrontEnd(&frontend)
-
-	exists := pc.FrontendExistsForDeployment("testbackend", logger.NewConsoleLogger())
-
-	if !exists {
-		t.Fail()
-	}
 }
 
 func TestWaitForBackend_DOWN(t *testing.T) {

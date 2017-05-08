@@ -16,7 +16,7 @@ limitations under the License.
 package helper
 
 import (
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 func CountRunningPods(pods []v1.Pod) int {

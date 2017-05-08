@@ -36,7 +36,9 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 type bluegreen struct {
@@ -177,8 +179,12 @@ func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool
 			return
 		default:
 			{
-				podSelector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.Version}
-				pods, listErr := bluegreen.deployer.K8client.ListPodsWithLabel(descriptor.Namespace, podSelector)
+				selector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.Version}
+				pods, listErr := bluegreen.deployer.K8client.
+					Pods(descriptor.Namespace).
+					List(meta.ListOptions{
+						LabelSelector: labels.SelectorFromSet(selector).String(),
+					})
 				if listErr != nil {
 					bluegreen.deployer.Logger.Printf(fmt.Sprintf("Error listing pods for new deployment: %v\n", listErr))
 					healthChan <- false

@@ -16,10 +16,13 @@ import (
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/client"
 	etcdclient "github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var (
@@ -32,7 +35,7 @@ var (
 
 const APPNAME = "integrationtest"
 
-var kubernetes client.Client
+var k8sclient *kubernetes.Clientset
 var etcd etcdclient.KeysAPI
 
 func TestMain(m *testing.M) {
@@ -50,7 +53,16 @@ func TestMain(m *testing.M) {
 
 	if *kubernetesUrl != "" {
 
-		kubernetes = client.NewClient(*kubernetesUrl, "", "")
+		k8sconfig, err := clientcmd.BuildConfigFromFlags(*kubernetesUrl, "")
+		if err != nil {
+			panic(err.Error())
+		}
+		// creates the clientset
+		k8sclient, err = kubernetes.NewForConfig(k8sconfig)
+		if err != nil {
+			panic(err.Error())
+		}
+
 		resetEnvironment()
 
 		result := m.Run()
@@ -217,9 +229,13 @@ func TestDeployWithoutHealthCheck(t *testing.T) {
 
 func TestRedeployShouldFail(t *testing.T) {
 
-	labels := make(map[string]string)
-	labels["app"] = APPNAME
-	rcList, err := kubernetes.ListReplicationControllersWithLabel(*namespace, labels)
+	selector := make(map[string]string)
+	selector["app"] = APPNAME
+	rcList, err := k8sclient.
+		ReplicationControllers(*namespace).
+		List(meta.ListOptions{
+			LabelSelector: labels.SelectorFromSet(selector).String(),
+		})
 
 	if err != nil {
 		t.Fatal("Incorrect numer of replication controllers")
@@ -267,17 +283,18 @@ func TestRedeployShouldFail(t *testing.T) {
 
 func resetEnvironment() {
 
-	rcList, _ := kubernetes.ListReplicationControllers(*namespace)
+	rcList, _ := k8sclient.ReplicationControllers(*namespace).List(meta.ListOptions{})
 	for _, rc := range rcList.Items {
-		kubernetes.Patch(*namespace, "replicationcontrollers", rc.Name, `{"spec": {"replicas": 0}}`)
+		rc.Spec.Replicas = &int32(0)
+		k8sclient.ReplicationControllers(*namespace).Update(&rc)
 	}
 
-	kubernetes.DeleteNamespace(*namespace)
+	k8sclient.Namespaces().Delete(*namespace, &meta.DeleteOptions{OrphanDependents: &bool(false)})
 
 	for {
 		foundTestNamespace := false
 
-		namespaces, _ := kubernetes.ListNamespaces()
+		namespaces, _ := k8sclient.Namespaces().List(meta.ListOptions{})
 
 		for _, ns := range namespaces.Items {
 			if ns.Name == *namespace {
@@ -292,7 +309,13 @@ func resetEnvironment() {
 		}
 	}
 
-	kubernetes.CreateNamespace(*namespace)
+	ns := v1.Namespace{
+		meta.TypeMeta{},
+		meta.ObjectMeta{Name: *namespace},
+		v1.NamespaceSpec{},
+		v1.NamespaceStatus{},
+	}
+	k8sclient.Namespaces().Create(&ns)
 
 	etcd.Delete(context.Background(), "/proxy/frontends/deployer-"+*namespace+".cloudrti.com", &etcdclient.DeleteOptions{})
 
@@ -329,7 +352,7 @@ func checkProxyConfig(t *testing.T, version string) {
 		t.Errorf("Hostname not set correctly: %v", fr.Hostname)
 	}
 
-	rcList, err := kubernetes.ListReplicationControllers(*namespace)
+	rcList, err := k8sclient.ReplicationControllers(*namespace).List(meta.ListOptions{})
 	if err != nil || len(rcList.Items) != 1 {
 		t.Fatal("Error listing replication controllers")
 	}
@@ -341,9 +364,12 @@ func checkProxyConfig(t *testing.T, version string) {
 }
 
 func countPodsForApp(t *testing.T) int {
-	labels := map[string]string{"app": APPNAME}
-
-	pods, err := kubernetes.ListPodsWithLabel(*namespace, labels)
+	selector := map[string]string{"app": APPNAME}
+	pods, err := k8sclient.
+		Pods(*namespace).
+		List(meta.ListOptions{
+			LabelSelector: labels.SelectorFromSet(selector).String(),
+		})
 	if err != nil {
 		t.Error(err)
 	}
@@ -370,7 +396,7 @@ func backgroundDeploy(descriptor *types.Descriptor, resultChan chan bool, t *tes
 }
 
 func getReplicationControllerVersion(t *testing.T) int {
-	rcList, err := kubernetes.ListReplicationControllers(*namespace)
+	rcList, err := k8sclient.ReplicationControllers(*namespace).List(meta.ListOptions{})
 	if err != nil {
 		t.Fatal("Error listing replication controllers")
 	}
@@ -390,7 +416,7 @@ func getReplicationControllerVersion(t *testing.T) int {
 }
 
 func checkNoReclicationController(t *testing.T) {
-	rcList, err := kubernetes.ListReplicationControllers(*namespace)
+	rcList, err := k8sclient.ReplicationControllers(*namespace).List(meta.ListOptions{})
 	if err != nil {
 		t.Fatal("Error retrieving Replication Controllers")
 	}
@@ -401,7 +427,7 @@ func checkNoReclicationController(t *testing.T) {
 }
 
 func checkReplicationControllers(previousVersion int, t *testing.T) {
-	rcList, err := kubernetes.ListReplicationControllers(*namespace)
+	rcList, err := k8sclient.ReplicationControllers(*namespace).List(meta.ListOptions{})
 	if err != nil {
 		t.Fatal("Error retrieving Replication Controllers")
 	}
