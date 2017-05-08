@@ -74,12 +74,12 @@ func (bluegreen *bluegreen) Deploy() error {
 
 	service, err := bluegreen.deployer.CreateService()
 	if err != nil {
-		bluegreen.deployer.Logger.Println(err)
+		bluegreen.deployer.Logger.Println(err.Error())
 		return err
 	}
 
 	if err := bluegreen.createReplicationController(); err != nil {
-		bluegreen.deployer.Logger.Println(err)
+		bluegreen.deployer.Logger.Println(err.Error())
 		return err
 	}
 
@@ -92,21 +92,21 @@ func (bluegreen *bluegreen) Deploy() error {
 
 	if descriptor.Frontend != "" {
 		if err := bluegreen.deployer.Config.ProxyConfigurator.WaitForBackend(backendId, bluegreen.deployer.Logger); err != nil {
-			bluegreen.deployer.Logger.Println(err)
+			bluegreen.deployer.Logger.Println(err.Error())
 			return err
 		}
 
 		bluegreen.deployer.Logger.Println("Switch proxy backends....")
 
 		if err := bluegreen.deployer.Config.ProxyConfigurator.SwitchBackend(descriptor.Frontend, backendId); err != nil {
-			bluegreen.deployer.Logger.Printf("%v", err)
+			bluegreen.deployer.Logger.Println(err.Error())
 			return err
 		}
 	}
 
 	_, err = bluegreen.deployer.CreateOrUpdatePersistentService()
 	if err != nil {
-		bluegreen.deployer.Logger.Println(err)
+		bluegreen.deployer.Logger.Println(err.Error())
 		return err
 	}
 

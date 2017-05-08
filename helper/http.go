@@ -61,7 +61,7 @@ func HandleSuccess(writer http.ResponseWriter, logger logger.Logger, body interf
 		writer.Write(bodyBytes)
 	}
 
-	logMsg(logger, msg, args)
+	logMsg(logger, msg, args...)
 }
 
 func HandleCreated(writer http.ResponseWriter, logger logger.Logger, location string, msg string, args ...interface{}) {
@@ -75,7 +75,7 @@ func HandleStarted(writer http.ResponseWriter, logger logger.Logger, location st
 func handleNew(writer http.ResponseWriter, logger logger.Logger, location string, status int, msg string, args ...interface{}) {
 	writer.Header().Set("Location", location)
 	writer.WriteHeader(status)
-	logMsg(logger, msg, args)
+	logMsg(logger, msg, args...)
 }
 
 func HandleError(writer http.ResponseWriter, logger logger.Logger, status int, msg string, args ...interface{}) {
@@ -85,23 +85,20 @@ func HandleError(writer http.ResponseWriter, logger logger.Logger, status int, m
 	}
 	writer.WriteHeader(status)
 	writer.Write([]byte(message))
-	logger.Println(message)
+	logMsg(logger, msg, args...)
 }
 
 func HandleNotFound(writer http.ResponseWriter, logger logger.Logger, msg string, args ...interface{}) {
 	writer.WriteHeader(404)
-	logMsg(logger, msg, args)
+	logMsg(logger, msg, args...)
 }
 
 func logMsg(logger logger.Logger, msg string, args ...interface{}) {
 	var message string
-	if args != nil {
+	if len(args) > 0 {
 		message = fmt.Sprintf(msg, args...)
 	} else {
 		message = msg
-	}
-	if !strings.HasSuffix(message, "\n") {
-		message += "\n"
 	}
 	logger.Println(message)
 }

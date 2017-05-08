@@ -108,7 +108,7 @@ func (undeployer *Undeployer) Undeploy(deployment *types.Deployment, logger logg
 }
 
 func (undeployer *Undeployer) deleteDeployment(deployment *types.Deployment, logger logger.Logger) {
-	logger.Println("Deleting deployment %v.", deployment.Id)
+	logger.Printf("Deleting deployment %v", deployment.Id)
 	err := undeployer.registry.DeleteDeployment(deployment.Descriptor.Namespace, deployment.Id)
 	if err != nil {
 		undeployer.handleError(logger, deployment, "Error deleting deployment in etcd, id %v: %v", deployment.Id, err)
