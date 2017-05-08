@@ -15,14 +15,14 @@ import (
 	"errors"
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/k8s"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	etcdclient "github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
-	"k8s.io/client-go/tools/clientcmd"
+	"regexp"
 )
 
 var (
@@ -35,7 +35,7 @@ var (
 
 const APPNAME = "integrationtest"
 
-var k8sclient *kubernetes.Clientset
+var k8sclient k8s.K8sClient
 var etcd etcdclient.KeysAPI
 
 func TestMain(m *testing.M) {
@@ -53,20 +53,12 @@ func TestMain(m *testing.M) {
 
 	if *kubernetesUrl != "" {
 
-		k8sconfig, err := clientcmd.BuildConfigFromFlags(*kubernetesUrl, "")
-		if err != nil {
-			panic(err.Error())
-		}
-		// creates the clientset
-		k8sclient, err = kubernetes.NewForConfig(k8sconfig)
-		if err != nil {
-			panic(err.Error())
-		}
-
+		k8sclient = k8s.New(*kubernetesUrl, logger.NewConsoleLogger())
 		resetEnvironment()
 
 		result := m.Run()
 
+		resetEnvironment()
 		os.Exit(result)
 	}
 }
@@ -231,12 +223,7 @@ func TestRedeployShouldFail(t *testing.T) {
 
 	selector := make(map[string]string)
 	selector["app"] = APPNAME
-	rcList, err := k8sclient.
-		ReplicationControllers(*namespace).
-		List(meta.ListOptions{
-			LabelSelector: labels.SelectorFromSet(selector).String(),
-		})
-
+	rcList, err := k8sclient.ListReplicationControllersWithSelector(*namespace, selector)
 	if err != nil {
 		t.Fatal("Incorrect numer of replication controllers")
 	}
@@ -283,18 +270,19 @@ func TestRedeployShouldFail(t *testing.T) {
 
 func resetEnvironment() {
 
-	rcList, _ := k8sclient.ReplicationControllers(*namespace).List(meta.ListOptions{})
+	rcList, _ := k8sclient.ListReplicationControllers(*namespace)
 	for _, rc := range rcList.Items {
-		rc.Spec.Replicas = &int32(0)
-		k8sclient.ReplicationControllers(*namespace).Update(&rc)
+		replicas := int32(0)
+		rc.Spec.Replicas = &replicas
+		k8sclient.UpdateReplicationController(*namespace, &rc)
 	}
 
-	k8sclient.Namespaces().Delete(*namespace, &meta.DeleteOptions{OrphanDependents: &bool(false)})
+	k8sclient.DeleteNamespace(*namespace)
 
 	for {
 		foundTestNamespace := false
 
-		namespaces, _ := k8sclient.Namespaces().List(meta.ListOptions{})
+		namespaces, _ := k8sclient.ListNamespaces()
 
 		for _, ns := range namespaces.Items {
 			if ns.Name == *namespace {
@@ -315,7 +303,7 @@ func resetEnvironment() {
 		v1.NamespaceSpec{},
 		v1.NamespaceStatus{},
 	}
-	k8sclient.Namespaces().Create(&ns)
+	k8sclient.CreateNamespace(&ns)
 
 	etcd.Delete(context.Background(), "/proxy/frontends/deployer-"+*namespace+".cloudrti.com", &etcdclient.DeleteOptions{})
 
@@ -352,7 +340,7 @@ func checkProxyConfig(t *testing.T, version string) {
 		t.Errorf("Hostname not set correctly: %v", fr.Hostname)
 	}
 
-	rcList, err := k8sclient.ReplicationControllers(*namespace).List(meta.ListOptions{})
+	rcList, err := k8sclient.ListReplicationControllers(*namespace)
 	if err != nil || len(rcList.Items) != 1 {
 		t.Fatal("Error listing replication controllers")
 	}
@@ -365,11 +353,7 @@ func checkProxyConfig(t *testing.T, version string) {
 
 func countPodsForApp(t *testing.T) int {
 	selector := map[string]string{"app": APPNAME}
-	pods, err := k8sclient.
-		Pods(*namespace).
-		List(meta.ListOptions{
-			LabelSelector: labels.SelectorFromSet(selector).String(),
-		})
+	pods, err := k8sclient.ListPodsWithSelector(*namespace, selector)
 	if err != nil {
 		t.Error(err)
 	}
@@ -396,7 +380,7 @@ func backgroundDeploy(descriptor *types.Descriptor, resultChan chan bool, t *tes
 }
 
 func getReplicationControllerVersion(t *testing.T) int {
-	rcList, err := k8sclient.ReplicationControllers(*namespace).List(meta.ListOptions{})
+	rcList, err := k8sclient.ListReplicationControllers(*namespace)
 	if err != nil {
 		t.Fatal("Error listing replication controllers")
 	}
@@ -416,7 +400,7 @@ func getReplicationControllerVersion(t *testing.T) int {
 }
 
 func checkNoReclicationController(t *testing.T) {
-	rcList, err := k8sclient.ReplicationControllers(*namespace).List(meta.ListOptions{})
+	rcList, err := k8sclient.ListReplicationControllers(*namespace)
 	if err != nil {
 		t.Fatal("Error retrieving Replication Controllers")
 	}
@@ -427,7 +411,7 @@ func checkNoReclicationController(t *testing.T) {
 }
 
 func checkReplicationControllers(previousVersion int, t *testing.T) {
-	rcList, err := k8sclient.ReplicationControllers(*namespace).List(meta.ListOptions{})
+	rcList, err := k8sclient.ListReplicationControllers(*namespace)
 	if err != nil {
 		t.Fatal("Error retrieving Replication Controllers")
 	}
@@ -456,36 +440,36 @@ func startDeploy(descriptor *types.Descriptor, t *testing.T) (string, error) {
 
 	jsonInputReader := bytes.NewReader(buf)
 
-	resp, err := http.Post(*deployerUrl+"descriptors", "application/json", jsonInputReader)
+	resp, err := http.Post(fmt.Sprintf("%vdescriptors/?namespace=%v", *deployerUrl, descriptor.Namespace), "application/json", jsonInputReader)
 	if err != nil {
 		return "", err
 	}
+
+	fmt.Printf("descriptor status: %v \n", resp.Status)
 
 	if resp.StatusCode != 201 {
 		return "", errors.New("creating descriptor didn't return 201")
 	}
 	descLocation := resp.Header.Get("Location")
-	lastSep := strings.LastIndex(descLocation, "/")
-	descId := descLocation[lastSep+1:]
-	lastSep = strings.Index(descId, "?")
-	descId = descId[:lastSep]
+	re := regexp.MustCompile("/descriptors/(.*)/.*")
+	descId := re.FindStringSubmatch(descLocation)[1]
 
 	t.Log("descriptor id: " + descId)
 
-	resp, err = http.Post(fmt.Sprintf("%vdeployments?namespace=%v&descriptorId=%v", *deployerUrl, *namespace, descId), "application/json", strings.NewReader(""))
+	resp, err = http.Post(fmt.Sprintf("%vdeployments/?namespace=%v&descriptorId=%v", *deployerUrl, *namespace, descId), "application/json", strings.NewReader(""))
 	if err != nil {
 		return "", err
 	}
+
+	fmt.Printf("deployment status: %v \n", resp.Status)
 
 	if resp.StatusCode != 202 {
 		return "", errors.New("creating deployment didn't return 202")
 	}
 
 	deplLocation := resp.Header.Get("Location")
-	lastSep = strings.LastIndex(deplLocation, "/")
-	deplId := deplLocation[lastSep+1:]
-	lastSep = strings.Index(deplId, "?")
-	deplId = deplId[:lastSep]
+	re = regexp.MustCompile("/deployments/(.*)/.*")
+	deplId := re.FindStringSubmatch(deplLocation)[1]
 
 	t.Log("deployment id: " + deplId)
 
