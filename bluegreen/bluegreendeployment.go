@@ -34,9 +34,9 @@ import (
 	"strings"
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/k8s"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 type bluegreen struct {
@@ -72,12 +72,12 @@ func (bluegreen *bluegreen) Deploy() error {
 
 	service, err := bluegreen.deployer.CreateService()
 	if err != nil {
-		bluegreen.deployer.Logger.Println(err)
+		bluegreen.deployer.Logger.Println(err.Error())
 		return err
 	}
 
 	if err := bluegreen.createReplicationController(); err != nil {
-		bluegreen.deployer.Logger.Println(err)
+		bluegreen.deployer.Logger.Println(err.Error())
 		return err
 	}
 
@@ -90,21 +90,21 @@ func (bluegreen *bluegreen) Deploy() error {
 
 	if descriptor.Frontend != "" {
 		if err := bluegreen.deployer.Config.ProxyConfigurator.WaitForBackend(backendId, bluegreen.deployer.Logger); err != nil {
-			bluegreen.deployer.Logger.Println(err)
+			bluegreen.deployer.Logger.Println(err.Error())
 			return err
 		}
 
 		bluegreen.deployer.Logger.Println("Switch proxy backends....")
 
 		if err := bluegreen.deployer.Config.ProxyConfigurator.SwitchBackend(descriptor.Frontend, backendId); err != nil {
-			bluegreen.deployer.Logger.Printf("%v", err)
+			bluegreen.deployer.Logger.Println(err.Error())
 			return err
 		}
 	}
 
 	_, err = bluegreen.deployer.CreateOrUpdatePersistentService()
 	if err != nil {
-		bluegreen.deployer.Logger.Println(err)
+		bluegreen.deployer.Logger.Println(err.Error())
 		return err
 	}
 
@@ -177,8 +177,8 @@ func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool
 			return
 		default:
 			{
-				podSelector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.Version}
-				pods, listErr := bluegreen.deployer.K8client.ListPodsWithLabel(descriptor.Namespace, podSelector)
+				selector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.Version}
+				pods, listErr := bluegreen.deployer.K8client.ListPodsWithSelector(descriptor.Namespace, selector)
 				if listErr != nil {
 					bluegreen.deployer.Logger.Printf(fmt.Sprintf("Error listing pods for new deployment: %v\n", listErr))
 					healthChan <- false
@@ -186,7 +186,7 @@ func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool
 					return
 				}
 
-				nrOfPods := helper.CountRunningPods(pods.Items)
+				nrOfPods := k8s.CountRunningPods(pods.Items)
 
 				if nrOfPods == descriptor.Replicas {
 					healthy := true

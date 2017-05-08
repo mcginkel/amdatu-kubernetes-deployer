@@ -27,7 +27,7 @@ import (
 )
 
 type Logger interface {
-	Println(v ...interface{})
+	Println(message string)
 	Printf(format string, v ...interface{})
 }
 
@@ -37,14 +37,14 @@ func NewConsoleLogger() *ConsoleLogger {
 	return &ConsoleLogger{}
 }
 
-func (logger *ConsoleLogger) Println(v ...interface{}) {
-	msg := fmt.Sprintln(v...)
-	log.Println(msg)
+func (logger *ConsoleLogger) Println(message string) {
+	message = strings.TrimSpace(message)
+	log.Println(message)
 }
 
 func (logger *ConsoleLogger) Printf(format string, v ...interface{}) {
 	msg := fmt.Sprintf(format, v...)
-	log.Println(msg)
+	logger.Println(msg)
 }
 
 type DeploymentLogger struct {
@@ -57,15 +57,15 @@ func NewDeploymentLogger(deployment *types.Deployment, registry *etcdregistry.Et
 	return &DeploymentLogger{deployment, registry, baseLogger}
 }
 
-func (logger *DeploymentLogger) Println(v ...interface{}) {
-	logger.baseLogger.Println(v)
-	msg := fmt.Sprintln(v...)
-	logger.addToDeployment(msg)
+func (logger *DeploymentLogger) Println(message string) {
+	logger.baseLogger.Println(message)
+	logger.addToDeployment(message)
 }
 
 func (logger *DeploymentLogger) Printf(format string, v ...interface{}) {
-	logger.baseLogger.Printf(format, v)
+	logger.baseLogger.Printf(format, v...)
 	msg := fmt.Sprintf(format, v...)
+	msg = strings.TrimSpace(msg)
 	logger.addToDeployment(msg)
 }
 

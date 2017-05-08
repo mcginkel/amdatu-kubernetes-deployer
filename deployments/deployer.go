@@ -24,7 +24,7 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 type Deployer struct {

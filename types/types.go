@@ -20,10 +20,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"k8s.io/client-go/pkg/api/v1"
 	"regexp"
 	"strings"
-
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 )
 
 const DEPLOYMENTSTATUS_DEPLOYING = "DEPLOYING"

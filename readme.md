@@ -193,7 +193,7 @@ The deployer is built using Bitbucket Pipelines (see `bitbucket-pipelines.yml` a
 which can be downloaded on the [Bitbucket Download Section](https://bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/downloads/),  
 and in Docker images, see [Docker Hub](https://hub.docker.com/r/amdatu/amdatu-kubernetes-deployer).
 
-# Versioning
+## Versioning
 
 The binaries are named and the docker images are tagged using a alpha/beta/production scheme:
 
@@ -202,3 +202,26 @@ The binaries are named and the docker images are tagged using a alpha/beta/produ
 We use `beta` and `production` tags, which will be moved for every new beta/production version.
 - For the `production` tag there will also be an additional tag, which represents a version number, following semantic versioning scheme, which will not be moved.
 - On docker hub the `production` tag will also result in the `latest` tag
+
+## Dependency management
+
+This repository uses [Godep](https://github.com/tools/godep) for go dependency management. In short this means:
+
+- Install Godep:
+    - Run `go get github.com/tools/godep`
+
+- Add a new dependency:
+    1. Run `go get foo/bar`
+    1. Use new dependency
+    1. Run `godep save ./...`
+
+- Update an existing dependency:
+    1. Run `go get -u foo/bar`
+    1. Run `godep update foo/bar`
+    
+## Testing
+
+On order to run the integrationtests, you first need to run the deployer as described above, and then start the tests with:
+
+    go test testing/deployment_test.go -deployer http://[deployerhost]:8000/ -kubernetes http://[kubernetes-api-server]:8080 -etcd http://[etcd-server]:2379 -concurrent 5
+    

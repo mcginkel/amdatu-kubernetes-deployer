@@ -17,17 +17,16 @@ package etcdregistry
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-go/api/v1"
 	"github.com/coreos/etcd/client"
 	etcd "github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
-
-	"errors"
-	"strings"
-	"time"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 const (

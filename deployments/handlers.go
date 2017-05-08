@@ -374,7 +374,7 @@ func (d *DeploymentHandlers) undeploy(writer http.ResponseWriter, req *http.Requ
 
 	deleteDeployment := req.URL.Query().Get("deleteDeployment") == "true"
 
-	undeployer := NewUndeployer(d.config)
+	undeployer := NewUndeployer(d.config, myLogger)
 
 	// start undeployment async
 	go undeployer.Undeploy(deployment, myLogger, deleteDeployment)
