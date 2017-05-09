@@ -25,14 +25,14 @@ import (
 
 func TestGetHealthUrl_WithSlash(t *testing.T) {
 
-	deployer := Deployer{
+	clusterManager := ClusterManager{
 		Deployment: &types.Deployment{
 			Descriptor: &types.Descriptor{
 				HealthCheckPath: "/myhealth",
 			},
 		},
 	}
-	url := deployer.GetHealthcheckUrl("127.0.0.1", 8080)
+	url := clusterManager.GetHealthcheckUrl("127.0.0.1", 8080)
 
 	if url != "http://127.0.0.1:8080/myhealth" {
 		t.Errorf("Incorrect url: %v", url)
@@ -42,14 +42,14 @@ func TestGetHealthUrl_WithSlash(t *testing.T) {
 
 func TestGetHealthUrl_WithoutSlash(t *testing.T) {
 
-	deployer := Deployer{
+	clusterManager := ClusterManager{
 		Deployment: &types.Deployment{
 			Descriptor: &types.Descriptor{
 				HealthCheckPath: "myhealth",
 			},
 		},
 	}
-	url := deployer.GetHealthcheckUrl("127.0.0.1", 8080)
+	url := clusterManager.GetHealthcheckUrl("127.0.0.1", 8080)
 
 	if url != "http://127.0.0.1:8080/myhealth" {
 		t.Errorf("Incorrect url: %v", url)
@@ -59,14 +59,14 @@ func TestGetHealthUrl_WithoutSlash(t *testing.T) {
 
 func TestGetHealthUrl_Default(t *testing.T) {
 
-	deployer := Deployer{
+	clusterManager := ClusterManager{
 		Deployment: &types.Deployment{
 			Descriptor: &types.Descriptor{
 				HealthCheckPath: "",
 			},
 		},
 	}
-	url := deployer.GetHealthcheckUrl("127.0.0.1", 8080)
+	url := clusterManager.GetHealthcheckUrl("127.0.0.1", 8080)
 
 	if url != "http://127.0.0.1:8080/health" {
 		t.Errorf("Incorrect url: %v", url)

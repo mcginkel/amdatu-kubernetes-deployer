@@ -20,21 +20,19 @@ import (
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/k8s"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	"k8s.io/client-go/pkg/api/v1"
 )
 
 type Undeployer struct {
-	registry  *etcdregistry.EtcdRegistry
-	config    helper.DeployerConfig
-	k8sclient k8s.K8sClient
+	registry *etcdregistry.EtcdRegistry
+	config   helper.DeployerConfig
 }
 
 func NewUndeployer(config helper.DeployerConfig, logger logger.Logger) *Undeployer {
 
-	return &Undeployer{config.EtcdRegistry, config, k8s.New(config.K8sUrl, logger)}
+	return &Undeployer{config.EtcdRegistry, config}
 
 }
 
@@ -51,40 +49,37 @@ func (undeployer *Undeployer) Undeploy(deployment *types.Deployment, logger logg
 	undeployer.registry.UpdateDeployment(deployment)
 
 	mutexKey := deployment.Descriptor.Namespace + "-" + deployment.Descriptor.AppName
-	logger.Printf("Trying to acquire mutex for %v\n", mutexKey)
+	logger.Printf("Trying to acquire mutex for %v", mutexKey)
 	mutex := helper.GetMutex(undeployer.config.Mutexes, mutexKey)
 	mutex.Lock()
 	defer mutex.Unlock()
-	logger.Printf("Acquired mutex for %v\n", mutexKey)
+	logger.Printf("Acquired mutex for %v", mutexKey)
 
-	logger.Printf("Starting undeployment of application %v in namespace %v\n", deployment.Descriptor.AppName, deployment.Descriptor.Namespace)
+	logger.Printf("Starting undeployment of application %v in namespace %v", deployment.Descriptor.AppName, deployment.Descriptor.Namespace)
+
+	var success = true
 
 	controllers, err := undeployer.getReplicationControllers(deployment, logger)
 	if err != nil {
-		undeployer.handleError(logger, deployment, "Error getting controllers: %v\n", err.Error())
+		undeployer.handleError(logger, deployment, "Error getting controllers: %v", err.Error())
 		return
-	}
-
-	var success = true
-	for _, controller := range controllers {
-		backend := deployment.Descriptor.Namespace + "-" + controller.ObjectMeta.Name
-		undeployer.deleteProxy(backend, logger)
-	}
-
-	if err = undeployer.deleteServices(deployment, logger); err != nil {
-		undeployer.handleError(logger, deployment, "Error deleting services: %v\n", err.Error())
-		success = false
-	}
-
-	for _, controller := range controllers {
-		if undeployer.k8sclient.ShutdownReplicationController(&controller); err != nil {
-			undeployer.handleError(logger, deployment, "Error deleting controller: %v\n", err.Error())
-			success = false
+	} else {
+		for _, controller := range controllers {
+			if undeployer.config.K8sClient.ShutdownReplicationController(&controller, logger); err != nil {
+				undeployer.handleError(logger, deployment, "Error deleting controller: %v", err.Error())
+				success = false
+			}
 		}
 	}
 
-	if success {
+	if err = undeployer.deleteServices(deployment, logger); err != nil {
+		undeployer.handleError(logger, deployment, "Error deleting services: %v", err.Error())
+		success = false
+	}
 
+	undeployer.deleteProxy(deployment, logger)
+
+	if success {
 		deployment.Status = types.DEPLOYMENTSTATUS_UNDEPLOYED
 		undeployer.registry.UpdateDeployment(deployment)
 
@@ -108,32 +103,31 @@ func (undeployer *Undeployer) getReplicationControllers(deployment *types.Deploy
 	logger.Printf("Getting replication controllers\n")
 
 	selector := map[string]string{"app": deployment.Descriptor.AppName}
-	rcList, err := undeployer.k8sclient.ListReplicationControllersWithSelector(deployment.Descriptor.Namespace, selector)
+	rcList, err := undeployer.config.K8sClient.ListReplicationControllersWithSelector(deployment.Descriptor.Namespace, selector)
 	if err != nil {
 		return []v1.ReplicationController{}, err
 	}
 	return rcList.Items, nil
 }
 
-func (undeployer *Undeployer) deleteProxy(backend string, logger logger.Logger) {
-	logger.Printf("Deleting proxy backend for %v\n", backend)
-	undeployer.config.ProxyConfigurator.DeleteDeployment(backend, logger)
-
-	logger.Printf("Deleting proxy frontend for %v\n", backend)
-	undeployer.config.ProxyConfigurator.DeleteFrontendForDeployment(backend, logger)
+func (undeployer *Undeployer) deleteProxy(deployment *types.Deployment, logger logger.Logger) {
+	logger.Printf("Deleting proxy for %v", deployment.Descriptor.AppName)
+	if err := undeployer.config.ProxyConfigurator.DeleteProxy(deployment, logger); err != nil {
+		logger.Printf("  Error deleting HAproxy config: %v", err.Error())
+	}
 }
 
 func (undeployer *Undeployer) deleteServices(deployment *types.Deployment, logger logger.Logger) error {
 
 	selector := map[string]string{"app": deployment.Descriptor.AppName}
-	servicelist, err := undeployer.k8sclient.ListServicesWithSelector(deployment.Descriptor.Namespace, selector)
+	servicelist, err := undeployer.config.K8sClient.ListServicesWithSelector(deployment.Descriptor.Namespace, selector)
 	if err != nil {
 		return err
 	}
 
 	for _, service := range servicelist.Items {
 		logger.Printf("Deleting service %v\n", service.ObjectMeta.Name)
-		err := undeployer.k8sclient.DeleteService(deployment.Descriptor.Namespace, service.Name)
+		err := undeployer.config.K8sClient.DeleteService(deployment.Descriptor.Namespace, service.Name)
 		if err != nil {
 			return err
 		}

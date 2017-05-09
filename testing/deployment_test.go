@@ -14,15 +14,15 @@ import (
 
 	"errors"
 
+	"regexp"
+
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/k8s"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	etcdclient "github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/api/v1"
-	"regexp"
 )
 
 var (
@@ -35,7 +35,7 @@ var (
 
 const APPNAME = "integrationtest"
 
-var k8sclient k8s.K8sClient
+var k8sclient *k8s.K8sClient
 var etcd etcdclient.KeysAPI
 
 func TestMain(m *testing.M) {
@@ -53,7 +53,14 @@ func TestMain(m *testing.M) {
 
 	if *kubernetesUrl != "" {
 
-		k8sclient = k8s.New(*kubernetesUrl, logger.NewConsoleLogger())
+		k8sConfig := k8s.K8sConfig{
+			ApiServerUrl: *kubernetesUrl,
+		}
+
+		k8sclient, err = k8s.New(k8sConfig)
+		if err != nil {
+			panic("Error creating k8s client: " + err.Error())
+		}
 		resetEnvironment()
 
 		result := m.Run()

@@ -17,17 +17,16 @@ package cluster
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/k8s"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
+	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/pkg/api/v1"
@@ -37,43 +36,39 @@ const DNS952LabelFmt string = "[a-z]([-a-z0-9]*[a-z0-9])?"
 
 var dns952LabelRegexp = regexp.MustCompile("^" + DNS952LabelFmt + "$")
 
-type Deployer struct {
+type ClusterManager struct {
 	Config     *helper.DeployerConfig
 	Deployment *types.Deployment
-	K8client   k8s.K8sClient
+	Registry   *etcdregistry.EtcdRegistry
 	Logger     logger.Logger
 }
 
-func NewDeployer(config helper.DeployerConfig, deployment *types.Deployment, logger logger.Logger) *Deployer {
+func NewClusterManager(config helper.DeployerConfig, deployment *types.Deployment, registry *etcdregistry.EtcdRegistry, logger logger.Logger) *ClusterManager {
 
-	return &Deployer{&config, deployment, k8s.New(config.K8sUrl, logger), logger}
+	return &ClusterManager{&config, deployment, registry, logger}
 
 }
 
-func (deployer *Deployer) CreateRcName() string {
-	return deployer.Deployment.Descriptor.AppName + "-" + deployer.Deployment.Version
-}
+func (cm *ClusterManager) CreateReplicationController() (*v1.ReplicationController, error) {
 
-func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationController, error) {
+	descriptor := cm.Deployment.Descriptor
 
-	descriptor := deployer.Deployment.Descriptor
-
+	rcName := cm.Deployment.GetVersionedName()
 	ctrl := new(v1.ReplicationController)
-	rcName := deployer.CreateRcName()
 	ctrl.Name = rcName
 
 	labels := make(map[string]string)
 	labels["name"] = rcName
-	labels["version"] = deployer.Deployment.Version
+	labels["version"] = cm.Deployment.Version
 	labels["app"] = descriptor.AppName
 
 	ctrl.Labels = labels
 
 	annotations := make(map[string]string)
-	annotations["deploymentTs"] = deployer.Deployment.Created
-	annotations["deploymentId"] = deployer.Deployment.Id
+	annotations["deploymentTs"] = cm.Deployment.Created
+	annotations["deploymentId"] = cm.Deployment.Id
 	annotations["appName"] = descriptor.AppName
-	annotations["version"] = deployer.Deployment.Version
+	annotations["version"] = cm.Deployment.Version
 	annotations["useHealthCheck"] = strconv.FormatBool(descriptor.UseHealthCheck)
 	annotations["healthCheckPath"] = descriptor.HealthCheckPath
 	annotations["healthCheckPort"] = strconv.Itoa(descriptor.HealthCheckPort)
@@ -89,7 +84,7 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 		container.Env = append(container.Env,
 			v1.EnvVar{Name: "APP_NAME", Value: descriptor.AppName},
 			v1.EnvVar{Name: "POD_NAMESPACE", Value: descriptor.Namespace},
-			v1.EnvVar{Name: "APP_VERSION", Value: deployer.Deployment.Version},
+			v1.EnvVar{Name: "APP_VERSION", Value: cm.Deployment.Version},
 			v1.EnvVar{Name: "POD_NAME", ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}}})
 
 		// ATTENTION: if you add more EnvVars here, also remove them in etcdregistry.go/cleanDescriptor() !
@@ -111,7 +106,7 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 	ctrl.Spec = v1.ReplicationControllerSpec{
 		Selector: map[string]string{
 			"name":    rcName,
-			"version": deployer.Deployment.Version,
+			"version": cm.Deployment.Version,
 			"app":     descriptor.AppName,
 		},
 		Replicas: &replicas,
@@ -119,7 +114,7 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 			ObjectMeta: meta.ObjectMeta{
 				Labels: map[string]string{
 					"name":    rcName,
-					"version": deployer.Deployment.Version,
+					"version": cm.Deployment.Version,
 					"app":     descriptor.AppName,
 				},
 			},
@@ -127,28 +122,28 @@ func (deployer *Deployer) CreateReplicationController() (*v1.ReplicationControll
 		},
 	}
 
-	deployer.Logger.Println("Creating Replication Controller")
-	result, err := deployer.K8client.CreateReplicationController(descriptor.Namespace, ctrl)
+	result, err := cm.Config.K8sClient.CreateReplicationController(descriptor.Namespace, ctrl)
 	if err != nil {
-		deployer.Logger.Println("Error while creating replication controller")
+		cm.Logger.Println("Error while creating replication controller")
 		return result, err
 	}
 
-	deployer.Logger.Printf("Replication Controller %v created\n", result.ObjectMeta.Name)
+	cm.Logger.Printf("Replication Controller %v created\n", result.ObjectMeta.Name)
 	return result, nil
 
 }
 
-func (deployer *Deployer) CreateService() (*v1.Service, error) {
+func (cm *ClusterManager) CreateService() (*v1.Service, error) {
 
-	descriptor := deployer.Deployment.Descriptor
+	descriptor := cm.Deployment.Descriptor
 
+	name := cm.Deployment.GetVersionedName()
 	srv := new(v1.Service)
-	srv.Name = deployer.CreateRcName()
+	srv.Name = name
 
 	selector := make(map[string]string)
-	selector["name"] = deployer.CreateRcName()
-	selector["version"] = deployer.Deployment.Version
+	selector["name"] = name
+	selector["version"] = cm.Deployment.Version
 	selector["app"] = descriptor.AppName
 
 	srv.Labels = selector
@@ -176,27 +171,52 @@ func (deployer *Deployer) CreateService() (*v1.Service, error) {
 		SessionAffinity: "None",
 	}
 
-	deployer.Logger.Println("Creating Service")
+	cm.Logger.Println("Creating Service")
 
-	return deployer.K8client.CreateService(descriptor.Namespace, srv)
+	return cm.Config.K8sClient.CreateService(descriptor.Namespace, srv)
 }
 
-func (deployer *Deployer) CreateOrUpdatePersistentService() (*v1.Service, error) {
+func (cm *ClusterManager) CreateOrUpdatePersistentService() (*v1.Service, error) {
 
-	deployment := deployer.Deployment
+	deployment := cm.Deployment
 	descriptor := deployment.Descriptor
 
-	existing, _ := deployer.K8client.GetService(descriptor.Namespace, descriptor.AppName)
-	if existing.Name == "" {
-		srv := new(v1.Service)
-		srv.Name = descriptor.AppName
+	svc, err := cm.Config.K8sClient.GetService(descriptor.Namespace, descriptor.AppName)
+	if err == nil {
+		cm.Logger.Printf("Persistent service %v already exists on IP %v", svc.Name, svc.Spec.ClusterIP)
+
+		// check if ports changed
+		newPorts := getPorts(descriptor.PodSpec.Containers)
+		existingPorts := svc.Spec.Ports
+		if !servicePortEquals(newPorts, existingPorts) {
+			cm.Logger.Println("Updating persistent service ports")
+			svc.Spec.Ports = newPorts
+		}
+
+		cm.Logger.Println("Updating persistent service version selector")
+		svc.Spec.Selector["version"] = deployment.Version
+
+		// update session affinity
+		svc.Spec.SessionAffinity = "None"
+
+		_, err := cm.Config.K8sClient.UpdateService(descriptor.Namespace, svc)
+		if err != nil {
+			cm.Logger.Println("Error updating persistent service: " + err.Error())
+			return svc, err
+		}
+
+		return svc, nil
+
+	} else if statusError, isStatus := err.(*errors.StatusError); isStatus && statusError.Status().Reason == meta.StatusReasonNotFound {
+		svc := new(v1.Service)
+		svc.Name = descriptor.AppName
 
 		labels := make(map[string]string)
 		labels["app"] = descriptor.AppName
 		labels["name"] = descriptor.AppName
 		labels["persistent"] = "true"
 
-		srv.Labels = labels
+		svc.Labels = labels
 
 		ports := getPorts(descriptor.PodSpec.Containers)
 
@@ -204,44 +224,21 @@ func (deployer *Deployer) CreateOrUpdatePersistentService() (*v1.Service, error)
 		selector["app"] = descriptor.AppName
 		selector["version"] = deployment.Version
 
-		srv.Spec = v1.ServiceSpec{
+		svc.Spec = v1.ServiceSpec{
 			Selector:        selector,
 			Ports:           ports,
 			Type:            v1.ServiceTypeNodePort,
 			SessionAffinity: "None",
 		}
 
-		created, err := deployer.K8client.CreateService(descriptor.Namespace, srv)
+		created, err := cm.Config.K8sClient.CreateService(descriptor.Namespace, svc)
 
 		if err == nil {
-			deployer.Logger.Printf("Creating persistent service %v. Listening on IP %v\n", srv.Name, created.Spec.ClusterIP)
+			cm.Logger.Printf("Creating persistent service %v. Listening on IP %v\n", created.Name, created.Spec.ClusterIP)
 		}
-		return created, err
-
+		return created, nil
 	} else {
-		deployer.Logger.Printf("Persistent service %v already exists on IP %v\n", existing.Name, existing.Spec.ClusterIP)
-
-		// check if ports changed
-		newPorts := getPorts(descriptor.PodSpec.Containers)
-		existingPorts := existing.Spec.Ports
-		if !servicePortEquals(newPorts, existingPorts) {
-			deployer.Logger.Println("Updating persistent service ports")
-			existing.Spec.Ports = newPorts
-		}
-
-		deployer.Logger.Println("Updating persistent service version selector")
-		existing.Spec.Selector["version"] = deployment.Version
-
-		// update session affinity
-		existing.Spec.SessionAffinity = "None"
-
-		_, err := deployer.K8client.UpdateService(descriptor.Namespace, existing)
-		if err != nil {
-			deployer.Logger.Println("Error updating persistent service: " + err.Error())
-			return existing, err
-		}
-
-		return existing, nil
+		return nil, err
 	}
 }
 
@@ -280,20 +277,20 @@ func servicePortEquals(a, b []v1.ServicePort) bool {
 	return true
 }
 
-func (deployer *Deployer) FindCurrentRc() ([]v1.ReplicationController, error) {
+func (cm *ClusterManager) FindOldReplicationControllers() ([]v1.ReplicationController, error) {
 
-	descriptor := deployer.Deployment.Descriptor
+	descriptor := cm.Deployment.Descriptor
 
 	result := []v1.ReplicationController{}
 
 	selector := map[string]string{"app": descriptor.AppName}
-	replicationControllers, err := deployer.K8client.ListReplicationControllersWithSelector(descriptor.Namespace, selector)
+	replicationControllers, err := cm.Config.K8sClient.ListReplicationControllersWithSelector(descriptor.Namespace, selector)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, rc := range replicationControllers.Items {
-		if rc.Labels["version"] != deployer.Deployment.Version {
+		if rc.Labels["version"] != cm.Deployment.Version {
 			result = append(result, rc)
 		}
 	}
@@ -301,117 +298,94 @@ func (deployer *Deployer) FindCurrentRc() ([]v1.ReplicationController, error) {
 	return result, nil
 }
 
-func (deployer *Deployer) FindCurrentPods(allowSameVersion bool) ([]v1.Pod, error) {
+func (cm *ClusterManager) FindOldPods() ([]v1.Pod, error) {
 
-	descriptor := deployer.Deployment.Descriptor
+	descriptor := cm.Deployment.Descriptor
 
-	result := make([]v1.Pod, 0, 10)
+	result := []v1.Pod{}
 
 	selector := map[string]string{"app": descriptor.AppName}
-	pods, err := deployer.K8client.ListPodsWithSelector(descriptor.Namespace, selector)
+	pods, err := cm.Config.K8sClient.ListPodsWithSelector(descriptor.Namespace, selector)
 	if err != nil {
 		return result, err
 	}
 
 	for _, pod := range pods.Items {
-		if allowSameVersion || pod.Labels["version"] != deployer.Deployment.Version {
+		if pod.Labels["version"] != cm.Deployment.Version {
 			result = append(result, pod)
 		}
 	}
 
-	if len(result) == 0 {
-		return result, errors.New("No active Pods found")
-	} else {
-		return result, nil
-	}
+	return result, nil
 }
 
-func (deployer *Deployer) FindCurrentService() ([]v1.Service, error) {
+func (cm *ClusterManager) FindOldServices() ([]v1.Service, error) {
 
-	descriptor := deployer.Deployment.Descriptor
+	descriptor := cm.Deployment.Descriptor
 
-	result := make([]v1.Service, 1, 10)
+	result := []v1.Service{}
 
 	selector := map[string]string{"app": descriptor.AppName}
-	services, err := deployer.K8client.ListServicesWithSelector(descriptor.Namespace, selector)
+	services, err := cm.Config.K8sClient.ListServicesWithSelector(descriptor.Namespace, selector)
 	if err != nil {
-		return result, errors.New("No active Service found")
+		return result, err
 	}
 
 	for _, service := range services.Items {
-		if service.Labels["version"] != deployer.Deployment.Version && service.Labels["persistent"] != "true" {
-
+		if service.Labels["version"] != cm.Deployment.Version && service.Labels["persistent"] != "true" {
 			result = append(result, service)
 		}
 	}
 
-	if len(result) == 0 {
-		return result, errors.New("No active Service found")
-	} else {
-		return result, nil
-	}
+	return result, nil
 }
 
-func (deployer *Deployer) CleaupOldDeployments() {
-	controllers, err := deployer.FindCurrentRc()
-
-	if err != nil {
-		deployer.Logger.Printf("Error getting replication controllers: %v\n", err.Error())
-		return
-	}
-	if len(controllers) == 0 {
-		deployer.Logger.Println("Did not find a old replication controller to remove")
-		return
-	}
-
-	for _, rc := range controllers {
-		if rc.Name != "" {
-			deployer.K8client.ShutdownReplicationController(&rc)
-			deployer.Config.ProxyConfigurator.DeleteDeployment(rc.Namespace+"-"+rc.Name, deployer.Logger)
+func (cm *ClusterManager) CleanUpOldDeployments() {
+	cm.Logger.Println("Looking for old ReplicationControllers...")
+	controllers, err := cm.FindOldReplicationControllers()
+	if err == nil {
+		for _, rc := range controllers {
+			if rc.Name != "" {
+				cm.Config.K8sClient.ShutdownReplicationController(&rc, cm.Logger)
+				cm.Config.ProxyConfigurator.DeleteBackend(rc.Namespace+"-"+rc.Name, cm.Logger)
+			}
 		}
 	}
 
-	log.Println("Looking for old pods...")
-	pods, err := deployer.FindCurrentPods(false)
-
-	if err != nil {
-		deployer.Logger.Println("Did not find old pods to remove")
-	}
-
-	for _, pod := range pods {
-		if pod.Name != "" {
-			deployer.DeletePod(pod)
+	cm.Logger.Println("Looking for old Pods...")
+	pods, err := cm.FindOldPods()
+	if err == nil {
+		for _, pod := range pods {
+			if pod.Name != "" {
+				cm.DeletePod(pod)
+			}
 		}
 	}
 
-	log.Println("Looking for services...")
-	services, err := deployer.FindCurrentService()
-
-	if err != nil {
-		deployer.Logger.Println("Did not find an old service to remove")
-		return
-	}
-
-	for _, service := range services {
-		if service.Name != "" {
-			deployer.deleteService(service)
+	cm.Logger.Println("Looking for old Services...")
+	services, err := cm.FindOldServices()
+	if err == nil {
+		for _, service := range services {
+			if service.Name != "" {
+				cm.deleteService(service)
+			}
 		}
 	}
 }
 
-func (deployer *Deployer) DeletePod(pod v1.Pod) {
+func (cm *ClusterManager) DeletePod(pod v1.Pod) {
 
-	descriptor := deployer.Deployment.Descriptor
+	descriptor := cm.Deployment.Descriptor
 
-	deployer.Logger.Printf("Deleting Pod %v", pod.Name)
+	cm.Logger.Printf("Deleting Pod %v", pod.Name)
 
-	deployer.K8client.DeletePod(descriptor.Namespace, pod.Name)
+	cm.Config.K8sClient.DeletePod(descriptor.Namespace, pod.Name)
 }
 
-func (deployer *Deployer) deleteService(service v1.Service) {
-	descriptor := deployer.Deployment.Descriptor
-	deployer.Logger.Printf("Deleting Service %v", service.Name)
-	deployer.K8client.DeleteService(descriptor.Namespace, service.Name)
+func (cm *ClusterManager) deleteService(service v1.Service) {
+	descriptor := cm.Deployment.Descriptor
+	cm.Logger.Printf("Deleting Service %v", service.Name)
+	cm.Config.K8sClient.DeleteService(descriptor.Namespace, service.Name)
 }
 
 func FindHealthcheckPort(pod *v1.Pod) int32 {
@@ -437,9 +411,9 @@ func FindHealthcheckPort(pod *v1.Pod) int32 {
 	}
 }
 
-func (deployer *Deployer) GetHealthcheckUrl(host string, port int32) string {
+func (cm *ClusterManager) GetHealthcheckUrl(host string, port int32) string {
 
-	descriptor := deployer.Deployment.Descriptor
+	descriptor := cm.Deployment.Descriptor
 
 	var healthUrl string
 	if descriptor.HealthCheckPath != "" {
@@ -455,46 +429,47 @@ func (deployer *Deployer) GetHealthcheckUrl(host string, port int32) string {
 	return fmt.Sprintf("http://%v:%v/%v", host, port, healthUrl)
 }
 
-func (deployer *Deployer) findRcForDeployment() (*v1.ReplicationController, error) {
-	descriptor := deployer.Deployment.Descriptor
-	return deployer.K8client.GetReplicationController(descriptor.Namespace, deployer.CreateRcName())
+func (cm *ClusterManager) findRcForDeployment() (*v1.ReplicationController, error) {
+	descriptor := cm.Deployment.Descriptor
+	return cm.Config.K8sClient.GetReplicationController(descriptor.Namespace, cm.Deployment.GetVersionedName())
 }
 
-func (deployer *Deployer) findServiceForDeployment() (*v1.Service, error) {
-	descriptor := deployer.Deployment.Descriptor
-	return deployer.K8client.GetService(descriptor.Namespace, deployer.CreateRcName())
+func (cm *ClusterManager) findServiceForDeployment() (*v1.Service, error) {
+	descriptor := cm.Deployment.Descriptor
+	return cm.Config.K8sClient.GetService(descriptor.Namespace, cm.Deployment.GetVersionedName())
 }
 
-func (deployer *Deployer) findPodsForDeployment() (*v1.PodList, error) {
-	descriptor := deployer.Deployment.Descriptor
-	selector := map[string]string{"app": descriptor.AppName, "version": deployer.Deployment.Version}
-	return deployer.K8client.ListPodsWithSelector(descriptor.Namespace, selector)
+func (cm *ClusterManager) findPodsForDeployment() (*v1.PodList, error) {
+	descriptor := cm.Deployment.Descriptor
+	selector := map[string]string{"app": descriptor.AppName, "version": cm.Deployment.Version}
+	return cm.Config.K8sClient.ListPodsWithSelector(descriptor.Namespace, selector)
 }
 
-func (deployer *Deployer) CleanupFailedDeployment() {
-	deployer.Logger.Println("Cleaning up resources created by deployment")
+func (cm *ClusterManager) CleanupFailedDeployment() {
+	cm.Logger.Println("Cleaning up resources created by deployment")
 
-	rc, err := deployer.findRcForDeployment()
+	rc, err := cm.findRcForDeployment()
 
 	if err == nil {
-		deployer.Logger.Printf("Deleting ReplicationController %v\n", rc.Name)
-		deployer.K8client.ShutdownReplicationController(rc)
+		cm.Logger.Printf("  Deleting ReplicationController %v", rc.Name)
+		cm.Config.K8sClient.ShutdownReplicationController(rc, cm.Logger)
+
+		cm.Logger.Printf("  Deleting proxy backend %v\n", rc.Namespace+"-"+rc.Name)
+		cm.Config.ProxyConfigurator.DeleteBackend(rc.Namespace+"-"+rc.Name, cm.Logger)
 	}
 
-	pods, err := deployer.findPodsForDeployment()
+	pods, err := cm.findPodsForDeployment()
 	if err == nil {
 		for _, pod := range pods.Items {
-			deployer.Logger.Printf("Deleting pod %v\n", pod.Name)
-			deployer.DeletePod(pod)
+			cm.Logger.Printf("  Deleting Pod %v", pod.Name)
+			cm.DeletePod(pod)
 		}
 	}
 
-	deployer.Logger.Printf("Deleting proxy config %v\n", rc.Namespace+"-"+rc.Name)
-	deployer.Config.ProxyConfigurator.DeleteDeployment(rc.Namespace+"-"+rc.Name, deployer.Logger)
-	service, err := deployer.findServiceForDeployment()
-
+	service, err := cm.findServiceForDeployment()
 	if err == nil {
-		deployer.deleteService(*service)
+		cm.Logger.Printf("  Deleting Service %v", service.Name)
+		cm.deleteService(*service)
 	}
 }
 

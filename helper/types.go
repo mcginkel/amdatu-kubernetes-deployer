@@ -19,15 +19,14 @@ import (
 	"sync"
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/k8s"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 )
 
 type DeployerConfig struct {
-	K8sUrl            string
-	K8sUsername       string
-	K8sPassword       string
-	HealthTimeout     int64
-	EtcdRegistry      *etcdregistry.EtcdRegistry
-	ProxyConfigurator *proxies.ProxyConfigurator
-	Mutexes           map[string]*sync.Mutex
+	HealthTimeout       int64
+	K8sClient           *k8s.K8sClient
+	EtcdRegistry        *etcdregistry.EtcdRegistry
+	ProxyConfigurator   *proxies.ProxyConfigurator
+	Mutexes             map[string]*sync.Mutex
 }

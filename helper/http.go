@@ -65,11 +65,11 @@ func HandleSuccess(writer http.ResponseWriter, logger logger.Logger, body interf
 }
 
 func HandleCreated(writer http.ResponseWriter, logger logger.Logger, location string, msg string, args ...interface{}) {
-	handleNew(writer, logger, location, 201, msg, args)
+	handleNew(writer, logger, location, 201, msg, args...)
 }
 
 func HandleStarted(writer http.ResponseWriter, logger logger.Logger, location string, msg string, args ...interface{}) {
-	handleNew(writer, logger, location, 202, msg, args)
+	handleNew(writer, logger, location, 202, msg, args...)
 }
 
 func handleNew(writer http.ResponseWriter, logger logger.Logger, location string, status int, msg string, args ...interface{}) {

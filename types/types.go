@@ -20,9 +20,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"k8s.io/client-go/pkg/api/v1"
 	"regexp"
 	"strings"
+
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 const DEPLOYMENTSTATUS_DEPLOYING = "DEPLOYING"
@@ -193,6 +194,10 @@ func (deployment *Deployment) SetVersion() {
 		version = strings.ToLower(version)
 		deployment.Version = version
 	}
+}
+
+func (deployment *Deployment) GetVersionedName() string {
+	return deployment.Descriptor.AppName + "-" + deployment.Version
 }
 
 func (deployment *Deployment) String() string {
