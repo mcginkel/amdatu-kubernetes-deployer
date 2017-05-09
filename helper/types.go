@@ -28,5 +28,6 @@ type DeployerConfig struct {
 	K8sClient           *k8s.K8sClient
 	EtcdRegistry        *etcdregistry.EtcdRegistry
 	ProxyConfigurator   *proxies.ProxyConfigurator
+	IngressConfigurator *proxies.IngressConfigurator
 	Mutexes             map[string]*sync.Mutex
 }

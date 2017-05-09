@@ -115,6 +115,10 @@ func (undeployer *Undeployer) deleteProxy(deployment *types.Deployment, logger l
 	if err := undeployer.config.ProxyConfigurator.DeleteProxy(deployment, logger); err != nil {
 		logger.Printf("  Error deleting HAproxy config: %v", err.Error())
 	}
+
+	if err := undeployer.config.IngressConfigurator.DeleteProxy(deployment, logger); err != nil {
+		logger.Printf("  Error deleting HAproxy config: %v", err.Error())
+	}
 }
 
 func (undeployer *Undeployer) deleteServices(deployment *types.Deployment, logger logger.Logger) error {

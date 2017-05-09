@@ -67,18 +67,27 @@ func (bluegreen *bluegreen) Deploy() error {
 		return err
 	}
 
+	warnings := false
+
 	if descriptor.Frontend != "" && len(service.Spec.Ports) > 0 {
 		logger.Println("Creating HAProxy configuration...")
 		if err := bluegreen.clusterManager.Config.ProxyConfigurator.CreateOrUpdateProxy(
 			deployment, service, logger); err != nil {
 			return err
 		}
+
+		//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		// AFTER THIS POINT DO NOT RETURN ERRORS ANYMORE, BECAUSE THE CLEANUP WON'T SWITCH BACK TO OLD HAPROXY CONFIG !!!
+		//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+		if err := bluegreen.clusterManager.Config.IngressConfigurator.CreateOrUpdateProxy(
+			deployment, service, logger); err != nil {
+			warnings = true
+			logger.Printf("WARNING: Ingress configuration failed!\n  %v", err.Error())
+		}
 	} else {
 		logger.Println("No frontend or no ports configured in deployment, skipping proxy configuration")
 	}
-
-	// AFTER THIS POINT DO NOT RETURN ERRORS ANYMORE, BECAUSE THE CLEANUP WON'T SWITCH BACK TO OLD PROXY CONFIG!!!
-	warnings := false
 
 	bluegreen.clusterManager.Logger.Println("Cleaning up old deployments")
 	bluegreen.clusterManager.CleanUpOldDeployments()

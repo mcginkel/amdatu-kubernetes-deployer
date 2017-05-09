@@ -153,6 +153,28 @@ func (k8s *K8sClient) GetNamespace(name string) (*v1.Namespace, error) {
 	return k8s.client.Namespaces().Get(name, meta.GetOptions{})
 }
 
+func (k8s *K8sClient) CreateIngress(namespace string, ingress *v1beta1.Ingress) (*v1beta1.Ingress, error) {
+	return k8s.client.Ingresses(namespace).Create(ingress)
+}
+
+func (k8s *K8sClient) GetIngress(namespace, name string) (*v1beta1.Ingress, error) {
+	return k8s.client.Ingresses(namespace).Get(name, meta.GetOptions{})
+}
+
+func (k8s *K8sClient) UpdateIngress(namespace string, ingress *v1beta1.Ingress) (*v1beta1.Ingress, error) {
+	return k8s.client.Ingresses(namespace).Update(ingress)
+}
+
+func (k8s *K8sClient) DeleteIngress(namespace, name string) error {
+	return k8s.client.
+		Ingresses(namespace).
+		Delete(name, &meta.DeleteOptions{})
+}
+
+func (k8s *K8sClient) GetSecret(namespace, name string) (*v1.Secret, error) {
+	return k8s.client.Secrets(namespace).Get(name, meta.GetOptions{})
+}
+
 func (k8s *K8sClient) ShutdownReplicationController(rc *v1.ReplicationController, logger logger.Logger) error {
 	logger.Printf("Scaling down replication controller: %v\n", rc.Name)
 
