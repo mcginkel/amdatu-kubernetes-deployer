@@ -60,19 +60,19 @@ func (bluegreen *bluegreen) Deploy() error {
 		return err
 	}
 
-	logger.Println("Creating / Updating unversioned Service")
-	_, err = bluegreen.clusterManager.CreateOrUpdatePersistentService()
-	if err != nil {
-		logger.Println(err.Error())
-		return err
-	}
-
 	warnings := false
 
 	if descriptor.Frontend != "" && len(service.Spec.Ports) > 0 {
 		logger.Println("Creating HAProxy configuration...")
 		if err := bluegreen.clusterManager.Config.ProxyConfigurator.CreateOrUpdateProxy(
 			deployment, service, logger); err != nil {
+			return err
+		}
+
+		logger.Println("Creating / Updating unversioned Service")
+		_, err = bluegreen.clusterManager.CreateOrUpdatePersistentService()
+		if err != nil {
+			logger.Println(err.Error())
 			return err
 		}
 
@@ -87,6 +87,14 @@ func (bluegreen *bluegreen) Deploy() error {
 		}
 	} else {
 		logger.Println("No frontend or no ports configured in deployment, skipping proxy configuration")
+
+		logger.Println("Creating / Updating unversioned Service")
+		_, err = bluegreen.clusterManager.CreateOrUpdatePersistentService()
+		if err != nil {
+			logger.Println(err.Error())
+			return err
+		}
+
 	}
 
 	bluegreen.clusterManager.Logger.Println("Cleaning up old deployments")
