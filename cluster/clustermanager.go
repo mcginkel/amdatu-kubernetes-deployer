@@ -151,9 +151,12 @@ func (cm *ClusterManager) CreateService() (*v1.Service, error) {
 	ports := []v1.ServicePort{}
 	for _, container := range descriptor.PodSpec.Containers {
 		for _, port := range container.Ports {
-			servicePort := v1.ServicePort{Port: port.ContainerPort}
-			servicePort.TargetPort = intstr.IntOrString{Type: intstr.Int, IntVal: port.ContainerPort}
-			servicePort.Protocol = v1.ProtocolTCP
+			servicePort := v1.ServicePort{
+				Name:       port.Name,
+				Port:       port.ContainerPort,
+				TargetPort: intstr.IntOrString{Type: intstr.Int, IntVal: port.ContainerPort},
+				Protocol:   v1.ProtocolTCP,
+			}
 			ports = append(ports, servicePort)
 		}
 	}
