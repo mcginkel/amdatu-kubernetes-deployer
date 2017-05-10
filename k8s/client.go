@@ -16,7 +16,7 @@ limitations under the License.
 package k8s
 
 import (
-	"os"
+	"log"
 	"time"
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
@@ -24,40 +24,45 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-type K8sClient struct {
-	client *kubernetes.Clientset
-	logger logger.Logger
+type K8sConfig struct {
+	ApiServerUrl string
 }
 
-func New(apiserverUrl string, logger logger.Logger) K8sClient {
+type K8sClient struct {
+	client *kubernetes.Clientset
+}
+
+func New(k8sConfig K8sConfig) (*K8sClient, error) {
 
 	// create config
-	config, err := clientcmd.BuildConfigFromFlags(apiserverUrl, "")
+	config, err := clientcmd.BuildConfigFromFlags(k8sConfig.ApiServerUrl, "")
 	if err != nil {
-		logger.Printf("Error creating k8s config: %v", err.Error())
-		os.Exit(1)
+		log.Fatalf("Error creating k8s config: %v", err.Error())
+		return nil, err
 	}
 	// create client
 	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		logger.Printf("Error creating k8s client: %v", err.Error())
-		os.Exit(1)
+		log.Fatalf("Error creating k8s client: %v", err.Error())
+		return nil, err
 	}
 
-	return K8sClient{
+	k8sClient := K8sClient{
 		client: client,
-		logger: logger,
 	}
+
+	return &k8sClient, nil
 }
 
-func (k8s K8sClient) ListReplicationControllers(namespace string) (*v1.ReplicationControllerList, error) {
+func (k8s *K8sClient) ListReplicationControllers(namespace string) (*v1.ReplicationControllerList, error) {
 	return k8s.ListReplicationControllersWithSelector(namespace, make(map[string]string))
 }
 
-func (k8s K8sClient) ListReplicationControllersWithSelector(namespace string, selector map[string]string) (*v1.ReplicationControllerList, error) {
+func (k8s *K8sClient) ListReplicationControllersWithSelector(namespace string, selector map[string]string) (*v1.ReplicationControllerList, error) {
 	return k8s.client.
 		ReplicationControllers(namespace).
 		List(meta.ListOptions{
@@ -65,29 +70,29 @@ func (k8s K8sClient) ListReplicationControllersWithSelector(namespace string, se
 		})
 }
 
-func (k8s K8sClient) DeleteReplicationController(namespace, name string) error {
+func (k8s *K8sClient) DeleteReplicationController(namespace, name string) error {
 	return k8s.client.
 		ReplicationControllers(namespace).
 		Delete(name, &meta.DeleteOptions{})
 }
 
-func (k8s K8sClient) CreateReplicationController(namespace string, rc *v1.ReplicationController) (*v1.ReplicationController, error) {
+func (k8s *K8sClient) CreateReplicationController(namespace string, rc *v1.ReplicationController) (*v1.ReplicationController, error) {
 	return k8s.client.ReplicationControllers(namespace).Create(rc)
 }
 
-func (k8s K8sClient) GetReplicationController(namespace, name string) (*v1.ReplicationController, error) {
+func (k8s *K8sClient) GetReplicationController(namespace, name string) (*v1.ReplicationController, error) {
 	return k8s.client.ReplicationControllers(namespace).Get(name, meta.GetOptions{})
 }
 
-func (k8s K8sClient) UpdateReplicationController(namespace string, rc *v1.ReplicationController) (*v1.ReplicationController, error) {
+func (k8s *K8sClient) UpdateReplicationController(namespace string, rc *v1.ReplicationController) (*v1.ReplicationController, error) {
 	return k8s.client.ReplicationControllers(namespace).Update(rc)
 }
 
-func (k8s K8sClient) ListPods(namespace string) (*v1.PodList, error) {
+func (k8s *K8sClient) ListPods(namespace string) (*v1.PodList, error) {
 	return k8s.ListPodsWithSelector(namespace, nil)
 }
 
-func (k8s K8sClient) ListPodsWithSelector(namespace string, selector map[string]string) (*v1.PodList, error) {
+func (k8s *K8sClient) ListPodsWithSelector(namespace string, selector map[string]string) (*v1.PodList, error) {
 	return k8s.client.
 		Pods(namespace).
 		List(meta.ListOptions{
@@ -95,17 +100,17 @@ func (k8s K8sClient) ListPodsWithSelector(namespace string, selector map[string]
 		})
 }
 
-func (k8s K8sClient) DeletePod(namespace, name string) error {
+func (k8s *K8sClient) DeletePod(namespace, name string) error {
 	return k8s.client.
 		Pods(namespace).
 		Delete(name, &meta.DeleteOptions{})
 }
 
-func (k8s K8sClient) ListServices(namespace string) (*v1.ServiceList, error) {
+func (k8s *K8sClient) ListServices(namespace string) (*v1.ServiceList, error) {
 	return k8s.ListServicesWithSelector(namespace, nil)
 }
 
-func (k8s K8sClient) ListServicesWithSelector(namespace string, selector map[string]string) (*v1.ServiceList, error) {
+func (k8s *K8sClient) ListServicesWithSelector(namespace string, selector map[string]string) (*v1.ServiceList, error) {
 	return k8s.client.
 		Services(namespace).
 		List(meta.ListOptions{
@@ -113,45 +118,71 @@ func (k8s K8sClient) ListServicesWithSelector(namespace string, selector map[str
 		})
 }
 
-func (k8s K8sClient) DeleteService(namespace, name string) error {
+func (k8s *K8sClient) DeleteService(namespace, name string) error {
 	return k8s.client.
 		Services(namespace).
 		Delete(name, &meta.DeleteOptions{})
 }
 
-func (k8s K8sClient) CreateService(namespace string, svc *v1.Service) (*v1.Service, error) {
+func (k8s *K8sClient) CreateService(namespace string, svc *v1.Service) (*v1.Service, error) {
 	return k8s.client.Services(namespace).Create(svc)
 }
 
-func (k8s K8sClient) GetService(namespace, name string) (*v1.Service, error) {
+func (k8s *K8sClient) GetService(namespace, name string) (*v1.Service, error) {
 	return k8s.client.Services(namespace).Get(name, meta.GetOptions{})
 }
 
-func (k8s K8sClient) UpdateService(namespace string, svc *v1.Service) (*v1.Service, error) {
+func (k8s *K8sClient) UpdateService(namespace string, svc *v1.Service) (*v1.Service, error) {
 	return k8s.client.Services(namespace).Update(svc)
 }
 
-func (k8s K8sClient) ListNamespaces() (*v1.NamespaceList, error) {
+func (k8s *K8sClient) ListNamespaces() (*v1.NamespaceList, error) {
 	return k8s.client.Namespaces().List(meta.ListOptions{})
 }
 
-func (k8s K8sClient) DeleteNamespace(name string) error {
+func (k8s *K8sClient) DeleteNamespace(name string) error {
 	falseVar := false
 	return k8s.client.Namespaces().Delete(name, &meta.DeleteOptions{OrphanDependents: &falseVar})
 }
 
-func (k8s K8sClient) CreateNamespace(ns *v1.Namespace) (*v1.Namespace, error) {
+func (k8s *K8sClient) CreateNamespace(ns *v1.Namespace) (*v1.Namespace, error) {
 	return k8s.client.Namespaces().Create(ns)
 }
 
-func (k8s K8sClient) ShutdownReplicationController(rc *v1.ReplicationController) error {
-	k8s.logger.Printf("Scaling down replication controller: %v\n", rc.Name)
+func (k8s *K8sClient) GetNamespace(name string) (*v1.Namespace, error) {
+	return k8s.client.Namespaces().Get(name, meta.GetOptions{})
+}
+
+func (k8s *K8sClient) CreateIngress(namespace string, ingress *v1beta1.Ingress) (*v1beta1.Ingress, error) {
+	return k8s.client.Ingresses(namespace).Create(ingress)
+}
+
+func (k8s *K8sClient) GetIngress(namespace, name string) (*v1beta1.Ingress, error) {
+	return k8s.client.Ingresses(namespace).Get(name, meta.GetOptions{})
+}
+
+func (k8s *K8sClient) UpdateIngress(namespace string, ingress *v1beta1.Ingress) (*v1beta1.Ingress, error) {
+	return k8s.client.Ingresses(namespace).Update(ingress)
+}
+
+func (k8s *K8sClient) DeleteIngress(namespace, name string) error {
+	return k8s.client.
+		Ingresses(namespace).
+		Delete(name, &meta.DeleteOptions{})
+}
+
+func (k8s *K8sClient) GetSecret(namespace, name string) (*v1.Secret, error) {
+	return k8s.client.Secrets(namespace).Get(name, meta.GetOptions{})
+}
+
+func (k8s *K8sClient) ShutdownReplicationController(rc *v1.ReplicationController, logger logger.Logger) error {
+	logger.Printf("Scaling down replication controller: %v\n", rc.Name)
 
 	replicas := int32(0)
 	rc.Spec.Replicas = &replicas
 	_, err := k8s.client.ReplicationControllers(rc.Namespace).Update(rc)
 	if err != nil {
-		k8s.logger.Printf("Error scaling down replication controller: %v\n", err.Error())
+		logger.Printf("Error scaling down replication controller: %v\n", err.Error())
 	}
 
 	successChan := make(chan bool)
@@ -160,16 +191,16 @@ func (k8s K8sClient) ShutdownReplicationController(rc *v1.ReplicationController)
 
 	select {
 	case <-successChan:
-		k8s.logger.Println("Scaledown successful")
+		logger.Println("Scaledown successful")
 	case <-time.After(time.Second * 90):
-		k8s.logger.Println("Scaledown failed")
+		logger.Println("Scaledown failed")
 		successChan <- false
 	}
 
 	return k8s.client.ReplicationControllers(rc.Namespace).Delete(rc.Name, &meta.DeleteOptions{})
 }
 
-func (k8s K8sClient) waitForScaleDown(rc *v1.ReplicationController, successChan chan bool) {
+func (k8s *K8sClient) waitForScaleDown(rc *v1.ReplicationController, successChan chan bool) {
 	for {
 		select {
 		case <-successChan:

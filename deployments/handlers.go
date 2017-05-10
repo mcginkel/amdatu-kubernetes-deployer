@@ -379,7 +379,7 @@ func (d *DeploymentHandlers) undeploy(writer http.ResponseWriter, req *http.Requ
 	// start undeployment async
 	go undeployer.Undeploy(deployment, myLogger, deleteDeployment)
 
-	helper.HandleStarted(writer, myLogger, "/deployments/"+deployment.Id, "Undeployment started, namespace %v, appname %v\n", deployment.Descriptor.Namespace, deployment.Descriptor.AppName)
+	helper.HandleStarted(writer, myLogger, "/deployments/"+deployment.Id, "Undeployment started, namespace %v, appname %v", deployment.Descriptor.Namespace, deployment.Descriptor.AppName)
 }
 
 func (d *DeploymentHandlers) getDeployment(namespace string, id string, logger logger.Logger) (*types.Deployment, error) {

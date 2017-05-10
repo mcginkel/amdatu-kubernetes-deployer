@@ -15,14 +15,6 @@ limitations under the License.
 */
 package bluegreen
 
-/**
-1) Create new RC, with a label name that includes the version.
-2) Watch Kubernetes for Pods to become RUNNING
-3) Switch backend in proxy
-4) Remove old backend from proxy
-5) Remove old RC from Kubernetes
-*/
-
 import (
 	"encoding/json"
 	"errors"
@@ -35,102 +27,129 @@ import (
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/k8s"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	"k8s.io/client-go/pkg/api/v1"
 )
 
 type bluegreen struct {
-	deployer *cluster.Deployer
+	clusterManager *cluster.ClusterManager
 }
 
-func NewBlueGreen(deployer *cluster.Deployer) *bluegreen {
-	return &bluegreen{deployer}
+func NewBlueGreen(clusterManager *cluster.ClusterManager) *bluegreen {
+	return &bluegreen{clusterManager}
 }
 
 func (bluegreen *bluegreen) Deploy() error {
 
-	descriptor := bluegreen.deployer.Deployment.Descriptor
+	deployment := bluegreen.clusterManager.Deployment
+	descriptor := deployment.Descriptor
+	logger := bluegreen.clusterManager.Logger
 
-	bluegreen.deployer.Logger.Println("Starting blue-green deployment")
+	logger.Println("Starting blue-green deployment")
 
-	backendId := descriptor.Namespace + "-" + bluegreen.deployer.CreateRcName()
-	bluegreen.deployer.Logger.Printf("Prepare proxy backend %v....\n", backendId)
-	if descriptor.Frontend != "" {
-		frontend := proxies.Frontend{
-			Type:              "http",
-			Hostname:          descriptor.Frontend,
-			BackendId:         backendId,
-			RedirectWwwPrefix: descriptor.RedirectWww,
+	logger.Println("Creating Replication Controller")
+	if err := bluegreen.createReplicationController(); err != nil {
+		logger.Println(err.Error())
+		return err
+	}
+
+	logger.Println("Creating versioned service")
+	service, err := bluegreen.clusterManager.CreateService()
+	if err != nil {
+		logger.Println(err.Error())
+		return err
+	}
+
+	warnings := false
+
+	if descriptor.Frontend != "" && len(service.Spec.Ports) > 0 {
+		logger.Println("Creating HAProxy configuration...")
+		if err := bluegreen.clusterManager.Config.ProxyConfigurator.CreateOrUpdateProxy(
+			deployment, service, logger); err != nil {
+			return err
 		}
 
-		if _, err := bluegreen.deployer.Config.ProxyConfigurator.CreateFrontEnd(&frontend); err != nil {
+		logger.Println("Creating / Updating unversioned Service")
+		_, err = bluegreen.clusterManager.CreateOrUpdatePersistentService()
+		if err != nil {
+			logger.Println(err.Error())
 			return err
+		}
+
+		//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		// AFTER THIS POINT DO NOT RETURN ERRORS ANYMORE, BECAUSE THE CLEANUP WON'T SWITCH BACK TO OLD HAPROXY CONFIG !!!
+		//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+		if err := bluegreen.clusterManager.Config.IngressConfigurator.CreateOrUpdateProxy(
+			deployment, service, logger); err != nil {
+			warnings = true
+			logger.Printf("WARNING: Ingress configuration failed!\n  %v", err.Error())
 		}
 	} else {
-		bluegreen.deployer.Logger.Println("No frontend configured in deployment, skipping creation")
-	}
+		logger.Println("No frontend or no ports configured in deployment, skipping proxy configuration")
 
-	service, err := bluegreen.deployer.CreateService()
-	if err != nil {
-		bluegreen.deployer.Logger.Println(err.Error())
-		return err
-	}
-
-	if err := bluegreen.createReplicationController(); err != nil {
-		bluegreen.deployer.Logger.Println(err.Error())
-		return err
-	}
-
-	if len(service.Spec.Ports) > 0 {
-		port := selectPort(service.Spec.Ports)
-		bluegreen.deployer.Logger.Printf("Adding backend for port %v\n", port)
-		bluegreen.deployer.Config.ProxyConfigurator.AddBackendServer(backendId, service.Spec.ClusterIP, int32(port.Port),
-			descriptor.UseCompression, descriptor.AdditionHttpHeaders)
-	}
-
-	if descriptor.Frontend != "" {
-		if err := bluegreen.deployer.Config.ProxyConfigurator.WaitForBackend(backendId, bluegreen.deployer.Logger); err != nil {
-			bluegreen.deployer.Logger.Println(err.Error())
+		logger.Println("Creating / Updating unversioned Service")
+		_, err = bluegreen.clusterManager.CreateOrUpdatePersistentService()
+		if err != nil {
+			logger.Println(err.Error())
 			return err
 		}
 
-		bluegreen.deployer.Logger.Println("Switch proxy backends....")
-
-		if err := bluegreen.deployer.Config.ProxyConfigurator.SwitchBackend(descriptor.Frontend, backendId); err != nil {
-			bluegreen.deployer.Logger.Println(err.Error())
-			return err
-		}
 	}
 
-	_, err = bluegreen.deployer.CreateOrUpdatePersistentService()
+	bluegreen.clusterManager.Logger.Println("Cleaning up old deployments")
+	bluegreen.clusterManager.CleanUpOldDeployments()
+
+	logger.Println("Updating deployment status")
+	deployment.Status = types.DEPLOYMENTSTATUS_DEPLOYED
+	err = bluegreen.clusterManager.Registry.UpdateDeployment(deployment)
+
 	if err != nil {
-		bluegreen.deployer.Logger.Println(err.Error())
-		return err
+		warnings = true
+		logger.Println("WARNING: couldn't update deployment status to DEPLOYED!")
 	}
 
-	bluegreen.deployer.Logger.Println("Cleaning up old deployments....")
-	bluegreen.deployer.CleaupOldDeployments()
+	// set status of previous deployments to undeployed
+	logger.Println("Updating deployment status of old deployments")
+	deployments, err := bluegreen.clusterManager.Registry.GetDeployments(deployment.Descriptor.Namespace)
+	if err != nil {
+		warnings = true
+		logger.Println("Warning: couldn't update old deployment status to UNDEPLOYED")
+	} else {
+		for _, oldDeployment := range deployments {
+			if oldDeployment.Id != deployment.Id &&
+				oldDeployment.Status == types.DEPLOYMENTSTATUS_DEPLOYED &&
+				oldDeployment.Descriptor.AppName == deployment.Descriptor.AppName {
 
-	return nil
-}
+				oldDeployment.Status = types.DEPLOYMENTSTATUS_UNDEPLOYED
+				err := bluegreen.clusterManager.Registry.UpdateDeployment(oldDeployment)
+				if err != nil {
+					warnings = true
+					logger.Println("Warning: couldn't update old deployment status to UNDEPLOYED")
+				}
 
-func selectPort(ports []v1.ServicePort) v1.ServicePort {
-	if len(ports) > 1 {
-		for _, port := range ports {
-			if port.Name != "healthcheck" {
-				return port
+				err = bluegreen.clusterManager.Registry.StoreLogLine(
+					oldDeployment.Descriptor.Namespace, oldDeployment.Id,
+					fmt.Sprintf("Undeployed during deployment of %v\n", deployment.Id))
+				if err != nil {
+					logger.Println("Warning: couldn't update old deployment logs")
+				}
 			}
 		}
 	}
 
-	return ports[0]
+	logger.Println("Blue-green deployment successful")
+	if warnings {
+		logger.Println("But there were warning(s), see above. Try a redeployment to fix deployment statuses")
+	}
+	return nil
 }
 
 func (bluegreen *bluegreen) createReplicationController() error {
 
-	descriptor := bluegreen.deployer.Deployment.Descriptor
+	descriptor := bluegreen.clusterManager.Deployment.Descriptor
 
-	_, err := bluegreen.deployer.CreateReplicationController()
+	_, err := bluegreen.clusterManager.CreateReplicationController()
 	if err != nil {
 		return err
 	}
@@ -140,7 +159,7 @@ func (bluegreen *bluegreen) createReplicationController() error {
 	}
 
 	if descriptor.UseHealthCheck && !descriptor.IgnoreHealthCheck {
-		return bluegreen.waitForPods(bluegreen.deployer.CreateRcName(), bluegreen.deployer.Deployment.Version)
+		return bluegreen.waitForPods(bluegreen.clusterManager.Deployment.GetVersionedName(), bluegreen.clusterManager.Deployment.Version)
 	} else {
 		return nil
 	}
@@ -149,7 +168,7 @@ func (bluegreen *bluegreen) createReplicationController() error {
 func (bluegreen *bluegreen) waitForPods(name, version string) error {
 	healthChan := make(chan bool, 1)
 
-	bluegreen.deployer.Logger.Printf("Waiting up to %v seconds for pods to start and to become healthy\n", bluegreen.deployer.Config.HealthTimeout)
+	bluegreen.clusterManager.Logger.Printf("Waiting up to %v seconds for pods to start and to become healthy\n", bluegreen.clusterManager.Config.HealthTimeout)
 
 	go bluegreen.checkPods(name, version, healthChan)
 
@@ -160,7 +179,7 @@ func (bluegreen *bluegreen) waitForPods(name, version string) error {
 		} else {
 			return errors.New("Error while waiting for pods to become healthy")
 		}
-	case <-time.After(time.Duration(bluegreen.deployer.Config.HealthTimeout) * time.Second):
+	case <-time.After(time.Duration(bluegreen.clusterManager.Config.HealthTimeout) * time.Second):
 		healthChan <- false
 		return errors.New("Timeout waiting for pods to become healthy")
 	}
@@ -169,7 +188,7 @@ func (bluegreen *bluegreen) waitForPods(name, version string) error {
 
 func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool) {
 
-	descriptor := bluegreen.deployer.Deployment.Descriptor
+	descriptor := bluegreen.clusterManager.Deployment.Descriptor
 
 	for {
 		select {
@@ -177,10 +196,10 @@ func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool
 			return
 		default:
 			{
-				selector := map[string]string{"name": name, "version": bluegreen.deployer.Deployment.Version}
-				pods, listErr := bluegreen.deployer.K8client.ListPodsWithSelector(descriptor.Namespace, selector)
+				selector := map[string]string{"name": name, "version": bluegreen.clusterManager.Deployment.Version}
+				pods, listErr := bluegreen.clusterManager.Config.K8sClient.ListPodsWithSelector(descriptor.Namespace, selector)
 				if listErr != nil {
-					bluegreen.deployer.Logger.Printf(fmt.Sprintf("Error listing pods for new deployment: %v\n", listErr))
+					bluegreen.clusterManager.Logger.Printf(fmt.Sprintf("Error listing pods for new deployment: %v\n", listErr))
 					healthChan <- false
 
 					return
@@ -200,10 +219,10 @@ func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool
 
 					if healthy {
 						healthChan <- true
-						bluegreen.deployer.Logger.Println("Deployment healthy!")
+						bluegreen.clusterManager.Logger.Println("Deployment healthy!")
 						return
 					} else {
-						bluegreen.deployer.Logger.Println("Deployment not healthy yet, retrying in 1 second")
+						bluegreen.clusterManager.Logger.Println("Deployment not healthy yet, retrying in 1 second")
 						time.Sleep(1 * time.Second)
 					}
 
@@ -218,13 +237,13 @@ func (bluegreen *bluegreen) checkPods(name, version string, healthChan chan bool
 
 func (bluegreen *bluegreen) checkPodHealth(pod *v1.Pod) bool {
 
-	descriptor := bluegreen.deployer.Deployment.Descriptor
+	descriptor := bluegreen.clusterManager.Deployment.Descriptor
 
 	var resp *http.Response
 	var err error
 
 	port := cluster.FindHealthcheckPort(pod)
-	url := bluegreen.deployer.GetHealthcheckUrl(pod.Status.PodIP, port)
+	url := bluegreen.clusterManager.GetHealthcheckUrl(pod.Status.PodIP, port)
 
 	//bluegreen.deployer.Logger.Printf("Checking pod health with healthcheck type %s on url %s",
 	//	descriptor.HealthCheckType, url);
@@ -260,7 +279,7 @@ func (bluegreen *bluegreen) checkPodHealth(pod *v1.Pod) bool {
 
 		var dat = HealthCheckEvent{}
 		if err := json.Unmarshal(body, &dat); err != nil {
-			bluegreen.deployer.Logger.Println("Error parsing healthcheck: " + err.Error())
+			bluegreen.clusterManager.Logger.Println("Error parsing healthcheck: " + err.Error())
 			return false
 		}
 
@@ -269,8 +288,8 @@ func (bluegreen *bluegreen) checkPodHealth(pod *v1.Pod) bool {
 }
 
 func (bluegreen *bluegreen) logHealth(pod *v1.Pod, health string) {
-	descriptor := bluegreen.deployer.Deployment.Descriptor
-	bluegreen.deployer.Config.EtcdRegistry.StoreHealth(descriptor.Namespace, bluegreen.deployer.Deployment.Id, pod.Name, health)
+	descriptor := bluegreen.clusterManager.Deployment.Descriptor
+	bluegreen.clusterManager.Config.EtcdRegistry.StoreHealth(descriptor.Namespace, bluegreen.clusterManager.Deployment.Id, pod.Name, health)
 }
 
 type HealthCheckEvent struct {

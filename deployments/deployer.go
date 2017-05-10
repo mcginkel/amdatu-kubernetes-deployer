@@ -24,42 +24,44 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
+	"k8s.io/apimachinery/pkg/api/errors"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/api/v1"
 )
 
 type Deployer struct {
-	registry *etcdregistry.EtcdRegistry
-	config   helper.DeployerConfig
+	Registry *etcdregistry.EtcdRegistry
+	Config   helper.DeployerConfig
 }
 
 func NewDeployer(config helper.DeployerConfig) Deployer {
 	return Deployer{config.EtcdRegistry, config}
 }
 
-func (d *Deployer) deploy(deployment *types.Deployment, logger logger.Logger) {
+func (deployer *Deployer) deploy(deployment *types.Deployment, logger logger.Logger) {
 
 	mutexKey := deployment.Descriptor.Namespace + "-" + deployment.Descriptor.AppName
 	logger.Printf("Trying to acquire mutex for %v\n", mutexKey)
-	mutex := helper.GetMutex(d.config.Mutexes, mutexKey)
+	mutex := helper.GetMutex(deployer.Config.Mutexes, mutexKey)
 	mutex.Lock()
 	defer mutex.Unlock()
 	logger.Printf("Acquired mutex for %v\n", mutexKey)
 
 	if err := deployment.Descriptor.SetDefaults().Validate(); err != nil {
-		d.handleError(logger, deployment, "Deployment descriptor incorrect: \n %v", err.Error())
+		deployer.handleError(logger, deployment, "Deployment descriptor incorrect: \n %v", err.Error())
 		return
 	}
 
 	logger.Printf("%v\n", deployment.Descriptor.String())
 
-	deployer := cluster.NewDeployer(d.config, deployment, logger)
+	clusterManager := cluster.NewClusterManager(deployer.Config, deployment, deployer.Registry, logger)
 	if deployment.Version == "000" {
-		rc, err := deployer.FindCurrentRc()
+		rc, err := clusterManager.FindOldReplicationControllers()
 		if err != nil {
-			d.handleError(logger, deployment, "Error getting replication controllers for determining next version: %v", err.Error())
+			deployer.handleError(logger, deployment, "Error getting replication controllers for determining next version: %v", err.Error())
 			return
 		} else if len(rc) == 0 {
-			deployer.Deployment.Version = "1"
+			clusterManager.Deployment.Version = "1"
 		} else {
 
 			// sometimes we have orphaned RCs, sort them out
@@ -69,14 +71,14 @@ func (d *Deployer) deploy(deployment *types.Deployment, logger logger.Logger) {
 					activeRcs = append(activeRcs, ctrl)
 				} else {
 					logger.Printf("Note: found orphaned replication controller %v, will try to finally delete it...\n", ctrl.Name)
-					deployer.K8client.DeleteReplicationController(ctrl.Namespace, ctrl.Name)
+					clusterManager.Config.K8sClient.DeleteReplicationController(ctrl.Namespace, ctrl.Name)
 				}
 			}
 
 			if len(activeRcs) == 0 {
-				deployer.Deployment.Version = "1"
+				clusterManager.Deployment.Version = "1"
 			} else if len(activeRcs) > 1 {
-				d.handleError(logger, deployment, "Could not determine next deployment version, more than a singe Replication Controller found")
+				deployer.handleError(logger, deployment, "Could not determine next deployment version, more than a singe Replication Controller found")
 				return
 			} else {
 				var ctrl = activeRcs[0]
@@ -84,18 +86,18 @@ func (d *Deployer) deploy(deployment *types.Deployment, logger logger.Logger) {
 				versionString := ctrl.Labels["version"]
 				newVersion, err := cluster.DetermineNewVersion(versionString)
 				if err != nil {
-					d.handleError(logger, deployment, "Could not determine next deployment version based on current version %v", err.Error())
+					deployer.handleError(logger, deployment, "Could not determine next deployment version based on current version %v", err.Error())
 					return
 				} else {
 					logger.Printf("New deployment version: %v", newVersion)
-					deployer.Deployment.Version = newVersion
+					clusterManager.Deployment.Version = newVersion
 				}
 			}
 		}
 	}
 
 	var err error
-	deployer.Deployment.Descriptor.Environment, err = d.registry.GetEnvironmentVars()
+	clusterManager.Deployment.Descriptor.Environment, err = deployer.Registry.GetEnvironmentVars()
 	if err != nil {
 		logger.Println("No environment vars found")
 	}
@@ -107,55 +109,39 @@ func (d *Deployer) deploy(deployment *types.Deployment, logger logger.Logger) {
 	*/
 
 	logger.Println("Checking for existing service...")
-	_, err = deployer.K8client.GetService(deployment.Descriptor.Namespace, deployer.CreateRcName())
-
-	if err != nil {
+	svc, err := clusterManager.Config.K8sClient.GetService(deployment.Descriptor.Namespace, clusterManager.Deployment.GetVersionedName())
+	if statusError, isStatus := err.(*errors.StatusError); isStatus && statusError.Status().Reason == meta.StatusReasonNotFound {
 		logger.Println("No existing service found, starting deployment")
 
 		switch deployment.Descriptor.DeploymentType {
 		case "blue-green":
-			deploymentError = bluegreen.NewBlueGreen(deployer).Deploy()
+			deploymentError = bluegreen.NewBlueGreen(clusterManager).Deploy()
 		default:
-			d.handleError(logger, deployment, "Unknown type of deployment: %v", deployment.Descriptor.DeploymentType)
+			deployer.handleError(logger, deployment, "Unknown type of deployment: %v", deployment.Descriptor.DeploymentType)
 			return
 		}
-	} else {
+	} else if svc != nil {
 		// TODO handle redeployment with same version?!
-		d.handleError(logger, deployment, "Existing service found, this version is already deployed. Exiting deployment.")
+		deployer.handleError(logger, deployment, "Existing service found, this version is already deployed. Exiting deployment.")
+		return
+	} else {
+		deployer.handleError(logger, deployment, "Error checking for existing services, stopping deployment.")
 		return
 	}
 
 	if deploymentError == nil {
-		deployment.Status = types.DEPLOYMENTSTATUS_DEPLOYED
-		d.registry.UpdateDeployment(deployment)
-
-		// set status of previous deployments to undeployed
-		deployments, err := d.registry.GetDeployments(deployment.Descriptor.Namespace)
-		if err != nil {
-			logger.Println("Error updating old deployments: " + err.Error())
-			return
-		}
-
-		for _, oldDeployment := range deployments {
-			if oldDeployment.Id != deployment.Id &&
-				oldDeployment.Status == types.DEPLOYMENTSTATUS_DEPLOYED &&
-				oldDeployment.Descriptor.AppName == deployment.Descriptor.AppName {
-
-				oldDeployment.Status = types.DEPLOYMENTSTATUS_UNDEPLOYED
-				d.registry.UpdateDeployment(oldDeployment)
-				d.registry.StoreLogLine(oldDeployment.Descriptor.Namespace, oldDeployment.Id, fmt.Sprintf("Undeployed during deployment of %v\n", deployment.Id))
-			}
-		}
 
 	} else {
-		d.handleError(logger, deployment, "Deployment failed! %v\n", deploymentError.Error())
-		deployer.CleanupFailedDeployment()
+		deployer.handleError(logger, deployment, "Deployment failed! %v\n", deploymentError.Error())
+		clusterManager.CleanupFailedDeployment()
 	}
 }
 
 func (d *Deployer) handleError(logger logger.Logger, deployment *types.Deployment, msg string, args ...interface{}) {
-	message := fmt.Sprintf(msg, args...)
-	logger.Println(message)
+	if args != nil && len(args) > 0 {
+		msg = fmt.Sprintf(msg, args...)
+	}
+	logger.Println(msg)
 	deployment.Status = types.DEPLOYMENTSTATUS_FAILURE
-	d.registry.UpdateDeployment(deployment)
+	d.Registry.UpdateDeployment(deployment)
 }

@@ -16,6 +16,7 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/descriptors"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/k8s"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/migration"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	etcd "github.com/coreos/etcd/client"
@@ -90,25 +91,33 @@ func init() {
 	etcdApi := etcd.NewKeysAPI(etcdClient)
 	registry = etcdregistry.NewEtcdRegistry(etcdApi)
 
-	if err := migration.Migrate(etcdApi, registry); err != nil {
-		log.Fatal(err)
+	k8sConfig := k8s.K8sConfig{
+		ApiServerUrl: kubernetesurl,
+	}
+	k8sClient, err := k8s.New(k8sConfig)
+	if err != nil {
+		log.Fatalf("Could not initialize k8s client! %v", err.Error())
 	}
 
-	descriptorHandlers = descriptors.NewDescriptorHandlers(registry)
-
 	proxyConfigurator := proxies.NewProxyConfigurator(etcdApi, proxyRestUrl, proxyReloadSleep)
+	ingressConfigurator := proxies.NewIngressConfigurator(k8sClient)
 
 	mutexes := map[string]*sync.Mutex{}
 
 	deployerConfig := helper.DeployerConfig{
-		K8sUrl:            kubernetesurl,
-		K8sUsername:       kubernetesUsername,
-		K8sPassword:       kubernetesPassword,
-		HealthTimeout:     healthTimeout,
-		EtcdRegistry:      registry,
-		ProxyConfigurator: proxyConfigurator,
-		Mutexes:           mutexes,
+		HealthTimeout:       healthTimeout,
+		K8sClient:           k8sClient,
+		EtcdRegistry:        registry,
+		ProxyConfigurator:   proxyConfigurator,
+		IngressConfigurator: ingressConfigurator,
+		Mutexes:             mutexes,
 	}
+
+	if err := migration.Migrate(etcdApi, registry); err != nil {
+		log.Fatalf("Error during migration", err.Error())
+	}
+
+	descriptorHandlers = descriptors.NewDescriptorHandlers(registry)
 	deploymentHandlers = deployments.NewDeploymentHandlers(deployerConfig)
 }
 

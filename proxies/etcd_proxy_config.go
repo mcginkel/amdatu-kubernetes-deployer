@@ -29,6 +29,7 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	"github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 type ProxyConfigurator struct {
@@ -37,14 +38,14 @@ type ProxyConfigurator struct {
 	ProxyReload int
 }
 
-type BackendServer struct {
+type backendServer struct {
 	IPAddress           string
 	Port                int32
 	CompressionEnabled  bool
 	AdditionHttpHeaders []types.HttpHeader
 }
 
-type Frontend struct {
+type frontend struct {
 	Hostname          string
 	Type              string
 	BackendId         string
@@ -55,123 +56,66 @@ func NewProxyConfigurator(etcdApi client.KeysAPI, restUrl string, proxyReload in
 	return &ProxyConfigurator{etcdApi, restUrl, proxyReload}
 }
 
-func (proxyConfigurator *ProxyConfigurator) DeleteFrontendForDeployment(deploymentName string, logger logger.Logger) {
+func (proxyConfigurator *ProxyConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
+	service *v1.Service, logger logger.Logger) error {
 
-	frontendKeys := proxyConfigurator.getFrontendKeysForDeployment(deploymentName, logger)
+	descriptor := deployment.Descriptor
+	backendId := descriptor.Namespace + "-" + deployment.GetVersionedName()
 
-	for _, key := range frontendKeys {
-		if _, err := proxyConfigurator.etcdApi.Delete(context.Background(), key, nil); err != nil {
-			logger.Printf("Error deleting frontend %v", key)
-		}
-	}
-}
-
-func (proxyConfigurator *ProxyConfigurator) getFrontendKeysForDeployment(deploymentName string, logger logger.Logger) []string {
-	keys := []string{}
-
-	result, err := proxyConfigurator.etcdApi.Get(context.Background(), "/proxy/frontends", &client.GetOptions{})
-	if err != nil {
-		logger.Println("Error listing frontends, now assuming no frontend exists")
-		return keys
+	fe := frontend{
+		Type:              "http",
+		Hostname:          descriptor.Frontend,
+		BackendId:         backendId,
+		RedirectWwwPrefix: descriptor.RedirectWww,
 	}
 
-	for _, entry := range result.Node.Nodes {
-		value := Frontend{}
-		json.Unmarshal([]byte(entry.Value), &value)
-
-		if value.BackendId == deploymentName {
-			keys = append(keys, entry.Key)
-		}
-	}
-	return keys
-}
-
-func (proxyConfigurator *ProxyConfigurator) AddBackendServer(deploymentName string, ip string, port int32,
-	useCompression bool, additionHttpHeaders []types.HttpHeader) error {
-	if err := proxyConfigurator.prepareBaseConfig(); err != nil {
+	logger.Println("  ... frontend")
+	if err := proxyConfigurator.createFrontEnd(&fe, logger); err != nil {
+		logger.Println(err.Error())
 		return err
 	}
 
-	if additionHttpHeaders != nil {
-		prefixSpacesInHeaderValues(additionHttpHeaders)
-	}
-
-	value := BackendServer{
-		IPAddress:           ip,
-		Port:                port,
-		CompressionEnabled:  useCompression,
-		AdditionHttpHeaders: additionHttpHeaders,
-	}
-
-	bytes, err := json.Marshal(value)
-	if err != nil {
+	logger.Println("  ... backend")
+	if err := proxyConfigurator.addBackendServer(backendId, descriptor, service, logger); err != nil {
+		logger.Println(err.Error())
 		return err
 	}
 
-	etcdKey := fmt.Sprintf("/proxy/backends/%v/%v", deploymentName, ip)
-	log.Printf("Registering backend %v for server %v:%v\n", etcdKey, ip, port)
-	if _, err := proxyConfigurator.etcdApi.Set(context.Background(), etcdKey, string(bytes), nil); err != nil {
+	logger.Println("  ... waiting for backend being up")
+	if err := proxyConfigurator.waitForBackend(backendId, logger); err != nil {
+		logger.Println(err.Error())
+		return err
+	}
+
+	logger.Println("  ... switching to new backend")
+	if err := proxyConfigurator.switchBackend(descriptor.Frontend, backendId, logger); err != nil {
+		logger.Println(err.Error())
 		return err
 	}
 
 	return nil
+
 }
 
-func (proxyConfigurator *ProxyConfigurator) DeleteDeployment(deploymentName string, logger logger.Logger) {
-
-	proxyConfigurator.DeleteFrontendForDeployment(deploymentName, logger)
-
-	keyName := fmt.Sprintf("/proxy/backends/%v", deploymentName)
-	if _, err := proxyConfigurator.etcdApi.Delete(context.Background(), keyName, &client.DeleteOptions{Recursive: true}); err != nil {
-		logger.Printf("Key %v not found, nothing deleted\n", keyName)
-	}
-}
-
-func (proxyConfigurator *ProxyConfigurator) CreateFrontEnd(frontend *Frontend) (string, error) {
+func (proxyConfigurator *ProxyConfigurator) createFrontEnd(fe *frontend, logger logger.Logger) error {
 	if err := proxyConfigurator.prepareBaseConfig(); err != nil {
-		return "", err
+		return err
 	}
 
-	key := fmt.Sprintf("/proxy/frontends/%v", frontend.Hostname)
+	key := fmt.Sprintf("/proxy/frontends/%v", fe.Hostname)
 	resp, _ := proxyConfigurator.etcdApi.Get(context.Background(), key, nil)
 
 	if resp != nil {
 		// frontend exists, but there might be changed properties like redirectWww
-		log.Printf("Frontend %v already exists, updating it\n", key)
-		old := Frontend{}
+		logger.Printf("    ... frontend for %v already exists, updating it", fe.Hostname)
+		old := frontend{}
 		if err := json.Unmarshal([]byte(resp.Node.Value), &old); err != nil {
-			return "", err
+			return err
 		}
-		frontend.BackendId = old.BackendId
+		fe.BackendId = old.BackendId
 	}
 
-	bytes, err := json.Marshal(frontend)
-	if err != nil {
-		return "", err
-	}
-
-	if _, err := proxyConfigurator.etcdApi.Set(context.Background(), key, string(bytes), nil); err != nil {
-		log.Println("Error creating proxy frontend ", err)
-		return "", err
-	}
-
-	log.Printf("Created proxy frontend %v", key)
-
-	return key, nil
-}
-
-func (proxyConfigurator *ProxyConfigurator) SwitchBackend(frontendName string, newBackendName string) error {
-
-	key := fmt.Sprintf("/proxy/frontends/%v", frontendName)
-
-	value := Frontend{}
-	resp, _ := proxyConfigurator.etcdApi.Get(context.Background(), key, nil)
-	if err := json.Unmarshal([]byte(resp.Node.Value), &value); err != nil {
-		return err
-	}
-
-	value.BackendId = newBackendName
-	bytes, err := json.Marshal(value)
+	bytes, err := json.Marshal(fe)
 	if err != nil {
 		return err
 	}
@@ -179,16 +123,53 @@ func (proxyConfigurator *ProxyConfigurator) SwitchBackend(frontendName string, n
 	if _, err := proxyConfigurator.etcdApi.Set(context.Background(), key, string(bytes), nil); err != nil {
 		return err
 	}
+
+	log.Printf("    ... created / updated proxy frontend for %v", fe.Hostname)
 
 	return nil
 }
 
-func (proxyConfigurator *ProxyConfigurator) WaitForBackend(newBackendName string, logger logger.Logger) error {
+func (proxyConfigurator *ProxyConfigurator) addBackendServer(backendId string, descriptor *types.Descriptor, service *v1.Service, logger logger.Logger) error {
+
+	if err := proxyConfigurator.prepareBaseConfig(); err != nil {
+		return err
+	}
+
+	httpHeaders := descriptor.AdditionHttpHeaders
+	if httpHeaders != nil {
+		prefixSpacesInHeaderValues(httpHeaders)
+	}
+
+	port := selectPort(service.Spec.Ports)
+
+	be := backendServer{
+		IPAddress:           service.Spec.ClusterIP,
+		Port:                port,
+		CompressionEnabled:  descriptor.UseCompression,
+		AdditionHttpHeaders: httpHeaders,
+	}
+
+	bytes, err := json.Marshal(be)
+	if err != nil {
+		return err
+	}
+
+	etcdKey := fmt.Sprintf("/proxy/backends/%v/%v", backendId, be.IPAddress)
+	if _, err := proxyConfigurator.etcdApi.Set(context.Background(), etcdKey, string(bytes), nil); err != nil {
+		return err
+	}
+
+	logger.Printf("    ... created proxy backend for %v", service.Name)
+
+	return nil
+}
+
+func (proxyConfigurator *ProxyConfigurator) waitForBackend(newBackendName string, logger logger.Logger) error {
 	if proxyConfigurator.RestUrl == "" {
-		logger.Printf("Sleeping for %v seconds for proxy to reload...\n", proxyConfigurator.ProxyReload)
+		logger.Printf("    ... sleeping for %v seconds for proxy to reload", proxyConfigurator.ProxyReload)
 		time.Sleep(time.Second * time.Duration(proxyConfigurator.ProxyReload))
 	} else {
-		logger.Println("Waiting for proxy to reload...")
+		logger.Println("    waiting for backend to be available...")
 
 		successChan := make(chan bool)
 		timeoutChan := make(chan bool, 2) // don't block if we timeout, but monitorBackend still waits for connection
@@ -198,16 +179,77 @@ func (proxyConfigurator *ProxyConfigurator) WaitForBackend(newBackendName string
 		select {
 		case success := <-successChan:
 			if success {
+				logger.Println("    ... backend is up")
 				return nil
 			} else {
 				return errors.New("Error getting proxy status")
 			}
 		case <-time.After(time.Second * time.Duration(proxyConfigurator.ProxyReload)):
 			timeoutChan <- true
-			return errors.New("Waiting for proxy to get backend available timed out")
+			return errors.New("    waiting for backend to be available timed out!")
 		}
 	}
 
+	return nil
+}
+
+func (proxyConfigurator *ProxyConfigurator) switchBackend(frontendName string, newBackendName string, logger logger.Logger) error {
+
+	key := fmt.Sprintf("/proxy/frontends/%v", frontendName)
+
+	fe := frontend{}
+	resp, _ := proxyConfigurator.etcdApi.Get(context.Background(), key, nil)
+	if err := json.Unmarshal([]byte(resp.Node.Value), &fe); err != nil {
+		return err
+	}
+
+	fe.BackendId = newBackendName
+	bytes, err := json.Marshal(fe)
+	if err != nil {
+		return err
+	}
+
+	if _, err := proxyConfigurator.etcdApi.Set(context.Background(), key, string(bytes), nil); err != nil {
+		return err
+	}
+
+	logger.Println("    ... switched backend")
+	return nil
+}
+
+func (proxyConfigurator *ProxyConfigurator) DeleteProxy(deployment *types.Deployment, logger logger.Logger) error {
+	err1 := proxyConfigurator.deleteFrontend(deployment, logger)
+	backendId := deployment.Descriptor.Namespace + "-" + deployment.GetVersionedName()
+	err2 := proxyConfigurator.DeleteBackend(backendId, logger)
+
+	errmsg := ""
+	if err1 != nil {
+		errmsg = err1.Error()
+	}
+	if err2 != nil {
+		errmsg += ", " + err2.Error()
+	}
+	if len(errmsg) > 1 {
+		return errors.New(errmsg)
+	}
+	return nil
+}
+
+func (proxyConfigurator *ProxyConfigurator) deleteFrontend(deployment *types.Deployment, logger logger.Logger) error {
+	key := fmt.Sprintf("/proxy/frontends/%v", deployment.Descriptor.Frontend)
+	if _, err := proxyConfigurator.etcdApi.Delete(context.Background(), key, nil); err != nil {
+		logger.Printf("Error deleting proxy frontend %v: %v", deployment.Descriptor.Frontend, err.Error())
+		return err
+	}
+	return nil
+}
+
+func (proxyConfigurator *ProxyConfigurator) DeleteBackend(backendId string, logger logger.Logger) error {
+	key := fmt.Sprintf("/proxy/backends/%v", backendId)
+	if _, err := proxyConfigurator.etcdApi.Delete(context.Background(), key, &client.DeleteOptions{Recursive: true}); err != nil {
+		logger.Printf("Error deleting proxy backend %v: %v", backendId, err.Error())
+		return err
+	}
 	return nil
 }
 
@@ -264,6 +306,18 @@ func (proxyConfigurator *ProxyConfigurator) prepareBaseConfig() error {
 	}
 
 	return nil
+}
+
+func selectPort(ports []v1.ServicePort) int32 {
+	if len(ports) > 1 {
+		for _, port := range ports {
+			if port.Name != "healthcheck" {
+				return port.Port
+			}
+		}
+	}
+
+	return ports[0].Port
 }
 
 func prefixSpacesInHeaderValues(headers []types.HttpHeader) {

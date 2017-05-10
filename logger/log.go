@@ -38,7 +38,7 @@ func NewConsoleLogger() *ConsoleLogger {
 }
 
 func (logger *ConsoleLogger) Println(message string) {
-	message = strings.TrimSpace(message)
+	message = strings.TrimSuffix(message, "\n")
 	log.Println(message)
 }
 
@@ -59,14 +59,13 @@ func NewDeploymentLogger(deployment *types.Deployment, registry *etcdregistry.Et
 
 func (logger *DeploymentLogger) Println(message string) {
 	logger.baseLogger.Println(message)
+	message = strings.TrimSuffix(message, "\n")
 	logger.addToDeployment(message)
 }
 
 func (logger *DeploymentLogger) Printf(format string, v ...interface{}) {
-	logger.baseLogger.Printf(format, v...)
 	msg := fmt.Sprintf(format, v...)
-	msg = strings.TrimSpace(msg)
-	logger.addToDeployment(msg)
+	logger.Println(msg)
 }
 
 func (logger *DeploymentLogger) addToDeployment(msg string) {

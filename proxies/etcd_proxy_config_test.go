@@ -29,6 +29,7 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	"github.com/coreos/etcd/client"
 	"golang.org/x/net/context"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 var kAPI client.KeysAPI
@@ -60,7 +61,19 @@ func TestCreateProxyConfigurator(t *testing.T) {
 func TestAddBackendServer_newBackend(t *testing.T) {
 	pc := createProxyConfigurator("")
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, nil); err != nil {
+	desc := &types.Descriptor{}
+	svc := &v1.Service{
+		Spec: v1.ServiceSpec{
+			ClusterIP: "127.0.0.1",
+			Ports: []v1.ServicePort{
+				{
+					Port: 8080,
+				},
+			},
+		},
+	}
+
+	if err := pc.addBackendServer("testbackend", desc, svc, logger.NewConsoleLogger()); err != nil {
 		t.Error(err)
 	}
 
@@ -73,7 +86,7 @@ func TestAddBackendServer_newBackend(t *testing.T) {
 		t.Error("Key not found")
 	}
 
-	value := BackendServer{}
+	value := backendServer{}
 
 	if err = json.Unmarshal([]byte(resp.Node.Value), &value); err != nil {
 		t.Error(err)
@@ -91,11 +104,33 @@ func TestAddBackendServer_newBackend(t *testing.T) {
 func TestAddBackendServer_existingBackend(t *testing.T) {
 	pc := createProxyConfigurator("")
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, nil); err != nil {
+	desc := &types.Descriptor{}
+	svc1 := &v1.Service{
+		Spec: v1.ServiceSpec{
+			ClusterIP: "127.0.0.1",
+			Ports: []v1.ServicePort{
+				{
+					Port: 8080,
+				},
+			},
+		},
+	}
+	svc2 := &v1.Service{
+		Spec: v1.ServiceSpec{
+			ClusterIP: "127.0.0.2",
+			Ports: []v1.ServicePort{
+				{
+					Port: 8181,
+				},
+			},
+		},
+	}
+
+	if err := pc.addBackendServer("testbackend", desc, svc1, logger.NewConsoleLogger()); err != nil {
 		t.Error(err)
 	}
 
-	if err := pc.AddBackendServer("testbackend", "127.0.0.2", 8181, false, nil); err != nil {
+	if err := pc.addBackendServer("testbackend", desc, svc2, logger.NewConsoleLogger()); err != nil {
 		t.Error(err)
 	}
 
@@ -111,11 +146,23 @@ func TestAddBackendServer_existingBackend(t *testing.T) {
 
 func TestDeleteDeployment(t *testing.T) {
 	pc := createProxyConfigurator("")
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, nil); err != nil {
+	desc := &types.Descriptor{}
+	svc := &v1.Service{
+		Spec: v1.ServiceSpec{
+			ClusterIP: "127.0.0.1",
+			Ports: []v1.ServicePort{
+				{
+					Port: 8080,
+				},
+			},
+		},
+	}
+
+	if err := pc.addBackendServer("testbackend", desc, svc, logger.NewConsoleLogger()); err != nil {
 		t.Error(err)
 	}
 
-	pc.DeleteDeployment("testbackend", logger.NewConsoleLogger())
+	pc.DeleteBackend("testbackend", logger.NewConsoleLogger())
 
 	resp, _ := kAPI.Get(context.Background(), "/proxy/backends/testbackend", nil)
 
@@ -127,25 +174,21 @@ func TestDeleteDeployment(t *testing.T) {
 func TestDeleteDeployment_NotExistingShouldntFail(t *testing.T) {
 	pc := createProxyConfigurator("")
 
-	pc.DeleteDeployment("testbackend", logger.NewConsoleLogger())
+	pc.DeleteBackend("testbackend", logger.NewConsoleLogger())
 }
 
 func TestCreateFrontend(t *testing.T) {
 	pc := createProxyConfigurator("")
 
-	frontend := Frontend{
+	frontend := frontend{
 		Hostname:  "myhostname.com",
 		Type:      "http",
 		BackendId: "testbackend",
 	}
 
-	key, err := pc.CreateFrontEnd(&frontend)
+	err := pc.createFrontEnd(&frontend, logger.NewConsoleLogger())
 	if err != nil {
 		t.Error(err)
-	}
-
-	if key != "/proxy/frontends/myhostname.com" {
-		t.Errorf("Incorrect hostname: %v", key)
 	}
 
 }
@@ -153,27 +196,27 @@ func TestCreateFrontend(t *testing.T) {
 func TestCreateFrontend_ExistingShouldNotBeOverwritten(t *testing.T) {
 	pc := createProxyConfigurator("")
 
-	frontend := Frontend{
+	frontend := frontend{
 		Hostname:  "myhostname.com",
 		Type:      "http",
 		BackendId: "testbackend",
 	}
 
-	pc.CreateFrontEnd(&frontend)
+	pc.createFrontEnd(&frontend, logger.NewConsoleLogger())
 
-	frontend = Frontend{
+	frontend = frontend{
 		Hostname:  "myhostname.com",
 		Type:      "http",
 		BackendId: "testbackend2",
 	}
 
-	key, err := pc.CreateFrontEnd(&frontend)
+	err := pc.createFrontEnd(&frontend, logger.NewConsoleLogger())
 	if err != nil {
 		t.Error(err)
 	}
 
-	resp, err := kAPI.Get(context.Background(), key, nil)
-	value := Frontend{}
+	resp, err := kAPI.Get(context.Background(), "/proxy/frontends/myhostname.com", nil)
+	value := frontend{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), &value); err != nil {
 		t.Error(err)
 	}
@@ -186,20 +229,20 @@ func TestCreateFrontend_ExistingShouldNotBeOverwritten(t *testing.T) {
 func TestSwitchBackend(t *testing.T) {
 	pc := createProxyConfigurator("")
 
-	frontend := Frontend{
+	frontend := frontend{
 		Hostname:  "myhostname.com",
 		Type:      "http",
 		BackendId: "testbackend",
 	}
 
-	key, _ := pc.CreateFrontEnd(&frontend)
-	if err := pc.SwitchBackend("myhostname.com", "mynewbackend"); err != nil {
+	pc.createFrontEnd(&frontend, logger.NewConsoleLogger())
+	if err := pc.switchBackend("myhostname.com", "mynewbackend", logger.NewConsoleLogger()); err != nil {
 		t.Error(err)
 	}
 
-	resp, _ := kAPI.Get(context.Background(), key, nil)
+	resp, _ := kAPI.Get(context.Background(), "/proxy/frontends/myhostname.com", nil)
 
-	value := Frontend{}
+	value := frontend{}
 
 	if err := json.Unmarshal([]byte(resp.Node.Value), &value); err != nil {
 		t.Error(err)
@@ -208,25 +251,6 @@ func TestSwitchBackend(t *testing.T) {
 	if value.BackendId != "mynewbackend" {
 		t.Errorf("Incorrect backend: %v", value.BackendId)
 	}
-}
-
-func TestBackendServer(t *testing.T) {
-	pc := createProxyConfigurator("")
-
-	if err := pc.AddBackendServer("testbackend", "127.0.0.1", 8080, false, nil); err != nil {
-		t.Error(err)
-	}
-
-	if err := pc.AddBackendServer("testbackend", "127.0.0.2", 8181, false, nil); err != nil {
-		t.Error(err)
-	}
-
-	resp, _ := kAPI.Get(context.Background(), "/proxy/backends/testbackend", nil)
-
-	if resp.Node.Nodes.Len() != 2 {
-		t.Error("Incorrect number of backend servers registered")
-	}
-
 }
 
 func TestWaitForBackend_DOWN(t *testing.T) {
@@ -290,7 +314,7 @@ func TestPrefixHeaderValues(t *testing.T) {
 }
 
 func runWaitForBackend(pc *ProxyConfigurator, successChan chan bool) {
-	err := pc.WaitForBackend("mybackend", logger.NewConsoleLogger())
+	err := pc.waitForBackend("mybackend", logger.NewConsoleLogger())
 
 	if err != nil {
 		successChan <- false

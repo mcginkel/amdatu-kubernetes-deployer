@@ -20,9 +20,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"k8s.io/client-go/pkg/api/v1"
 	"regexp"
 	"strings"
+
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 const DEPLOYMENTSTATUS_DEPLOYING = "DEPLOYING"
@@ -52,6 +53,8 @@ type Descriptor struct {
 	Password                   string            `json:"password,omitempty"`
 	Environment                map[string]string `json:"environment,omitempty"`
 	UseCompression             bool              `json:"useCompression,omitempty"`
+	UseStickySessions          bool              `json:"useStickySessions,omitempty"`
+	TlsSecretName              string            `json:"tlsSecretName,omitempty"`
 	AdditionHttpHeaders        []HttpHeader      `json:"additionHttpHeaders,omitempty"`
 	UseHealthCheck             bool              `json:"useHealthCheck,omitempty"`
 	HealthCheckPath            string            `json:"healthCheckPath,omitempty"`
@@ -193,6 +196,10 @@ func (deployment *Deployment) SetVersion() {
 		version = strings.ToLower(version)
 		deployment.Version = version
 	}
+}
+
+func (deployment *Deployment) GetVersionedName() string {
+	return deployment.Descriptor.AppName + "-" + deployment.Version
 }
 
 func (deployment *Deployment) String() string {
