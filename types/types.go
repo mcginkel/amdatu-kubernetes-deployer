@@ -53,6 +53,8 @@ type Descriptor struct {
 	Password                   string            `json:"password,omitempty"`
 	Environment                map[string]string `json:"environment,omitempty"`
 	UseCompression             bool              `json:"useCompression,omitempty"`
+	UseStickySessions          bool              `json:"useStickySessions,omitempty"`
+	TlsSecretName              string            `json:"tlsSecretName,omitempty"`
 	AdditionHttpHeaders        []HttpHeader      `json:"additionHttpHeaders,omitempty"`
 	UseHealthCheck             bool              `json:"useHealthCheck,omitempty"`
 	HealthCheckPath            string            `json:"healthCheckPath,omitempty"`
