@@ -113,8 +113,8 @@ func init() {
 		Mutexes:             mutexes,
 	}
 
-	if err := migration.Migrate(etcdApi, registry); err != nil {
-		log.Fatalf("Error during migration", err.Error())
+	if err := migration.Migrate(etcdApi, deployerConfig); err != nil {
+		log.Fatalf("Error during migration: %v", err.Error())
 	}
 
 	descriptorHandlers = descriptors.NewDescriptorHandlers(registry)
