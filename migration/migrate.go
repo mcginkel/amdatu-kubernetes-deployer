@@ -42,7 +42,7 @@ func Migrate(newEtcdApi etcdclient.KeysAPI, config helper.DeployerConfig) error 
 			return errors.New("Could not read migration done marker: " + err.Error())
 		}
 	} else {
-		myLogger.Println("Ingress migration already done")
+		//myLogger.Println("Ingress migration already done")
 		return nil
 	}
 
@@ -88,6 +88,17 @@ func migrate(myLogger logger.Logger) error {
 
 				if len(deployment.Descriptor.Frontend) > 0 {
 
+					deploymentLogger := logger.NewDeploymentLogger(deployment, registry, myLogger)
+
+					// enable gzip
+					if !deployment.Descriptor.UseCompression {
+						deploymentLogger.Println("Enabling compression!")
+						deployment.Descriptor.UseCompression = true
+						if err := registry.UpdateDeployment(deployment); err != nil {
+							return errors.New("Error enabling compression: " + err.Error())
+						}
+					}
+
 					// find service
 					service, err := k8sClient.GetService(namespace, deploymentName)
 					if statusError, isStatus := err.(*k8sErrors.StatusError); isStatus && statusError.Status().Reason == meta.StatusReasonNotFound {
@@ -98,7 +109,6 @@ func migrate(myLogger logger.Logger) error {
 					}
 
 					// create ingress
-					deploymentLogger := logger.NewDeploymentLogger(deployment, registry, myLogger)
 					deploymentLogger.Printf("    Creating Ingress during migration for %v", deploymentName)
 					if err = ingressConfigurator.CreateOrUpdateProxy(deployment, service, deploymentLogger); err != nil {
 						deploymentLogger.Printf("      Error during creation of Ingress for %v: %v", deploymentName, err.Error())
@@ -109,6 +119,27 @@ func migrate(myLogger logger.Logger) error {
 					myLogger.Printf("    No frontend, skipping...")
 				}
 			}
+		}
+
+		// get descriptors
+		myLogger.Println("Enabling compression on descriptors")
+		descriptors, err := registry.GetDescriptors(namespace)
+		if err != nil {
+			return errors.New("  Could not read descriptors: " + err.Error())
+		}
+		for _, descriptor := range descriptors {
+
+			myLogger.Printf("  Descriptor: %v", descriptor.AppName)
+
+			// enable gzip
+			if !descriptor.UseCompression {
+				myLogger.Println("    Enabling compression!")
+				descriptor.UseCompression = true
+				if err := registry.UpdateDescriptor(descriptor); err != nil {
+					return errors.New("      Error enabling compression: " + err.Error())
+				}
+			}
+
 		}
 	}
 
