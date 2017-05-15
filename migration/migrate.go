@@ -1,131 +1,112 @@
 package migration
 
 import (
-	"encoding/json"
 	"errors"
+	"path"
 	"strings"
 
-	"log"
-
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/k8s"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/logger"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	etcdclient "github.com/coreos/etcd/client"
-	"github.com/satori/go.uuid"
 	"golang.org/x/net/context"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type deploymentResult struct {
-	Date       string            `json:"date,omitempty"`
-	Status     string            `json:"status,omitempty"`
-	Descriptor *types.Descriptor `json:"deployment,omitempty"`
-}
+const MIGRATION_KEY = "deployer/ingressMigrationDone"
 
 var etcdApi etcdclient.KeysAPI
 var registry *etcdregistry.EtcdRegistry
+var k8sClient *k8s.K8sClient
+var ingressConfigurator *proxies.IngressConfigurator
 
-func Migrate(newEtcdApi etcdclient.KeysAPI, newRegistry *etcdregistry.EtcdRegistry) error {
+func Migrate(newEtcdApi etcdclient.KeysAPI, config helper.DeployerConfig) error {
 
 	etcdApi = newEtcdApi
-	registry = newRegistry
+	registry = config.EtcdRegistry
+	k8sClient = config.K8sClient
+	ingressConfigurator = config.IngressConfigurator
 
-	return migrateIds()
+	myLogger := logger.NewConsoleLogger()
 
-}
-
-func migrateIds() error {
-
-	// check if migration was done already by looking for new "descriptors" directory
-	_, err := etcdApi.Get(context.Background(), "deployer/descriptors", nil)
+	// check if migration was done already
+	_, err := etcdApi.Get(context.Background(), MIGRATION_KEY, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "Key not found") {
-			log.Println("migrating deployments...")
+			myLogger.Println("Creating ingresses for active deployments...")
 		} else {
-			return errors.New("could not read migration done marker: " + err.Error())
+			return errors.New("Could not read migration done marker: " + err.Error())
 		}
 	} else {
-		log.Println("descriptor / deployment migration already done")
+		myLogger.Println("Ingress migration already done")
 		return nil
 	}
 
-	deployments, err := etcdApi.Get(context.Background(), "/deployment/descriptors", &etcdclient.GetOptions{Recursive: true})
+	// migrate
+	err = migrate(myLogger)
 	if err != nil {
-		log.Println("could not read deployments, assuming fresh etcd installation...")
-		return nil
+		return err
 	}
 
-	for _, item := range deployments.Node.Nodes {
-		if item.Dir {
-			for _, app := range item.Nodes {
-				if app.Dir {
-					log.Println("migrating: " + app.Key)
-					var latestDeploymentResult *deploymentResult
-					for _, ts := range app.Nodes {
-						deploymentresult := &deploymentResult{}
-						json.Unmarshal([]byte(ts.Value), deploymentresult)
-						log.Println("  deployment date " + deploymentresult.Date)
-						log.Println("  deployment status " + deploymentresult.Status)
-						if latestDeploymentResult == nil ||
-							(deploymentresult.Status == "success" &&
-								strings.Compare(deploymentresult.Date, latestDeploymentResult.Date) == 1) {
+	// mark migration as done
+	_, err = etcdApi.Set(context.Background(), MIGRATION_KEY, "done", nil)
+	if err != nil {
+		myLogger.Printf("Error during marking migration as done: %v", err.Error())
+		return err
+	}
 
-							log.Println("    newer successful deployment")
-							latestDeploymentResult = deploymentresult
-						}
-					}
+	return nil
+}
 
-					if latestDeploymentResult == nil {
-						log.Println("  NO SUCCESSFUL DEPLOYMENT FOUND!")
+func migrate(myLogger logger.Logger) error {
+
+	// get namespaces
+	namespaceNodes, err := etcdApi.Get(context.Background(), "deployer/deployments", nil)
+	if err != nil {
+		return errors.New("Could not read deployments for getting namespaces: " + err.Error())
+	}
+
+	for _, namespaceNode := range namespaceNodes.Node.Nodes {
+		namespace := path.Base(namespaceNode.Key)
+
+		myLogger.Printf("Namespace: %v", namespace)
+
+		// get active deployments
+		deployments, err := registry.GetDeployments(namespace)
+		if err != nil {
+			return errors.New("  Could not read deployments: " + err.Error())
+		}
+		for _, deployment := range deployments {
+			if deployment.Status == types.DEPLOYMENTSTATUS_DEPLOYED {
+
+				deploymentName := deployment.Descriptor.AppName + "-" + deployment.Version
+				myLogger.Printf("  Deployment: %v", deploymentName)
+
+				if len(deployment.Descriptor.Frontend) > 0 {
+
+					// find service
+					service, err := k8sClient.GetService(namespace, deploymentName)
+					if statusError, isStatus := err.(*k8sErrors.StatusError); isStatus && statusError.Status().Reason == meta.StatusReasonNotFound {
+						myLogger.Printf("    Could not find service for %v, skipping Ingress creation!", deploymentName)
 						continue
+					} else if err != nil {
+						return errors.New("Could not get service: " + err.Error())
 					}
 
-					descriptor := latestDeploymentResult.Descriptor
-					descriptor.Id = uuid.NewV4().String()
-					descriptor.Created = latestDeploymentResult.Date
-					descriptor.LastModified = latestDeploymentResult.Date
-
-					deployment := &types.Deployment{}
-					deployment.Id = uuid.NewV3(uuid.NamespaceURL, descriptor.Namespace+"-"+descriptor.AppName).String()
-					deployment.Version = descriptor.Deprecated_DeployedVersion
-					deployment.Created = latestDeploymentResult.Date
-					deployment.LastModified = latestDeploymentResult.Date
-					deployment.Descriptor = descriptor
-					deployment.Status = types.DEPLOYMENTSTATUS_DEPLOYED
-
-					descriptor.Deprecated_DeployedVersion = ""
-					descriptor.Deprecated_DeploymentTs = ""
-
-					err = registry.CreateDescriptorWithoutTimestamps(descriptor)
-					if err != nil {
-						log.Println("  ERROR STORING DESCRIPTOR: " + err.Error())
-						continue
+					// create ingress
+					deploymentLogger := logger.NewDeploymentLogger(deployment, registry, myLogger)
+					deploymentLogger.Printf("    Creating Ingress during migration for %v", deploymentName)
+					if err = ingressConfigurator.CreateOrUpdateProxy(deployment, service, deploymentLogger); err != nil {
+						deploymentLogger.Printf("      Error during creation of Ingress for %v: %v", deploymentName, err.Error())
+						return err
 					}
-					log.Println("    migrated descriptor")
-					err = registry.CreateDeploymentWithoutTimestamps(deployment)
-					if err != nil {
-						log.Println("  ERROR STORING DESCRIPTOR: " + err.Error())
-						continue
-					}
-					log.Println("    migrated deployment")
-
-					healthdata, err := etcdApi.Get(context.Background(), "/deployment/healthlog/"+descriptor.Namespace+"/"+descriptor.AppName+"/"+deployment.Created, &etcdclient.GetOptions{Recursive: true})
-					if err != nil {
-						log.Println("    could not read healthdata: " + err.Error())
-						continue
-					}
-					for _, poddata := range healthdata.Node.Nodes {
-						// /deployment/healthlog/namespace/appname/date/pod
-						parts := strings.Split(poddata.Key, "/")
-						if len(parts) != 7 {
-							log.Println("    could not parse healthdata key")
-							continue
-						}
-						err = registry.StoreHealth(descriptor.Namespace, deployment.Id, parts[6], poddata.Value)
-						if err != nil {
-							log.Println("    ERROR STORING HEALTH DATA: " + err.Error())
-							continue
-						}
-						log.Println("    also migrated health data")
-					}
+					deploymentLogger.Printf("    Successfully created Ingress during migration for %v", deploymentName)
+				} else {
+					myLogger.Printf("    No frontend, skipping...")
 				}
 			}
 		}
