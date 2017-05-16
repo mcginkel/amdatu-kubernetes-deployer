@@ -343,7 +343,9 @@ func (cm *ClusterManager) CleanUpOldDeployments() {
 	if err == nil {
 		for _, rc := range controllers {
 			if rc.Name != "" {
-				cm.Config.K8sClient.ShutdownReplicationController(&rc, cm.Logger)
+				if err := cm.Config.K8sClient.ShutdownReplicationController(&rc, cm.Logger); err != nil {
+					cm.Logger.Printf("Error during shutting down Replication Controller: %v", err.Error())
+				}
 				cm.Config.ProxyConfigurator.DeleteBackend(rc.Namespace+"-"+rc.Name, cm.Logger)
 			}
 		}

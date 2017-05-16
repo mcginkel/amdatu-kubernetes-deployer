@@ -33,11 +33,13 @@ import (
 
 type IngressConfigurator struct {
 	k8sClient *k8s.K8sClient
+	nginx     *NginxStatus
 }
 
-func NewIngressConfigurator(k8sClient *k8s.K8sClient) *IngressConfigurator {
+func NewIngressConfigurator(k8sClient *k8s.K8sClient, proxyReload int) *IngressConfigurator {
 	return &IngressConfigurator{
 		k8sClient: k8sClient,
+		nginx:     NewNginxStatus(k8sClient, proxyReload),
 	}
 }
 
@@ -82,6 +84,11 @@ func (ic *IngressConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
 		}
 
 	} else {
+		return err
+	}
+
+	err = ic.nginx.WaitForProxy(deployment, findIngressPort(service.Spec.Ports).TargetPort.IntVal, logger)
+	if err != nil {
 		return err
 	}
 

@@ -197,7 +197,7 @@ func (k8s *K8sClient) ShutdownReplicationController(rc *v1.ReplicationController
 		successChan <- false
 	}
 
-	return k8s.client.ReplicationControllers(rc.Namespace).Delete(rc.Name, &meta.DeleteOptions{})
+	return k8s.DeleteReplicationController(rc.Namespace, rc.Name)
 }
 
 func (k8s *K8sClient) waitForScaleDown(rc *v1.ReplicationController, successChan chan bool) {
