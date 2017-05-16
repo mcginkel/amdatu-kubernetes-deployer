@@ -100,7 +100,7 @@ func init() {
 	}
 
 	proxyConfigurator := proxies.NewProxyConfigurator(etcdApi, proxyRestUrl, proxyReloadSleep)
-	ingressConfigurator := proxies.NewIngressConfigurator(k8sClient)
+	ingressConfigurator := proxies.NewIngressConfigurator(k8sClient, proxyReloadSleep)
 
 	mutexes := map[string]*sync.Mutex{}
 
