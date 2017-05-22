@@ -71,9 +71,10 @@ func (k8s *K8sClient) ListReplicationControllersWithSelector(namespace string, s
 }
 
 func (k8s *K8sClient) DeleteReplicationController(namespace, name string) error {
+	falseVar := false
 	return k8s.client.
 		ReplicationControllers(namespace).
-		Delete(name, &meta.DeleteOptions{})
+		Delete(name, &meta.DeleteOptions{OrphanDependents: &falseVar})
 }
 
 func (k8s *K8sClient) CreateReplicationController(namespace string, rc *v1.ReplicationController) (*v1.ReplicationController, error) {
