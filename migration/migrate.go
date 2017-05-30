@@ -17,7 +17,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const MIGRATION_KEY = "deployer/ingressMigrationDone"
+const MIGRATION_KEY = "deployer/ingressMigrationDone2"
 
 var etcdApi etcdclient.KeysAPI
 var registry *etcdregistry.EtcdRegistry
@@ -108,11 +108,20 @@ func migrate(myLogger logger.Logger) error {
 						return errors.New("Could not get service: " + err.Error())
 					}
 
+					// find unversioned service
+					wwwService, err := k8sClient.GetService(namespace, deployment.Descriptor.AppName)
+					if statusError, isStatus := err.(*k8sErrors.StatusError); isStatus && statusError.Status().Reason == meta.StatusReasonNotFound {
+						myLogger.Printf("    Could not find unversioned service for %v, skipping Ingress creation!", deploymentName)
+						continue
+					} else if err != nil {
+						return errors.New("Could not get unversioned service: " + err.Error())
+					}
+
 					// create ingress
 					deploymentLogger.Printf("    Creating Ingress during migration for %v", deploymentName)
-					if err = ingressConfigurator.CreateOrUpdateProxy(deployment, service, deploymentLogger); err != nil {
+					if err = ingressConfigurator.CreateOrUpdateProxy(deployment, service, wwwService, deploymentLogger); err != nil {
 						deploymentLogger.Printf("      Error during creation of Ingress for %v: %v", deploymentName, err.Error())
-						return err
+						continue
 					}
 					deploymentLogger.Printf("    Successfully created Ingress during migration for %v", deploymentName)
 				} else {

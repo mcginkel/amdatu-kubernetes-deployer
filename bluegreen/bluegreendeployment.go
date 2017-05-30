@@ -70,7 +70,7 @@ func (bluegreen *bluegreen) Deploy() error {
 		}
 
 		logger.Println("Creating / Updating unversioned Service")
-		_, err = bluegreen.clusterManager.CreateOrUpdatePersistentService()
+		persistentService, err := bluegreen.clusterManager.CreateOrUpdatePersistentService()
 		if err != nil {
 			logger.Println(err.Error())
 			return err
@@ -81,7 +81,7 @@ func (bluegreen *bluegreen) Deploy() error {
 		//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 		if err := bluegreen.clusterManager.Config.IngressConfigurator.CreateOrUpdateProxy(
-			deployment, service, logger); err != nil {
+			deployment, service, persistentService, logger); err != nil {
 			warnings = true
 			logger.Printf("WARNING: Ingress configuration failed!\n  %v", err.Error())
 		}

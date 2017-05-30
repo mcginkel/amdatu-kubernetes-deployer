@@ -44,7 +44,7 @@ func NewIngressConfigurator(k8sClient *k8s.K8sClient, proxyReload int) *IngressC
 }
 
 func (ic *IngressConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
-	service *v1.Service, logger logger.Logger) error {
+	service *v1.Service, wwwService *v1.Service, logger logger.Logger) error {
 
 	descriptor := deployment.Descriptor
 
@@ -106,7 +106,7 @@ func (ic *IngressConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
 			logger.Println("  found existing www redirect Ingress, updating")
 
 			ingress.Annotations[rewriteSnippetKey] = rewriteSnippetValue
-			ic.setRules(ingress, descriptor, service, true)
+			ic.setRules(ingress, descriptor, wwwService, true)
 
 			if _, err := ic.k8sClient.UpdateIngress(descriptor.Namespace, ingress); err != nil {
 				return err
@@ -126,7 +126,7 @@ func (ic *IngressConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
 			annotations[rewriteSnippetKey] = rewriteSnippetValue
 			ingress.Annotations = annotations
 
-			ic.setRules(ingress, descriptor, service, true)
+			ic.setRules(ingress, descriptor, wwwService, true)
 
 			if _, err := ic.k8sClient.CreateIngress(descriptor.Namespace, ingress); err != nil {
 				return err
