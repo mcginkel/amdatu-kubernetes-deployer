@@ -164,7 +164,7 @@ func (cm *ClusterManager) CreateService() (*v1.Service, error) {
 	srv.Spec = v1.ServiceSpec{
 		Selector:        selector,
 		Ports:           ports,
-		Type:            v1.ServiceTypeNodePort,
+		Type:            v1.ServiceTypeClusterIP,
 		SessionAffinity: "None",
 	}
 
@@ -182,19 +182,19 @@ func (cm *ClusterManager) CreateOrUpdatePersistentService() (*v1.Service, error)
 	if err == nil {
 		cm.Logger.Printf("Persistent service %v already exists on IP %v", svc.Name, svc.Spec.ClusterIP)
 
-		// check if ports changed
+		// update port, they might have changed
+		cm.Logger.Println("Updating persistent service ports")
 		newPorts := getPorts(descriptor.PodSpec.Containers)
-		existingPorts := svc.Spec.Ports
-		if !servicePortEquals(newPorts, existingPorts) {
-			cm.Logger.Println("Updating persistent service ports")
-			svc.Spec.Ports = newPorts
-		}
+		svc.Spec.Ports = newPorts
 
 		cm.Logger.Println("Updating persistent service version selector")
 		svc.Spec.Selector["version"] = deployment.Version
 
-		// update session affinity
+		// update session affinity, will be handled by nginx
 		svc.Spec.SessionAffinity = "None"
+
+		// update service type, used to be NodePort, which is not needed
+		svc.Spec.Type = v1.ServiceTypeClusterIP
 
 		_, err := cm.Config.K8sClient.UpdateService(descriptor.Namespace, svc)
 		if err != nil {
@@ -224,7 +224,7 @@ func (cm *ClusterManager) CreateOrUpdatePersistentService() (*v1.Service, error)
 		svc.Spec = v1.ServiceSpec{
 			Selector:        selector,
 			Ports:           ports,
-			Type:            v1.ServiceTypeNodePort,
+			Type:            v1.ServiceTypeClusterIP,
 			SessionAffinity: "None",
 		}
 
