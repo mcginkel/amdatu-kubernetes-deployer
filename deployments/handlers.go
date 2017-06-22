@@ -229,11 +229,8 @@ func (d *DeploymentHandlers) StreamLogsHandler(writer http.ResponseWriter, req *
 		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("!!error Error getting deployment status: %v", err.Error())))
 		return
 	}
+
 	for isBusy {
-		if err != nil {
-			conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("!!error Error getting deployment status: %v", err.Error())))
-			return
-		}
 
 		var newLogs string
 		newLogs, index, err = d.registry.NextLogs(namespace, id, index)

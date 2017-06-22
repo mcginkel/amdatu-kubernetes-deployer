@@ -360,7 +360,7 @@ func (registry *EtcdRegistry) GetLogs(namespace string, deploymentId string) (st
 	if err != nil {
 		return "", 0, err
 	}
-	return response.Node.Value, response.Index, nil
+	return response.Node.Value, response.Node.ModifiedIndex, nil
 }
 
 func (registry *EtcdRegistry) NextLogs(namespace string, deploymentId string, index uint64) (string, uint64, error) {
@@ -369,7 +369,7 @@ func (registry *EtcdRegistry) NextLogs(namespace string, deploymentId string, in
 	c, _ := context.WithTimeout(context.Background(), 5*time.Second)
 	response, err := watcher.Next(c)
 	if err != nil {
-		return "", 0, err
+		return "", index, err
 	}
-	return response.Node.Value, response.Index, nil
+	return response.Node.Value, response.Node.ModifiedIndex, nil
 }
