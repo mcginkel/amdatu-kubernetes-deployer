@@ -52,12 +52,21 @@ type frontend struct {
 	RedirectWwwPrefix bool
 }
 
+type NoHAProxyError interface {
+	error
+}
+
 func NewProxyConfigurator(etcdApi client.KeysAPI, restUrl string, proxyReload int) *ProxyConfigurator {
 	return &ProxyConfigurator{etcdApi, restUrl, proxyReload}
 }
 
 func (proxyConfigurator *ProxyConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
 	service *v1.Service, logger logger.Logger) error {
+
+	if len(proxyConfigurator.RestUrl) == 0 {
+		logger.Println("HAProxy not configured, skipping HAProxy setup!")
+		return NoHAProxyError(errors.New("HAProxy not configured"))
+	}
 
 	descriptor := deployment.Descriptor
 	backendId := descriptor.Namespace + "-" + deployment.GetVersionedName()
@@ -218,6 +227,12 @@ func (proxyConfigurator *ProxyConfigurator) switchBackend(frontendName string, n
 }
 
 func (proxyConfigurator *ProxyConfigurator) DeleteProxy(deployment *types.Deployment, logger logger.Logger) error {
+
+	if len(proxyConfigurator.RestUrl) == 0 {
+		logger.Println("HAProxy not configured, skipping HAProxy setup!")
+		return NoHAProxyError(errors.New("HAProxy not configured"))
+	}
+
 	err1 := proxyConfigurator.deleteFrontend(deployment, logger)
 	backendId := deployment.Descriptor.Namespace + "-" + deployment.GetVersionedName()
 	err2 := proxyConfigurator.DeleteBackend(backendId, logger)
@@ -245,6 +260,12 @@ func (proxyConfigurator *ProxyConfigurator) deleteFrontend(deployment *types.Dep
 }
 
 func (proxyConfigurator *ProxyConfigurator) DeleteBackend(backendId string, logger logger.Logger) error {
+
+	if len(proxyConfigurator.RestUrl) == 0 {
+		logger.Println("HAProxy not configured, skipping HAProxy setup!")
+		return NoHAProxyError(errors.New("HAProxy not configured"))
+	}
+
 	key := fmt.Sprintf("/proxy/backends/%v", backendId)
 	if _, err := proxyConfigurator.etcdApi.Delete(context.Background(), key, &client.DeleteOptions{Recursive: true}); err != nil {
 		logger.Printf("Error deleting proxy backend %v: %v", backendId, err.Error())
