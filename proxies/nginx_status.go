@@ -157,7 +157,7 @@ func (nginx NginxStatus) getNginxStatusUrl(logger logger.Logger) (string, error)
 func (nginx NginxStatus) findNginxStatusPort(ports []v1.ServicePort) (int32, error) {
 	for _, port := range ports {
 		if port.Name == "status" {
-			return port.TargetPort.IntVal, nil
+			return port.Port, nil
 		}
 	}
 	return 0, errors.New("Could not find nginx status port!")
