@@ -49,16 +49,18 @@ func (ic *IngressConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
 	descriptor := deployment.Descriptor
 
 	logger.Printf("Getting Ingress for %v", descriptor.AppName)
+	var oldIngress v1beta1.Ingress
 	ingress, err := ic.k8sClient.GetIngress(descriptor.Namespace, descriptor.AppName)
 	if err == nil {
 
 		logger.Println("  found existing Ingress, updating")
+		oldIngress = *ingress // copy values, not pointer!
 
 		if err := ic.configure(ingress, descriptor, service, logger); err != nil {
 			return err
 		}
 
-		if _, err := ic.k8sClient.UpdateIngress(descriptor.Namespace, ingress); err != nil {
+		if ingress, err = ic.k8sClient.UpdateIngress(descriptor.Namespace, ingress); err != nil {
 			return err
 		}
 
@@ -79,7 +81,7 @@ func (ic *IngressConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
 			return err
 		}
 
-		if _, err := ic.k8sClient.CreateIngress(descriptor.Namespace, ingress); err != nil {
+		if ingress, err = ic.k8sClient.CreateIngress(descriptor.Namespace, ingress); err != nil {
 			return err
 		}
 
@@ -89,6 +91,13 @@ func (ic *IngressConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
 
 	err = ic.nginx.WaitForProxy(deployment, findIngressPort(service.Spec.Ports).TargetPort.IntVal, logger)
 	if err != nil {
+		if oldIngress.Name != "" {
+			logger.Println("Resetting Ingress")
+			ingress.Spec = oldIngress.Spec
+			if _, err2 := ic.k8sClient.UpdateIngress(descriptor.Namespace, ingress); err2 != nil {
+				logger.Printf("Error resetting Ingress: %v", err2.Error())
+			}
+		}
 		return err
 	}
 
