@@ -188,6 +188,7 @@ func (cm *ClusterManager) CreateOrUpdatePersistentService() (*v1.Service, error)
 		svc.Spec.Ports = newPorts
 
 		cm.Logger.Println("Updating persistent service version selector")
+		deployment.OldVersion = svc.Spec.Selector["version"]
 		svc.Spec.Selector["version"] = deployment.Version
 
 		// update session affinity, will be handled by nginx
@@ -239,6 +240,34 @@ func (cm *ClusterManager) CreateOrUpdatePersistentService() (*v1.Service, error)
 	}
 }
 
+func (cm *ClusterManager) DeleteOrResetPersistentService() {
+
+	deployment := cm.Deployment
+	descriptor := deployment.Descriptor
+
+	svc, err := cm.Config.K8sClient.GetService(descriptor.Namespace, descriptor.AppName)
+	if err != nil {
+		cm.Logger.Printf("Error getting persistent service: %v!", err.Error())
+		return
+	}
+
+	if len(deployment.OldVersion) > 0 {
+		cm.Logger.Printf("Resetting persistent service to version %v", deployment.OldVersion)
+		svc.Spec.Selector["version"] = deployment.OldVersion
+		_, err := cm.Config.K8sClient.UpdateService(descriptor.Namespace, svc)
+		if err != nil {
+			cm.Logger.Println("Error updating persistent service: " + err.Error())
+		}
+	} else {
+		cm.Logger.Println("Deleting persistent service")
+		err := cm.Config.K8sClient.DeleteService(descriptor.Namespace, svc.Name)
+		if err != nil {
+			cm.Logger.Println("Error deleting persistent service: " + err.Error())
+		}
+	}
+
+}
+
 func getPorts(containers []v1.Container) []v1.ServicePort {
 	ports := []v1.ServicePort{}
 	for _, container := range containers {
@@ -256,22 +285,6 @@ func getPorts(containers []v1.Container) []v1.ServicePort {
 		}
 	}
 	return ports
-}
-
-func servicePortEquals(a, b []v1.ServicePort) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, port := range a {
-		otherPort := b[i]
-		if port.Port != otherPort.Port ||
-			port.TargetPort != otherPort.TargetPort ||
-			port.Protocol != otherPort.Protocol {
-
-			return false
-		}
-	}
-	return true
 }
 
 func (cm *ClusterManager) FindOldReplicationControllers() ([]v1.ReplicationController, error) {
@@ -447,8 +460,9 @@ func (cm *ClusterManager) findPodsForDeployment() (*v1.PodList, error) {
 func (cm *ClusterManager) CleanupFailedDeployment() {
 	cm.Logger.Println("Cleaning up resources created by deployment")
 
-	rc, err := cm.findRcForDeployment()
+	cm.DeleteOrResetPersistentService()
 
+	rc, err := cm.findRcForDeployment()
 	if err == nil {
 		cm.Logger.Printf("  Deleting ReplicationController %v", rc.Name)
 		cm.Config.K8sClient.ShutdownReplicationController(rc, cm.Logger)

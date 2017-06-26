@@ -27,6 +27,7 @@ import (
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/k8s"
+	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	"k8s.io/client-go/pkg/api/v1"
 )
@@ -60,44 +61,49 @@ func (bluegreen *bluegreen) Deploy() error {
 		return err
 	}
 
+	logger.Println("Creating / Updating unversioned Service")
+	_, err = bluegreen.clusterManager.CreateOrUpdatePersistentService()
+	if err != nil {
+		logger.Println(err.Error())
+		return err
+	}
+
 	warnings := false
 
 	if descriptor.Frontend != "" && len(service.Spec.Ports) > 0 {
+		noHaProxy := false
 		logger.Println("Creating HAProxy configuration...")
-		if err := bluegreen.clusterManager.Config.ProxyConfigurator.CreateOrUpdateProxy(
-			deployment, service, logger); err != nil {
+		err := bluegreen.clusterManager.Config.ProxyConfigurator.CreateOrUpdateProxy(deployment, service, logger)
+		if _, ok := err.(proxies.NoHAProxyError); ok {
+			noHaProxy = true
+		} else if err != nil {
 			return err
 		}
 
-		logger.Println("Creating / Updating unversioned Service")
-		persistentService, err := bluegreen.clusterManager.CreateOrUpdatePersistentService()
-		if err != nil {
-			logger.Println(err.Error())
-			return err
-		}
-
-		//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		// AFTER THIS POINT DO NOT RETURN ERRORS ANYMORE, BECAUSE THE CLEANUP WON'T SWITCH BACK TO OLD HAPROXY CONFIG !!!
-		//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		// AFTER THIS POINT ONLY RETURN ERRORS IF HAPROXY IS NOT USED, BECAUSE THE CLEANUP WON'T SWITCH BACK TO OLD HAPROXY CONFIG !!!
+		//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 		if err := bluegreen.clusterManager.Config.IngressConfigurator.CreateOrUpdateProxy(
-			deployment, service, persistentService, logger); err != nil {
+			deployment, service, logger); err != nil {
+
+			if noHaProxy {
+				logger.Println(err.Error())
+				return err
+			}
 			warnings = true
 			logger.Printf("WARNING: Ingress configuration failed!\n  %v", err.Error())
 		}
+
 	} else {
 		logger.Println("No frontend or no ports configured in deployment, skipping proxy configuration")
-
-		logger.Println("Creating / Updating unversioned Service")
-		_, err = bluegreen.clusterManager.CreateOrUpdatePersistentService()
-		if err != nil {
-			logger.Println(err.Error())
-			return err
-		}
-
 	}
 
-	bluegreen.clusterManager.Logger.Println("Cleaning up old deployments")
+	//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	// AFTER THIS POINT DON'T RETURN ERRORS ANYMORE, BECAUSE THE CLEANUP WON'T SWITCH BACK TO OLD PROXY CONFIG !!!
+	//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+	logger.Println("Cleaning up old deployments")
 	bluegreen.clusterManager.CleanUpOldDeployments()
 
 	logger.Println("Updating deployment status")
@@ -140,7 +146,7 @@ func (bluegreen *bluegreen) Deploy() error {
 
 	logger.Println("Blue-green deployment successful")
 	if warnings {
-		logger.Println("But there were warning(s), see above. Try a redeployment to fix deployment statuses")
+		logger.Println("But there were warning(s), see above for details!")
 	}
 	return nil
 }

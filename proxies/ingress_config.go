@@ -44,21 +44,23 @@ func NewIngressConfigurator(k8sClient *k8s.K8sClient, proxyReload int) *IngressC
 }
 
 func (ic *IngressConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
-	service *v1.Service, wwwService *v1.Service, logger logger.Logger) error {
+	service *v1.Service, logger logger.Logger) error {
 
 	descriptor := deployment.Descriptor
 
 	logger.Printf("Getting Ingress for %v", descriptor.AppName)
+	var oldIngress v1beta1.Ingress
 	ingress, err := ic.k8sClient.GetIngress(descriptor.Namespace, descriptor.AppName)
 	if err == nil {
 
 		logger.Println("  found existing Ingress, updating")
+		oldIngress = *ingress // copy values, not pointer!
 
 		if err := ic.configure(ingress, descriptor, service, logger); err != nil {
 			return err
 		}
 
-		if _, err := ic.k8sClient.UpdateIngress(descriptor.Namespace, ingress); err != nil {
+		if ingress, err = ic.k8sClient.UpdateIngress(descriptor.Namespace, ingress); err != nil {
 			return err
 		}
 
@@ -79,7 +81,7 @@ func (ic *IngressConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
 			return err
 		}
 
-		if _, err := ic.k8sClient.CreateIngress(descriptor.Namespace, ingress); err != nil {
+		if ingress, err = ic.k8sClient.CreateIngress(descriptor.Namespace, ingress); err != nil {
 			return err
 		}
 
@@ -89,13 +91,26 @@ func (ic *IngressConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
 
 	err = ic.nginx.WaitForProxy(deployment, findIngressPort(service.Spec.Ports).TargetPort.IntVal, logger)
 	if err != nil {
+		if oldIngress.Name != "" {
+			logger.Println("Resetting Ingress")
+			ingress.Spec = oldIngress.Spec
+			if _, err2 := ic.k8sClient.UpdateIngress(descriptor.Namespace, ingress); err2 != nil {
+				logger.Printf("Error resetting Ingress: %v", err2.Error())
+			}
+		}
 		return err
 	}
 
 	// create www redirect ingress
 	if descriptor.RedirectWww {
-		logger.Printf("Getting Ingress for wwww redirect of %v", descriptor.AppName)
 
+		logger.Printf("Getting persistent service for wwww redirect of %v", descriptor.AppName)
+		wwwService, err := ic.getPersistentService(deployment)
+		if err != nil {
+			return err
+		}
+
+		logger.Printf("Getting Ingress for wwww redirect of %v", descriptor.AppName)
 		wwwIngressName := getWwwRedirectName(deployment.Descriptor)
 		rewriteSnippetKey := "ingress.kubernetes.io/configuration-snippet"
 		rewriteSnippetValue := "rewrite ^/(.*)$ https://" + descriptor.Frontend + "/$1 permanent;"
@@ -275,6 +290,11 @@ func (ic *IngressConfigurator) DeleteProxy(deployment *types.Deployment, logger 
 		return errors.New(msg)
 	}
 	return nil
+}
+
+func (ic *IngressConfigurator) getPersistentService(deployment *types.Deployment) (*v1.Service, error) {
+	return ic.k8sClient.GetService(deployment.Descriptor.Namespace, deployment.Descriptor.AppName)
+
 }
 
 func getWwwRedirectName(descriptor *types.Descriptor) string {

@@ -67,7 +67,12 @@ func migrate(myLogger logger.Logger) error {
 	// get namespaces
 	namespaceNodes, err := etcdApi.Get(context.Background(), "deployer/deployments", nil)
 	if err != nil {
-		return errors.New("Could not read deployments for getting namespaces: " + err.Error())
+		if strings.Contains(err.Error(), "Key not found") {
+			myLogger.Println("No deployments found, nothing to do :)")
+			return nil
+		} else {
+			return errors.New("Could not read deployments for getting namespaces: " + err.Error())
+		}
 	}
 
 	for _, namespaceNode := range namespaceNodes.Node.Nodes {
@@ -108,18 +113,9 @@ func migrate(myLogger logger.Logger) error {
 						return errors.New("Could not get service: " + err.Error())
 					}
 
-					// find unversioned service
-					wwwService, err := k8sClient.GetService(namespace, deployment.Descriptor.AppName)
-					if statusError, isStatus := err.(*k8sErrors.StatusError); isStatus && statusError.Status().Reason == meta.StatusReasonNotFound {
-						myLogger.Printf("    Could not find unversioned service for %v, skipping Ingress creation!", deploymentName)
-						continue
-					} else if err != nil {
-						return errors.New("Could not get unversioned service: " + err.Error())
-					}
-
 					// create ingress
 					deploymentLogger.Printf("    Creating Ingress during migration for %v", deploymentName)
-					if err = ingressConfigurator.CreateOrUpdateProxy(deployment, service, wwwService, deploymentLogger); err != nil {
+					if err = ingressConfigurator.CreateOrUpdateProxy(deployment, service, deploymentLogger); err != nil {
 						deploymentLogger.Printf("      Error during creation of Ingress for %v: %v", deploymentName, err.Error())
 						continue
 					}

@@ -129,9 +129,7 @@ func (deployer *Deployer) deploy(deployment *types.Deployment, logger logger.Log
 		return
 	}
 
-	if deploymentError == nil {
-
-	} else {
+	if deploymentError != nil {
 		deployer.handleError(logger, deployment, "Deployment failed! %v\n", deploymentError.Error())
 		clusterManager.CleanupFailedDeployment()
 	}

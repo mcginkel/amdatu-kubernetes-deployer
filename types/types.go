@@ -183,6 +183,7 @@ type Deployment struct {
 	Version      string      `json:"version,omitempty"`
 	Status       string      `json:"status,omitempty"`
 	Descriptor   *Descriptor `json:"descriptor,omitempty"`
+	OldVersion   string
 }
 
 func (deployment *Deployment) SetVersion() {
