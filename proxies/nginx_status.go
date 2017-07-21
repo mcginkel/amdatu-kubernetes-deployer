@@ -32,6 +32,7 @@ import (
 type NginxStatus struct {
 	k8sClient          *k8s.K8sClient
 	proxyReloadTimeout int
+	healthCheckTimeout int
 }
 
 type vhostTrafficStatus struct {
@@ -41,15 +42,21 @@ type vhostTrafficStatus struct {
 	} `json:"upstreamZones"`
 }
 
-func NewNginxStatus(k8sClient *k8s.K8sClient, timeout int) *NginxStatus {
+func NewNginxStatus(k8sClient *k8s.K8sClient, timeout int, healthTimeout int) *NginxStatus {
 	return &NginxStatus{
 		k8sClient:          k8sClient,
 		proxyReloadTimeout: timeout,
+		healthCheckTimeout: healthTimeout,
 	}
 }
 
 func (nginx NginxStatus) WaitForProxy(deployment *types.Deployment, port int32, logger logger.Logger) error {
 	logger.Println("  waiting for backend to be available...")
+
+	timeout := nginx.proxyReloadTimeout
+	if deployment.Descriptor.IgnoreHealthCheck {
+		timeout += nginx.healthCheckTimeout
+	}
 
 	successChan := make(chan bool)
 	timeoutChan := make(chan bool, 2) // don't block if we timeout, but monitorBackend still waits for connection
@@ -65,7 +72,7 @@ func (nginx NginxStatus) WaitForProxy(deployment *types.Deployment, port int32, 
 		} else {
 			return errors.New("Error getting proxy status")
 		}
-	case <-time.After(time.Second * time.Duration(nginx.proxyReloadTimeout)):
+	case <-time.After(time.Second * time.Duration(timeout)):
 		timeoutChan <- true
 		return errors.New("    ... waiting for backend to be available timed out!")
 	}

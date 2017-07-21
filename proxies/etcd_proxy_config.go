@@ -33,9 +33,10 @@ import (
 )
 
 type ProxyConfigurator struct {
-	etcdApi     client.KeysAPI
-	RestUrl     string
-	ProxyReload int
+	etcdApi            client.KeysAPI
+	restUrl            string
+	proxyReloadTimeout int
+	healthCheckTimeout int
 }
 
 type backendServer struct {
@@ -56,14 +57,14 @@ type NoHAProxyError interface {
 	error
 }
 
-func NewProxyConfigurator(etcdApi client.KeysAPI, restUrl string, proxyReload int) *ProxyConfigurator {
-	return &ProxyConfigurator{etcdApi, restUrl, proxyReload}
+func NewProxyConfigurator(etcdApi client.KeysAPI, restUrl string, proxyReload int, healthTimeout int) *ProxyConfigurator {
+	return &ProxyConfigurator{etcdApi, restUrl, proxyReload, healthTimeout}
 }
 
 func (proxyConfigurator *ProxyConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
 	service *v1.Service, logger logger.Logger) error {
 
-	if len(proxyConfigurator.RestUrl) == 0 {
+	if len(proxyConfigurator.restUrl) == 0 {
 		logger.Println("HAProxy not configured, skipping HAProxy setup!")
 		return NoHAProxyError(errors.New("HAProxy not configured"))
 	}
@@ -91,7 +92,7 @@ func (proxyConfigurator *ProxyConfigurator) CreateOrUpdateProxy(deployment *type
 	}
 
 	logger.Println("  ... waiting for backend being up")
-	if err := proxyConfigurator.waitForBackend(backendId, logger); err != nil {
+	if err := proxyConfigurator.waitForBackend(backendId, logger, descriptor.IgnoreHealthCheck); err != nil {
 		logger.Println(err.Error())
 		return err
 	}
@@ -173,10 +174,16 @@ func (proxyConfigurator *ProxyConfigurator) addBackendServer(backendId string, d
 	return nil
 }
 
-func (proxyConfigurator *ProxyConfigurator) waitForBackend(newBackendName string, logger logger.Logger) error {
-	if proxyConfigurator.RestUrl == "" {
-		logger.Printf("    ... sleeping for %v seconds for proxy to reload", proxyConfigurator.ProxyReload)
-		time.Sleep(time.Second * time.Duration(proxyConfigurator.ProxyReload))
+func (proxyConfigurator *ProxyConfigurator) waitForBackend(newBackendName string, logger logger.Logger, healtcheckIgnored bool) error {
+
+	timeout := proxyConfigurator.proxyReloadTimeout
+	if healtcheckIgnored {
+		timeout += proxyConfigurator.healthCheckTimeout
+	}
+
+	if proxyConfigurator.restUrl == "" {
+		logger.Printf("    ... sleeping for %v seconds for proxy to reload", timeout)
+		time.Sleep(time.Second * time.Duration(timeout))
 	} else {
 		logger.Println("    waiting for backend to be available...")
 
@@ -193,7 +200,7 @@ func (proxyConfigurator *ProxyConfigurator) waitForBackend(newBackendName string
 			} else {
 				return errors.New("Error getting proxy status")
 			}
-		case <-time.After(time.Second * time.Duration(proxyConfigurator.ProxyReload)):
+		case <-time.After(time.Second * time.Duration(timeout)):
 			timeoutChan <- true
 			return errors.New("    waiting for backend to be available timed out!")
 		}
@@ -228,7 +235,7 @@ func (proxyConfigurator *ProxyConfigurator) switchBackend(frontendName string, n
 
 func (proxyConfigurator *ProxyConfigurator) DeleteProxy(deployment *types.Deployment, logger logger.Logger) error {
 
-	if len(proxyConfigurator.RestUrl) == 0 {
+	if len(proxyConfigurator.restUrl) == 0 {
 		logger.Println("HAProxy not configured, skipping HAProxy setup!")
 		return NoHAProxyError(errors.New("HAProxy not configured"))
 	}
@@ -261,7 +268,7 @@ func (proxyConfigurator *ProxyConfigurator) deleteFrontend(deployment *types.Dep
 
 func (proxyConfigurator *ProxyConfigurator) DeleteBackend(backendId string, logger logger.Logger) error {
 
-	if len(proxyConfigurator.RestUrl) == 0 {
+	if len(proxyConfigurator.restUrl) == 0 {
 		logger.Println("HAProxy not configured, skipping HAProxy setup!")
 		return NoHAProxyError(errors.New("HAProxy not configured"))
 	}
@@ -275,7 +282,7 @@ func (proxyConfigurator *ProxyConfigurator) DeleteBackend(backendId string, logg
 }
 
 func (proxyConfigurator *ProxyConfigurator) monitorBackend(newBackendName string, successChan chan bool, timeoutChan chan bool, logger logger.Logger) {
-	url := fmt.Sprintf("%s/stats/backend/%s/status", proxyConfigurator.RestUrl, newBackendName)
+	url := fmt.Sprintf("%s/stats/backend/%s/status", proxyConfigurator.restUrl, newBackendName)
 
 	for {
 		select {

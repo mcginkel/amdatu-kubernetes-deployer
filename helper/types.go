@@ -24,7 +24,7 @@ import (
 )
 
 type DeployerConfig struct {
-	HealthTimeout       int64
+	HealthTimeout       int
 	K8sClient           *k8s.K8sClient
 	EtcdRegistry        *etcdregistry.EtcdRegistry
 	ProxyConfigurator   *proxies.ProxyConfigurator

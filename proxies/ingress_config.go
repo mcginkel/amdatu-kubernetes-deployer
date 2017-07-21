@@ -36,10 +36,10 @@ type IngressConfigurator struct {
 	nginx     *NginxStatus
 }
 
-func NewIngressConfigurator(k8sClient *k8s.K8sClient, proxyReload int) *IngressConfigurator {
+func NewIngressConfigurator(k8sClient *k8s.K8sClient, proxyReload int, healthTimeout int) *IngressConfigurator {
 	return &IngressConfigurator{
 		k8sClient: k8sClient,
-		nginx:     NewNginxStatus(k8sClient, proxyReload),
+		nginx:     NewNginxStatus(k8sClient, proxyReload, healthTimeout),
 	}
 }
 

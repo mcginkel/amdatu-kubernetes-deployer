@@ -24,7 +24,7 @@ import (
 )
 
 var kubernetesurl, etcdUrl, port, kubernetesUsername, kubernetesPassword, proxyRestUrl string
-var healthTimeout int64
+var healthTimeout int
 var proxyReloadSleep int
 var skipServerCertValidation bool
 var registry *etcdregistry.EtcdRegistry
@@ -43,7 +43,7 @@ func init() {
 	flag.StringVar(&port, "deployport", "8000", "Port to listen for deployments")
 	flag.StringVar(&kubernetesUsername, "kubernetesusername", "noauth", "Username to authenticate against Kubernetes API server. Skip authentication when not set")
 	flag.StringVar(&kubernetesPassword, "kubernetespassword", "noauth", "Username to authenticate against Kubernetes API server.")
-	flag.Int64Var(&healthTimeout, "timeout", 60, "Timeout in seconds for health checks")
+	flag.IntVar(&healthTimeout, "timeout", 60, "Timeout in seconds for health checks")
 	flag.IntVar(&proxyReloadSleep, "proxysleep", 20, "Seconds to wait for proxy to reload config")
 	flag.StringVar(&proxyRestUrl, "proxyrest", "", "Proxy REST url")
 	flag.BoolVar(&skipServerCertValidation, "skipServerCertValidation", false, "Skip server certificate validation")
@@ -99,8 +99,8 @@ func init() {
 		log.Fatalf("Could not initialize k8s client! %v", err.Error())
 	}
 
-	proxyConfigurator := proxies.NewProxyConfigurator(etcdApi, proxyRestUrl, proxyReloadSleep)
-	ingressConfigurator := proxies.NewIngressConfigurator(k8sClient, proxyReloadSleep)
+	proxyConfigurator := proxies.NewProxyConfigurator(etcdApi, proxyRestUrl, proxyReloadSleep, healthTimeout)
+	ingressConfigurator := proxies.NewIngressConfigurator(k8sClient, proxyReloadSleep, healthTimeout)
 
 	mutexes := map[string]*sync.Mutex{}
 
