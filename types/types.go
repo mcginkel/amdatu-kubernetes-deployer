@@ -63,6 +63,7 @@ type Descriptor struct {
 	IgnoreHealthCheck          bool              `json:"ignoreHealthCheck,omitempty"`
 	UseExternalHealthCheck     bool              `json:"useExternalHealthCheck,omitempty"`
 	ExternalHealthCheckPath    string            `json:"externalHealthCheckPath,omitempty"`
+	ReadinessPort              int               `json:"readinessPort,omitempty"`
 	Deprecated_DeployedVersion string            `json:"deployedVersion,omitempty"`
 	Deprecated_DeploymentTs    string            `json:"deploymentTs,omitempty"`
 }
