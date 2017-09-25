@@ -33,7 +33,7 @@ To make applications available to the internet, you need a load balancer. Amdatu
 the [Nginx controller](https://github.com/kubernetes/ingress/tree/master/controllers/nginx), because the Deployer uses some Nginx
 specific features at the moment; other controllers might work as well but are not supported). How the Ingress Controller is exposed to the internet depends on environment: on cloud providers you probably want to expose it with the cloud specific loadbalancer, on other environments it might be enough to expose it with a NodePort service.
 
-*Note: earlier versions of the Deployer used a custom setup of a HAProxy Loadbalancer and more Amdatu Kubernetes components for dynamic reconfiguration of HAProxy. That setup was deprecated in favour of using K8s native Ingresses and the Nginx Ingress Controller, and the corresponsing code will be removed soonish!*
+*Note: earlier versions of the Deployer used a custom setup of a HAProxy Loadbalancer and more Amdatu Kubernetes components for dynamic reconfiguration of HAProxy. That setup was deprecated in favour of using K8s native Ingresses and the Nginx Ingress Controller.*
 
 ## Usage
 
