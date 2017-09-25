@@ -112,12 +112,8 @@ func (undeployer *Undeployer) getReplicationControllers(deployment *types.Deploy
 
 func (undeployer *Undeployer) deleteProxy(deployment *types.Deployment, logger logger.Logger) {
 	logger.Printf("Deleting proxy for %v", deployment.Descriptor.AppName)
-	if err := undeployer.config.ProxyConfigurator.DeleteProxy(deployment, logger); err != nil {
-		logger.Printf("  Error deleting HAproxy config: %v", err.Error())
-	}
-
 	if err := undeployer.config.IngressConfigurator.DeleteProxy(deployment, logger); err != nil {
-		logger.Printf("  Error deleting HAproxy config: %v", err.Error())
+		logger.Printf("  Error deleting Ingress config: %v", err.Error())
 	}
 }
 

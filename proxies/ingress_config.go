@@ -122,6 +122,7 @@ func (ic *IngressConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
 
 			ingress.Annotations[rewriteSnippetKey] = rewriteSnippetValue
 			ic.setRules(ingress, descriptor, wwwService, true)
+			ic.setTlsConfig(ingress, descriptor, true, logger)
 
 			if _, err := ic.k8sClient.UpdateIngress(descriptor.Namespace, ingress); err != nil {
 				return err
@@ -142,6 +143,7 @@ func (ic *IngressConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
 			ingress.Annotations = annotations
 
 			ic.setRules(ingress, descriptor, wwwService, true)
+			ic.setTlsConfig(ingress, descriptor, true, logger)
 
 			if _, err := ic.k8sClient.CreateIngress(descriptor.Namespace, ingress); err != nil {
 				return err
@@ -156,7 +158,7 @@ func (ic *IngressConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
 }
 
 func (ic *IngressConfigurator) configure(ingress *v1beta1.Ingress, descriptor *types.Descriptor, service *v1.Service, logger logger.Logger) error {
-	if err := ic.setTlsConfig(ingress, descriptor, logger); err != nil {
+	if err := ic.setTlsConfig(ingress, descriptor, false, logger); err != nil {
 		return err
 	}
 	ic.setRules(ingress, descriptor, service, false)
@@ -200,26 +202,17 @@ func (ic *IngressConfigurator) setRules(ingress *v1beta1.Ingress, descriptor *ty
 	}
 }
 
-func (ic *IngressConfigurator) setTlsConfig(ingress *v1beta1.Ingress, descriptor *types.Descriptor, logger logger.Logger) error {
+func (ic *IngressConfigurator) setTlsConfig(ingress *v1beta1.Ingress, descriptor *types.Descriptor, withWww bool, logger logger.Logger) error {
 
-	secretName := descriptor.TlsSecretName
-	var err error
-	if len(secretName) == 0 {
-		secretName, err = extractDomain(descriptor.Frontend)
-		if err != nil {
-			return errors.New(fmt.Sprintf("Couldn't parse frontend for 2nd level domain for TLS secret name, can not create Ingress!\n%v", err.Error()))
-		}
-	}
-
-	logger.Printf("Searching for TLS secret %v", secretName)
-	_, err = ic.k8sClient.GetSecret(descriptor.Namespace, secretName)
-	if statusError, isStatus := err.(*k8sErrors.StatusError); isStatus && statusError.ErrStatus.Reason == meta.StatusReasonNotFound {
-		return errors.New(fmt.Sprintf("  Didn't find secret %v, can not create Ingress!", secretName))
-	} else if err != nil {
-		return err
+	secretName, err := ic.findTlsSecret(descriptor)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Couldn't find TLS secret, can not create Ingress!\n%v", err.Error()))
 	}
 
 	host := descriptor.Frontend
+	if withWww {
+		host = "www." + host
+	}
 
 	ingress.Spec.TLS = []v1beta1.IngressTLS{
 		{
@@ -228,6 +221,37 @@ func (ic *IngressConfigurator) setTlsConfig(ingress *v1beta1.Ingress, descriptor
 		},
 	}
 	return nil
+}
+
+func (ic *IngressConfigurator) findTlsSecret(descriptor *types.Descriptor) (string, error) {
+
+	// first try secret specified in descriptor
+	secretName := descriptor.TlsSecretName
+	if len(secretName) > 0 && ic.secretExists(descriptor.Namespace, secretName) {
+		return secretName, nil
+	}
+
+	// then try full frontend name
+	secretName = descriptor.Frontend
+	if ic.secretExists(descriptor.Namespace, secretName) {
+		return secretName, nil
+	}
+
+	// try 2nd level domain
+	secretName, err := extractDomain(descriptor.Frontend)
+	if err != nil {
+		return "", err
+	}
+	if ic.secretExists(descriptor.Namespace, secretName) {
+		return secretName, nil
+	}
+
+	return "", errors.New("No secret found")
+}
+
+func (ic *IngressConfigurator) secretExists(namespace, secretName string) bool {
+	_, err := ic.k8sClient.GetSecret(namespace, secretName)
+	return err == nil
 }
 
 func (ic *IngressConfigurator) setAffiity(ingress *v1beta1.Ingress, descriptor *types.Descriptor) {

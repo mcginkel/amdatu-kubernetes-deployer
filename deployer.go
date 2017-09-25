@@ -23,7 +23,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-var kubernetesurl, etcdUrl, port, kubernetesUsername, kubernetesPassword, proxyRestUrl string
+var kubernetesurl, etcdUrl, port, kubernetesUsername, kubernetesPassword string
 var healthTimeout int
 var proxyReloadSleep int
 var skipServerCertValidation bool
@@ -45,7 +45,6 @@ func init() {
 	flag.StringVar(&kubernetesPassword, "kubernetespassword", "noauth", "Username to authenticate against Kubernetes API server.")
 	flag.IntVar(&healthTimeout, "timeout", 60, "Timeout in seconds for health checks")
 	flag.IntVar(&proxyReloadSleep, "proxysleep", 20, "Seconds to wait for proxy to reload config")
-	flag.StringVar(&proxyRestUrl, "proxyrest", "", "Proxy REST url")
 	flag.BoolVar(&skipServerCertValidation, "skipServerCertValidation", false, "Skip server certificate validation")
 
 	exampleUsage := "Missing required argument %v. Example usage: ./deployer_linux_amd64 -kubernetes http://[kubernetes-api-url]:8080 -etcd http://[etcd-url]:2379 -deployport 8000"
@@ -99,7 +98,6 @@ func init() {
 		log.Fatalf("Could not initialize k8s client! %v", err.Error())
 	}
 
-	proxyConfigurator := proxies.NewProxyConfigurator(etcdApi, proxyRestUrl, proxyReloadSleep, healthTimeout)
 	ingressConfigurator := proxies.NewIngressConfigurator(k8sClient, proxyReloadSleep, healthTimeout)
 
 	mutexes := map[string]*sync.Mutex{}
@@ -108,7 +106,6 @@ func init() {
 		HealthTimeout:       healthTimeout,
 		K8sClient:           k8sClient,
 		EtcdRegistry:        registry,
-		ProxyConfigurator:   proxyConfigurator,
 		IngressConfigurator: ingressConfigurator,
 		Mutexes:             mutexes,
 	}
