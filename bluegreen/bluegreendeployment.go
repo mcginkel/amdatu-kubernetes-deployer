@@ -27,7 +27,6 @@ import (
 
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/cluster"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/k8s"
-	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/proxies"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	"k8s.io/client-go/pkg/api/v1"
 )
@@ -68,33 +67,13 @@ func (bluegreen *bluegreen) Deploy() error {
 		return err
 	}
 
-	warnings := false
-
 	if descriptor.Frontend != "" && len(service.Spec.Ports) > 0 {
-		noHaProxy := false
-		logger.Println("Creating HAProxy configuration...")
-		err := bluegreen.clusterManager.Config.ProxyConfigurator.CreateOrUpdateProxy(deployment, service, logger)
-		if _, ok := err.(proxies.NoHAProxyError); ok {
-			noHaProxy = true
-		} else if err != nil {
+		if err := bluegreen.clusterManager.Config.IngressConfigurator.
+			CreateOrUpdateProxy(deployment, service, logger); err != nil {
+
+			logger.Println(err.Error())
 			return err
 		}
-
-		//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		// AFTER THIS POINT ONLY RETURN ERRORS IF HAPROXY IS NOT USED, BECAUSE THE CLEANUP WON'T SWITCH BACK TO OLD HAPROXY CONFIG !!!
-		//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-		if err := bluegreen.clusterManager.Config.IngressConfigurator.CreateOrUpdateProxy(
-			deployment, service, logger); err != nil {
-
-			if noHaProxy {
-				logger.Println(err.Error())
-				return err
-			}
-			warnings = true
-			logger.Printf("WARNING: Ingress configuration failed!\n  %v", err.Error())
-		}
-
 	} else {
 		logger.Println("No frontend or no ports configured in deployment, skipping proxy configuration")
 	}
@@ -106,48 +85,39 @@ func (bluegreen *bluegreen) Deploy() error {
 	logger.Println("Cleaning up old deployments")
 	bluegreen.clusterManager.CleanUpOldDeployments()
 
-	logger.Println("Updating deployment status")
-	deployment.Status = types.DEPLOYMENTSTATUS_DEPLOYED
-	err = bluegreen.clusterManager.Registry.UpdateDeployment(deployment)
-
-	if err != nil {
-		warnings = true
-		logger.Println("WARNING: couldn't update deployment status to DEPLOYED!")
-	}
-
-	// set status of previous deployments to undeployed
-	logger.Println("Updating deployment status of old deployments")
-	deployments, err := bluegreen.clusterManager.Registry.GetDeployments(deployment.Descriptor.Namespace)
-	if err != nil {
-		warnings = true
-		logger.Println("Warning: couldn't update old deployment status to UNDEPLOYED")
+	// set status of previous deployment to undeployed
+	if deployments, err := bluegreen.clusterManager.Registry.GetDeployments(deployment.Descriptor.Namespace); err != nil {
+		logger.Println("WARNING: couldn't update old deployment status to UNDEPLOYED")
 	} else {
 		for _, oldDeployment := range deployments {
 			if oldDeployment.Id != deployment.Id &&
 				oldDeployment.Status == types.DEPLOYMENTSTATUS_DEPLOYED &&
 				oldDeployment.Descriptor.AppName == deployment.Descriptor.AppName {
 
+				logger.Println("Updating deployment status of old deployment")
+
 				oldDeployment.Status = types.DEPLOYMENTSTATUS_UNDEPLOYED
-				err := bluegreen.clusterManager.Registry.UpdateDeployment(oldDeployment)
-				if err != nil {
-					warnings = true
-					logger.Println("Warning: couldn't update old deployment status to UNDEPLOYED")
+				if err := bluegreen.clusterManager.Registry.UpdateDeployment(oldDeployment); err != nil {
+					logger.Println("WARNING: couldn't update old deployment status to UNDEPLOYED")
 				}
 
-				err = bluegreen.clusterManager.Registry.StoreLogLine(
-					oldDeployment.Descriptor.Namespace, oldDeployment.Id,
-					fmt.Sprintf("Undeployed during deployment of %v\n", deployment.Id))
-				if err != nil {
-					logger.Println("Warning: couldn't update old deployment logs")
+				if err = bluegreen.clusterManager.Registry.
+					StoreLogLine(oldDeployment.Descriptor.Namespace, oldDeployment.Id,
+						fmt.Sprintf("Undeployed during deployment of %v\n", deployment.Id)); err != nil {
+
+					logger.Println("WARNING: couldn't update old deployment logs")
 				}
 			}
 		}
 	}
 
-	logger.Println("Blue-green deployment successful")
-	if warnings {
-		logger.Println("But there were warning(s), see above for details!")
+	logger.Println("Updating deployment status")
+	deployment.Status = types.DEPLOYMENTSTATUS_DEPLOYED
+	if err = bluegreen.clusterManager.Registry.UpdateDeployment(deployment); err != nil {
+		logger.Println("WARNING: couldn't update deployment status to DEPLOYED!")
 	}
+
+	logger.Println("Blue-green deployment successful")
 	return nil
 }
 

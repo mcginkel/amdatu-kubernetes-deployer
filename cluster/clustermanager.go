@@ -359,7 +359,6 @@ func (cm *ClusterManager) CleanUpOldDeployments() {
 				if err := cm.Config.K8sClient.ShutdownReplicationController(&rc, cm.Logger); err != nil {
 					cm.Logger.Printf("Error during shutting down Replication Controller: %v", err.Error())
 				}
-				cm.Config.ProxyConfigurator.DeleteBackend(rc.Namespace+"-"+rc.Name, cm.Logger)
 			}
 		}
 	}
@@ -466,9 +465,6 @@ func (cm *ClusterManager) CleanupFailedDeployment() {
 	if err == nil {
 		cm.Logger.Printf("  Deleting ReplicationController %v", rc.Name)
 		cm.Config.K8sClient.ShutdownReplicationController(rc, cm.Logger)
-
-		cm.Logger.Printf("  Deleting proxy backend %v\n", rc.Namespace+"-"+rc.Name)
-		cm.Config.ProxyConfigurator.DeleteBackend(rc.Namespace+"-"+rc.Name, cm.Logger)
 	}
 
 	pods, err := cm.findPodsForDeployment()
