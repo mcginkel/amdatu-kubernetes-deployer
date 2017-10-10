@@ -23,6 +23,9 @@ import (
 
 	"time"
 
+	"sort"
+	"strconv"
+
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/descriptors"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
@@ -114,6 +117,24 @@ func (d *DeploymentHandlers) ListDeploymentsHandler(writer http.ResponseWriter, 
 			return
 		}
 		deployments = newDeployments
+	}
+
+	// limit nr of results if needed
+	limit := req.URL.Query().Get("limit")
+	if limit != "" {
+		limitNr, err := strconv.Atoi(limit)
+		if err != nil {
+			helper.HandleError(writer, logger, 400, "limit parameter not a number")
+		}
+		if limitNr < 1 {
+			helper.HandleError(writer, logger, 400, "limit parameter must be >= 1")
+		}
+		nrDeployments := len(deployments)
+		if limitNr > nrDeployments {
+			limitNr = nrDeployments
+		}
+		sort.Sort(helper.ByModificationDate(deployments))
+		deployments = deployments[:limitNr]
 	}
 
 	helper.HandleSuccess(writer, logger, deployments, "Successfully listed deployments")
