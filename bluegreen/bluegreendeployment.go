@@ -111,6 +111,9 @@ func (bluegreen *bluegreen) Deploy() error {
 		}
 	}
 
+	// wait a second in order to get newer modification date than the undeployed deployment
+	time.Sleep(1 * time.Second)
+
 	logger.Println("Updating deployment status")
 	deployment.Status = types.DEPLOYMENTSTATUS_DEPLOYED
 	if err = bluegreen.clusterManager.Registry.UpdateDeployment(deployment); err != nil {
