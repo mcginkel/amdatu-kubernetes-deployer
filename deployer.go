@@ -131,6 +131,7 @@ func main() {
 
 	r.HandleFunc("/deployments/", deploymentHandlers.CreateDeploymentHandler).Methods("POST")
 	r.HandleFunc("/deployments/", deploymentHandlers.ListDeploymentsHandler).Methods("GET")
+	r.HandleFunc("/deployments/", deploymentHandlers.DeleteDeploymentsHandler).Methods("DELETE")
 	r.HandleFunc("/deployments/{id}/", deploymentHandlers.GetDeploymentHandler).Methods("GET")
 	r.HandleFunc("/deployments/{id}/healthcheckdata", deploymentHandlers.GetHealthcheckDataHandler).Methods("GET")
 	r.HandleFunc("/deployments/{id}/logs", deploymentHandlers.GetLogsHandler).Methods("GET")
