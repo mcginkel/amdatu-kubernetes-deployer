@@ -126,7 +126,7 @@ func (d *DeploymentHandlers) ListDeploymentsHandler(writer http.ResponseWriter, 
 		if limitNr > nrDeployments {
 			limitNr = nrDeployments
 		}
-		sort.Sort(helper.ByModificationDate(deployments))
+		sort.Sort(helper.DeploymentByModificationDate(deployments))
 		deployments = deployments[:limitNr]
 	}
 

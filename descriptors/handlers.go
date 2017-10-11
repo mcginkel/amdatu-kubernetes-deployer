@@ -28,6 +28,8 @@ import (
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 	"github.com/gorilla/mux"
 	"github.com/satori/go.uuid"
+	"sort"
+	"strconv"
 )
 
 type DescriptorHandlers struct {
@@ -131,32 +133,78 @@ func (d *DescriptorHandlers) ListDescriptorsHandler(writer http.ResponseWriter, 
 
 	logger.Printf("Listing descriptors for namespace %v", namespace)
 
-	descriptors, err := d.registry.GetDescriptors(namespace)
+	var err error
+	var descriptors []*types.Descriptor
+
+	appname := req.URL.Query().Get("appname")
+	if appname != "" {
+		descriptors, err = d.registry.GetDescriptorsByAppName(namespace, appname)
+	} else {
+		descriptors, err = d.registry.GetDescriptors(namespace)
+	}
+
 	if (err != nil && err == etcdregistry.ErrDescriptorNotFound) || len(descriptors) == 0 {
 		helper.HandleNotFound(writer, logger, "No descriptors found for namespace %v\n", namespace)
 		return
 	} else if err != nil {
-		helper.HandleError(writer, logger, 500, "Error getting deployments for namespace %v: %v", namespace, err)
+		helper.HandleError(writer, logger, 500, "Error getting descriptors for namespace %v: %v", namespace, err)
 		return
 	}
 
-	// filter for appname if needed
-	appname := req.URL.Query().Get("appname")
-	if appname != "" {
-		var newDescriptors []*types.Descriptor
-		for _, descriptor := range descriptors {
-			if descriptor.AppName == appname {
-				newDescriptors = append(newDescriptors, descriptor)
-			}
-		}
-		if len(newDescriptors) == 0 {
-			helper.HandleNotFound(writer, logger, "No descriptors found for namespace %v and appname %v\n", namespace, appname)
-			return
-		}
-		descriptors = newDescriptors
+	helper.HandleSuccess(writer, logger, descriptors, "Successfully listed descriptors")
+}
+
+func (d *DescriptorHandlers) DeleteDescriptorsHandler(writer http.ResponseWriter, req *http.Request) {
+
+	var myLogger logger.Logger
+	myLogger = logger.NewConsoleLogger()
+
+	//TODO check namespaces of user
+	namespace := req.URL.Query().Get("namespace")
+	if namespace == "" {
+		helper.HandleError(writer, myLogger, 400, "Namespace parameter missing")
+		return
 	}
 
-	helper.HandleSuccess(writer, logger, descriptors, "Successfully listed descriptors")
+	appName := req.URL.Query().Get("appname")
+	if appName == "" {
+		helper.HandleError(writer, myLogger, 400, "Appname parameter missing")
+		return
+	}
+
+	keepLatestStr := req.URL.Query().Get("keepLatest")
+	keepLatest := true
+	if keepLatestStr != "" {
+		var err error
+		keepLatest, err = strconv.ParseBool(keepLatestStr)
+		if err != nil {
+			helper.HandleError(writer, myLogger, 400, "KeepLatest parameter not parsable to bool")
+			return
+		}
+	}
+
+	myLogger.Printf("Deleting descriptors for namespace %v, app %v", namespace, appName)
+
+	descriptors, err := d.registry.GetDescriptorsByAppName(namespace, appName)
+	if (err != nil && err == etcdregistry.ErrDescriptorNotFound) || len(descriptors) == 0 {
+		helper.HandleNotFound(writer, myLogger, "No descriptors found for namespace %v\n", namespace)
+		return
+	} else if err != nil {
+		helper.HandleError(writer, myLogger, 500, "Error getting descriptors for namespace %v: %v", namespace, err)
+		return
+	}
+
+	sort.Sort(helper.DescriptorByModificationDate(descriptors))
+
+	if keepLatest {
+		descriptors = descriptors[1:]
+	}
+
+	for _, descriptor := range descriptors {
+		d.registry.DeleteDescriptor(namespace, descriptor.Id)
+	}
+
+	helper.HandleSuccess(writer, myLogger, "", "Successfully deleted deployments")
 }
 
 func (d *DescriptorHandlers) GetDescriptorHandler(writer http.ResponseWriter, req *http.Request) {

@@ -18,8 +18,19 @@ package helper
 import "bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/types"
 
 // ByModificationDate implements sort.Interface for []Deployment
-type ByModificationDate []*types.Deployment
+type DeploymentByModificationDate []*types.Deployment
 
-func (a ByModificationDate) Len() int           { return len(a) }
-func (a ByModificationDate) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a ByModificationDate) Less(i, j int) bool { return a[i].LastModified > a[j].LastModified }
+func (a DeploymentByModificationDate) Len() int      { return len(a) }
+func (a DeploymentByModificationDate) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a DeploymentByModificationDate) Less(i, j int) bool {
+	return a[i].LastModified > a[j].LastModified
+}
+
+// ByModificationDate implements sort.Interface for []Descriptor
+type DescriptorByModificationDate []*types.Descriptor
+
+func (a DescriptorByModificationDate) Len() int      { return len(a) }
+func (a DescriptorByModificationDate) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a DescriptorByModificationDate) Less(i, j int) bool {
+	return a[i].LastModified > a[j].LastModified
+}

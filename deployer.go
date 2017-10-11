@@ -124,6 +124,7 @@ func main() {
 
 	r.HandleFunc("/descriptors/", descriptorHandlers.CreateDescriptorHandler).Methods("POST")
 	r.HandleFunc("/descriptors/", descriptorHandlers.ListDescriptorsHandler).Methods("GET")
+	r.HandleFunc("/descriptors/", descriptorHandlers.DeleteDescriptorsHandler).Methods("DELETE")
 	r.HandleFunc("/descriptors/{id}/", descriptorHandlers.GetDescriptorHandler).Methods("GET")
 	r.HandleFunc("/descriptors/{id}/", descriptorHandlers.UpdateDescriptorHandler).Methods("PUT")
 	r.HandleFunc("/descriptors/{id}/", descriptorHandlers.DeleteDescriptorHandler).Methods("DELETE")

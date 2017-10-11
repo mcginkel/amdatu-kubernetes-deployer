@@ -189,6 +189,26 @@ func (registry *EtcdRegistry) GetDescriptorById(namespace string, id string) (*t
 	return &types.Descriptor{}, ErrDescriptorNotFound
 }
 
+func (registry *EtcdRegistry) GetDescriptorsByAppName(namespace string, appName string) ([]*types.Descriptor, error) {
+	allDescriptors, err := registry.GetDescriptors(namespace)
+	if err != nil {
+		return []*types.Descriptor{}, err
+	}
+	if len(allDescriptors) == 0 {
+		return []*types.Descriptor{}, ErrDescriptorNotFound
+	}
+	descriptors := make([]*types.Descriptor, 0)
+	for _, descriptor := range allDescriptors {
+		if descriptor.AppName == appName {
+			descriptors = append(descriptors, descriptor)
+		}
+	}
+	if len(descriptors) == 0 {
+		return []*types.Descriptor{}, ErrDescriptorNotFound
+	}
+	return descriptors, nil
+}
+
 func (registry *EtcdRegistry) DeleteDescriptor(namespace string, id string) error {
 	descriptor, err := registry.GetDescriptorById(namespace, id)
 	if err != nil {
