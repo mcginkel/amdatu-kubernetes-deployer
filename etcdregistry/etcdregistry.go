@@ -97,9 +97,28 @@ func (registry *EtcdRegistry) GetDeploymentById(namespace string, id string) (*t
 		if deployment.Id == id {
 			return deployment, nil
 		}
-
 	}
 	return &types.Deployment{}, ErrDeploymentNotFound
+}
+
+func (registry *EtcdRegistry) GetDeploymentsByAppName(namespace string, appName string) ([]*types.Deployment, error) {
+	allDeployments, err := registry.GetDeployments(namespace)
+	if err != nil {
+		return []*types.Deployment{}, err
+	}
+	if len(allDeployments) == 0 {
+		return []*types.Deployment{}, ErrDeploymentNotFound
+	}
+	deployments := make([]*types.Deployment, 0)
+	for _, deployment := range allDeployments {
+		if deployment.Descriptor.AppName == appName {
+			deployments = append(deployments, deployment)
+		}
+	}
+	if len(deployments) == 0 {
+		return []*types.Deployment{}, ErrDeploymentNotFound
+	}
+	return deployments, nil
 }
 
 func (registry *EtcdRegistry) DeleteDeployment(namespace string, id string) error {
@@ -168,6 +187,26 @@ func (registry *EtcdRegistry) GetDescriptorById(namespace string, id string) (*t
 
 	}
 	return &types.Descriptor{}, ErrDescriptorNotFound
+}
+
+func (registry *EtcdRegistry) GetDescriptorsByAppName(namespace string, appName string) ([]*types.Descriptor, error) {
+	allDescriptors, err := registry.GetDescriptors(namespace)
+	if err != nil {
+		return []*types.Descriptor{}, err
+	}
+	if len(allDescriptors) == 0 {
+		return []*types.Descriptor{}, ErrDescriptorNotFound
+	}
+	descriptors := make([]*types.Descriptor, 0)
+	for _, descriptor := range allDescriptors {
+		if descriptor.AppName == appName {
+			descriptors = append(descriptors, descriptor)
+		}
+	}
+	if len(descriptors) == 0 {
+		return []*types.Descriptor{}, ErrDescriptorNotFound
+	}
+	return descriptors, nil
 }
 
 func (registry *EtcdRegistry) DeleteDescriptor(namespace string, id string) error {

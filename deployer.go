@@ -124,6 +124,7 @@ func main() {
 
 	r.HandleFunc("/descriptors/", descriptorHandlers.CreateDescriptorHandler).Methods("POST")
 	r.HandleFunc("/descriptors/", descriptorHandlers.ListDescriptorsHandler).Methods("GET")
+	r.HandleFunc("/descriptors/", descriptorHandlers.DeleteDescriptorsHandler).Methods("DELETE")
 	r.HandleFunc("/descriptors/{id}/", descriptorHandlers.GetDescriptorHandler).Methods("GET")
 	r.HandleFunc("/descriptors/{id}/", descriptorHandlers.UpdateDescriptorHandler).Methods("PUT")
 	r.HandleFunc("/descriptors/{id}/", descriptorHandlers.DeleteDescriptorHandler).Methods("DELETE")
@@ -131,6 +132,7 @@ func main() {
 
 	r.HandleFunc("/deployments/", deploymentHandlers.CreateDeploymentHandler).Methods("POST")
 	r.HandleFunc("/deployments/", deploymentHandlers.ListDeploymentsHandler).Methods("GET")
+	r.HandleFunc("/deployments/", deploymentHandlers.DeleteDeploymentsHandler).Methods("DELETE")
 	r.HandleFunc("/deployments/{id}/", deploymentHandlers.GetDeploymentHandler).Methods("GET")
 	r.HandleFunc("/deployments/{id}/healthcheckdata", deploymentHandlers.GetHealthcheckDataHandler).Methods("GET")
 	r.HandleFunc("/deployments/{id}/logs", deploymentHandlers.GetLogsHandler).Methods("GET")

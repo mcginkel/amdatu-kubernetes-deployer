@@ -23,6 +23,9 @@ import (
 
 	"time"
 
+	"sort"
+	"strconv"
+
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/descriptors"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/etcdregistry"
 	"bitbucket.org/amdatulabs/amdatu-kubernetes-deployer/helper"
@@ -91,7 +94,16 @@ func (d *DeploymentHandlers) ListDeploymentsHandler(writer http.ResponseWriter, 
 
 	logger.Printf("Listing deployments for namespace %v", namespace)
 
-	deployments, err := d.registry.GetDeployments(namespace)
+	var err error
+	var deployments []*types.Deployment
+
+	appname := req.URL.Query().Get("appname")
+	if appname != "" {
+		deployments, err = d.registry.GetDeploymentsByAppName(namespace, appname)
+	} else {
+		deployments, err = d.registry.GetDeployments(namespace)
+	}
+
 	if (err != nil && err == etcdregistry.ErrDeploymentNotFound) || len(deployments) == 0 {
 		helper.HandleNotFound(writer, logger, "No deployments found for namespace %v\n", namespace)
 		return
@@ -100,23 +112,87 @@ func (d *DeploymentHandlers) ListDeploymentsHandler(writer http.ResponseWriter, 
 		return
 	}
 
-	// filter for appname if needed
-	appname := req.URL.Query().Get("appname")
-	if appname != "" {
-		var newDeployments []*types.Deployment
-		for _, deployment := range deployments {
-			if deployment.Descriptor.AppName == appname {
-				newDeployments = append(newDeployments, deployment)
-			}
+	// limit nr of results if needed
+	limit := req.URL.Query().Get("limit")
+	if limit != "" {
+		limitNr, err := strconv.Atoi(limit)
+		if err != nil {
+			helper.HandleError(writer, logger, 400, "limit parameter not a number")
 		}
-		if len(newDeployments) == 0 {
-			helper.HandleNotFound(writer, logger, "No deployments found for namespace %v and appname %v\n", namespace, appname)
-			return
+		if limitNr < 1 {
+			helper.HandleError(writer, logger, 400, "limit parameter must be >= 1")
 		}
-		deployments = newDeployments
+		nrDeployments := len(deployments)
+		if limitNr > nrDeployments {
+			limitNr = nrDeployments
+		}
+		sort.Sort(helper.DeploymentByModificationDate(deployments))
+		deployments = deployments[:limitNr]
 	}
 
 	helper.HandleSuccess(writer, logger, deployments, "Successfully listed deployments")
+}
+
+func (d *DeploymentHandlers) DeleteDeploymentsHandler(writer http.ResponseWriter, req *http.Request) {
+
+	var myLogger logger.Logger
+	myLogger = logger.NewConsoleLogger()
+
+	//TODO check namespaces of user
+	namespace := req.URL.Query().Get("namespace")
+	if namespace == "" {
+		helper.HandleError(writer, myLogger, 400, "Namespace parameter missing")
+		return
+	}
+
+	appName := req.URL.Query().Get("appname")
+	if appName == "" {
+		helper.HandleError(writer, myLogger, 400, "Appname parameter missing")
+		return
+	}
+
+	undeployStr := req.URL.Query().Get("undeploy")
+	undeploy := false
+	if undeployStr != "" {
+		var err error
+		undeploy, err = strconv.ParseBool(undeployStr)
+		if err != nil {
+			helper.HandleError(writer, myLogger, 400, "Undeploy parameter not parsable to bool")
+			return
+		}
+	}
+
+	myLogger.Printf("Deleting deployments for namespace %v, app %v", namespace, appName)
+
+	deployments, err := d.registry.GetDeploymentsByAppName(namespace, appName)
+	if (err != nil && err == etcdregistry.ErrDeploymentNotFound) || len(deployments) == 0 {
+		helper.HandleNotFound(writer, myLogger, "No deployments found for namespace %v\n", namespace)
+		return
+	} else if err != nil {
+		helper.HandleError(writer, myLogger, 500, "Error getting deployments for namespace %v: %v", namespace, err)
+		return
+	}
+
+	var deployed *types.Deployment
+	for _, deployment := range deployments {
+		if deployment.Status == types.DEPLOYMENTSTATUS_DEPLOYED {
+			deployed = deployment
+		} else if deployment.Status == types.DEPLOYMENTSTATUS_DEPLOYING || deployment.Status == types.DEPLOYMENTSTATUS_UNDEPLOYING {
+			myLogger.Println("ignoring ongoing (un)deployment...")
+			continue
+		} else {
+			d.registry.DeleteDeployment(namespace, deployment.Id)
+		}
+	}
+
+	if deployed != nil && undeploy {
+		myLogger = logger.NewDeploymentLogger(deployed, d.config.EtcdRegistry, myLogger)
+		req.URL.Query().Set("deleteDeployment", "true")
+		d.undeploy(writer, req, deployed, myLogger)
+		return
+	}
+
+	helper.HandleSuccess(writer, myLogger, "", "Successfully deleted deployments")
 }
 
 func (d *DeploymentHandlers) GetDeploymentHandler(writer http.ResponseWriter, req *http.Request) {
