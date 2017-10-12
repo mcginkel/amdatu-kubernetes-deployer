@@ -122,15 +122,40 @@ func (d *DeploymentHandlers) ListDeploymentsHandler(writer http.ResponseWriter, 
 		if limitNr < 1 {
 			helper.HandleError(writer, logger, 400, "limit parameter must be >= 1")
 		}
-		nrDeployments := len(deployments)
-		if limitNr > nrDeployments {
-			limitNr = nrDeployments
+		if appname != "" {
+			// we only have deployments of 1 app
+			deployments = limitDeployments(deployments, limitNr)
+		} else {
+			// sort by app first...
+			apps := make(map[string][]*types.Deployment)
+			for _, deployment := range deployments {
+				app := deployment.Descriptor.AppName
+				if _, ok := apps[app]; !ok {
+					apps[app] = make([]*types.Deployment, 0)
+				}
+				apps[app] = append(apps[app], deployment)
+			}
+
+			// limit nr deployments of each app
+			allDeployments := make([]*types.Deployment, 0)
+			for _, appDeployments := range apps {
+				appDeployments = limitDeployments(appDeployments, limitNr)
+				allDeployments = append(allDeployments, appDeployments...)
+			}
+			deployments = allDeployments
 		}
-		sort.Sort(helper.DeploymentByModificationDate(deployments))
-		deployments = deployments[:limitNr]
 	}
 
 	helper.HandleSuccess(writer, logger, deployments, "Successfully listed deployments")
+}
+
+func limitDeployments(deployments []*types.Deployment, limit int) []*types.Deployment {
+	nrDeployments := len(deployments)
+	if limit > nrDeployments {
+		limit = nrDeployments
+	}
+	sort.Sort(helper.DeploymentByModificationDate(deployments))
+	return deployments[:limit]
 }
 
 func (d *DeploymentHandlers) DeleteDeploymentsHandler(writer http.ResponseWriter, req *http.Request) {
