@@ -152,6 +152,20 @@ func (ic *IngressConfigurator) CreateOrUpdateProxy(deployment *types.Deployment,
 		} else {
 			return err
 		}
+	} else {
+		// check if old www redirect exists
+		wwwIngressName := getWwwRedirectName(deployment.Descriptor)
+		_, err = ic.k8sClient.GetIngress(deployment.Descriptor.Namespace, wwwIngressName)
+		if err == nil {
+			err = ic.k8sClient.DeleteIngress(deployment.Descriptor.Namespace, wwwIngressName)
+			if err != nil {
+				return err
+			}
+		} else if statusError, isStatus := err.(*k8sErrors.StatusError); isStatus && statusError.Status().Reason == meta.StatusReasonNotFound {
+			// everything is fine
+		} else {
+			return err
+		}
 	}
 
 	return nil
@@ -292,7 +306,13 @@ func (ic *IngressConfigurator) addAdditionalHeadersSnippet(snippet string, descr
 }
 
 func (ic *IngressConfigurator) DeleteProxy(deployment *types.Deployment, logger logger.Logger) error {
+
+	// ignore not found errors...
+
 	err1 := ic.k8sClient.DeleteIngress(deployment.Descriptor.Namespace, deployment.Descriptor.AppName)
+	if statusError, isStatus := err1.(*k8sErrors.StatusError); isStatus && statusError.Status().Reason == meta.StatusReasonNotFound {
+		err1 = nil
+	}
 
 	var err2 error
 	wwwIngressName := getWwwRedirectName(deployment.Descriptor)
