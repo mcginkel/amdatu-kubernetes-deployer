@@ -70,12 +70,13 @@ func (bluegreen *bluegreen) Deploy() error {
 	if descriptor.Frontend != "" && len(service.Spec.Ports) > 0 {
 		if err := bluegreen.clusterManager.Config.IngressConfigurator.
 			CreateOrUpdateProxy(deployment, service, logger); err != nil {
-
 			logger.Println(err.Error())
 			return err
 		}
 	} else {
-		logger.Println("No frontend or no ports configured in deployment, skipping proxy configuration")
+		logger.Println("No frontend or no ports configured in deployment, checking if old proxy config exists")
+		bluegreen.clusterManager.Config.IngressConfigurator.
+			DeleteProxy(deployment, logger)
 	}
 
 	//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
